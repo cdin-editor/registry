@@ -130,14 +130,14 @@ func readInput(path string, stdin io.Reader) (inputFile, error) {
 }
 
 func usageError(stderr io.Writer, format string, args ...any) int {
-	fmt.Fprintf(stderr, "registry: "+format+"\n", args...)
+	fmt.Fprintln(stderr, "registry: "+fmt.Sprintf(format, args...))
 	fmt.Fprintln(stderr)
 	printUsage(stderr)
 	return exitUsage
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, strings.TrimSpace("Registry — generic component delivery and orchestration
+	fmt.Fprintln(w, strings.TrimSpace(`Registry — generic component delivery and orchestration
 
 Usage:
   registry --version
@@ -155,5 +155,5 @@ Document kinds:
 
 Notes:
   YAML (.yaml/.yml) is accepted only for Product Definitions.
-  Standard input (-) is read as JSON."))
+  Standard input (-) is read as JSON.`))
 }
