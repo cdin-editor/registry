@@ -582,8 +582,8 @@ func (s *solver) search(state *searchState, environment []EnvironmentContract) (
 		}
 		if groupEnd-index > 1 {
 			conflict := &Conflict{
-				Code:    ConflictAmbiguousRelease,
-				Message: fmt.Sprintf("multiple distinct releases have equal SemVer precedence for %s", next.String()),
+				Code:               ConflictAmbiguousRelease,
+				Message:            fmt.Sprintf("multiple distinct releases have equal SemVer precedence for %s", next.String()),
 				InvolvedComponents: []string{next.componentID},
 			}
 			for i := index; i < groupEnd; i++ {
@@ -1172,10 +1172,10 @@ func populateConflictNodes(conflict *Conflict, state *searchState) {
 		}
 		seen[identity] = true
 		node := Node{ComponentID: k.componentID, Variant: k.variant}
-		if selected,ok:=state.chosen[k]; ok {
-			node.Version=selected.release.Version
+		if selected, ok := state.chosen[k]; ok {
+			node.Version = selected.release.Version
 		}
-		conflict.InvolvedNodes=append(conflict.InvolvedNodes,node)
+		conflict.InvolvedNodes = append(conflict.InvolvedNodes, node)
 	}
 	for _, k := range sortedConstraintKeys(state.constraints) {
 		add(k)
@@ -1183,11 +1183,15 @@ func populateConflictNodes(conflict *Conflict, state *searchState) {
 	for _, k := range sortedChosenKeys(state.chosen) {
 		add(k)
 	}
-	sort.Slice(conflict.InvolvedNodes,func(i,j int)bool{
-		a,b:=conflict.InvolvedNodes[i],conflict.InvolvedNodes[j]
-		if a.ComponentID!=b.ComponentID{return a.ComponentID<b.ComponentID}
-		if a.Variant!=b.Variant{return a.Variant<b.Variant}
-		return a.Version<b.Version
+	sort.Slice(conflict.InvolvedNodes, func(i, j int) bool {
+		a, b := conflict.InvolvedNodes[i], conflict.InvolvedNodes[j]
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		return a.Version < b.Version
 	})
 }
 
