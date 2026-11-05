@@ -62,6 +62,9 @@ func yamlValue(node *yaml.Node, active map[*yaml.Node]bool) (any, error) {
 		return yamlValue(node.Content[0], active)
 
 	case yaml.MappingNode:
+		if node.Tag != "!!map" {
+			return nil, fmt.Errorf("unsupported YAML tag %q at line %d", node.Tag, node.Line)
+		}
 		if len(node.Content)%2 != 0 {
 			return nil, fmt.Errorf("invalid YAML mapping at line %d", node.Line)
 		}
@@ -90,6 +93,9 @@ func yamlValue(node *yaml.Node, active map[*yaml.Node]bool) (any, error) {
 		return result, nil
 
 	case yaml.SequenceNode:
+		if node.Tag != "!!seq" {
+			return nil, fmt.Errorf("unsupported YAML tag %q at line %d", node.Tag, node.Line)
+		}
 		active[node] = true
 		defer delete(active, node)
 		result := make([]any, len(node.Content))

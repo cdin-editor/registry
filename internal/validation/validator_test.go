@@ -78,6 +78,28 @@ func TestRejectsMultipleYAMLDocuments(t *testing.T) {
 	}
 }
 
+func TestRejectsCustomYAMLCollectionTags(t *testing.T) {
+	validator, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := []byte("schema_version: \"1.0.0\"\\ncomponents: !custom []\\n")
+	if err := validator.Validate(ProductDefinition, input, "product.yaml"); err == nil || !strings.Contains(err.Error(), "unsupported YAML tag") {
+		t.Fatalf("Validate() error = %v, want unsupported collection tag error", err)
+	}
+}
+
+func TestRejectsNonStringYAMLMappingKeys(t *testing.T) {
+	validator, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := []byte("schema_version: \"1.0.0\"\\ncomponents:\\n  - component_id: backend\\n    version_constraint: \">=1.0.0 <2.0.0\"\\n    7: invalid\\n")
+	if err := validator.Validate(ProductDefinition, input, "product.yaml"); err == nil || !strings.Contains(err.Error(), "mapping keys must be strings") {
+		t.Fatalf("Validate() error = %v, want non-string key error", err)
+	}
+}
+
 func TestYAMLIsNotAcceptedForOtherKinds(t *testing.T) {
 	validator, err := New()
 	if err != nil {

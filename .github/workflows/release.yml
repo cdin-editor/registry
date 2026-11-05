@@ -50,9 +50,11 @@ jobs:
           go build -trimpath -ldflags "-s -w -X github.com/cdin-editor/registry/internal/buildinfo.Version=${VERSION} -X github.com/cdin-editor/registry/internal/buildinfo.Commit=${GITHUB_SHA}" -o "dist/${name}" ./cmd/registry
           cp LICENSE NOTICE README.md dist/
           if [ "$GOOS" = "windows" ]; then
-            (cd dist && zip -q "../${name%.exe}.zip" "${name}" LICENSE NOTICE README.md)
+            zip -q -j "dist/${name%.exe}.zip" "dist/${name}" LICENSE NOTICE README.md
+            rm "dist/${name}"
           else
             tar -czf "dist/${name}.tar.gz" -C dist "${name}" LICENSE NOTICE README.md
+            rm "dist/${name}"
           fi
 
       - uses: actions/upload-artifact@v4
