@@ -176,6 +176,36 @@ func TestREG011IsIndependentOfCatalogOrder(t *testing.T) {
 	}
 }
 
+// TestREG011DuplicateReleaseProvenanceIsIndependentOfCatalogOrder verifies
+// identical release bytes mirrored under different metadata URIs always produce
+// the same externally visible URI in the Graph and eventual Manifest.
+func TestREG011DuplicateReleaseProvenanceIsIndependentOfCatalogOrder(t *testing.T) {
+	fromZ := release("engine", "default", "1.0.0", "active")
+	fromZ.MetadataSHA = strings.Repeat("a", 64)
+	fromZ.MetadataURI = "https://z.example.invalid/releases/engine-1.0.0.json"
+	fromA := fromZ
+	fromA.MetadataURI = "https://a.example.invalid/releases/engine-1.0.0.json"
+
+	definition := product(Requirement{ComponentID: "engine", VersionConstraint: "=1.0.0"})
+	first := Resolve(definition, []*catalog.Catalog{
+		catalogOf("z-catalog", fromZ),
+		catalogOf("a-catalog", fromA),
+	})
+	second := Resolve(definition, []*catalog.Catalog{
+		catalogOf("a-catalog", fromA),
+		catalogOf("z-catalog", fromZ),
+	})
+	if first.Graph == nil || second.Graph == nil {
+		t.Fatalf("identical mirrored releases should resolve: first=%+v second=%+v", first.Report, second.Report)
+	}
+	const stableURI = "https://a.example.invalid/releases/engine-1.0.0.json"
+	for name, result := range map[string]Result{"forward": first, "reverse": second} {
+		if got := result.Graph.Components[0].ReleaseMetadataURI; got != stableURI {
+			t.Errorf("%s catalog order selected metadata URI %q, want stable URI %q", name, got, stableURI)
+		}
+	}
+}
+
 // TestREG008BacktracksAcrossTransitiveConstraintConflicts prevents a greedy
 // resolver from rejecting a valid graph when the highest direct candidate has
 // an incompatible transitive dependency but a lower candidate is fully valid.
