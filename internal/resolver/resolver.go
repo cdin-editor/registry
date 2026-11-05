@@ -177,6 +177,7 @@ type ContractProviderEvidence struct {
 	ComponentID        string `json:"component_id,omitempty"`
 	Variant            string `json:"variant,omitempty"`
 	Version            string `json:"version"`
+	ComponentVersion   string `json:"component_version,omitempty"`
 	CatalogID          string `json:"catalog_id,omitempty"`
 	ReleaseMetadataURI string `json:"release_metadata_uri,omitempty"`
 	ReleaseMetadataSHA string `json:"release_metadata_sha256,omitempty"`
@@ -811,7 +812,7 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 			providers[declaration.ContractID] = append(providers[declaration.ContractID], providerCandidate{
 				version: version,
 				evidence: ContractProviderEvidence{
-					Origin:"component", ComponentID:k.componentID, Variant:k.variant, Version:release.Version,
+					Origin:"component", ComponentID:k.componentID, Variant:k.variant, Version:declaration.Version, ComponentVersion:release.Version,
 					CatalogID:selected.catalogID, ReleaseMetadataURI:release.MetadataURI,
 					ReleaseMetadataSHA:release.MetadataSHA,
 				},
@@ -868,6 +869,7 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 				if a.Origin!=b.Origin{return a.Origin<b.Origin}
 				if a.ComponentID!=b.ComponentID{return a.ComponentID<b.ComponentID}
 				if a.Variant!=b.Variant{return a.Variant<b.Variant}
+				if a.ComponentVersion!=b.ComponentVersion{return a.ComponentVersion<b.ComponentVersion}
 				if a.Version!=b.Version{return a.Version<b.Version}
 				if a.CatalogID!=b.CatalogID{return a.CatalogID<b.CatalogID}
 				if a.ReleaseMetadataURI!=b.ReleaseMetadataURI{return a.ReleaseMetadataURI<b.ReleaseMetadataURI}
