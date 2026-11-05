@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add pull request and issue templates for bugs, feature requests and Spec/contract changes.
 - Pin the Registry schema mirror to an immutable CDIN Spec commit and add a drift-check/synchronization script.
 - Add cross-platform release target compilation through Pipeline's release runner.
+- Add a transport-injected Catalog Index loader with digest-before-parse verification, release identity checks, default-variant normalization, duplicate deduplication and conflict rejection.
 
 ### Changed
 
@@ -24,7 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Not yet implemented
 
-- Catalog ingestion and metadata digest verification.
+- Full Catalog transport policy, caching and local fixture integration.
 - Deterministic version, dependency and contract resolution.
 - Immutable Git source collection and transactional workspace publication.
 - Resolved Manifest and Resolution Report production.
+- Update discovery and release hardening.
