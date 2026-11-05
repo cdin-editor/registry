@@ -142,6 +142,12 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 	if err != nil {
 		return nil, fmt.Errorf("collector: resolve destination: %w", err)
 	}
+	// Canonicalize platform aliases such as macOS /tmp -> /private/tmp so
+	// containment checks apply to the real destination path.
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, fmt.Errorf("collector: canonicalize destination: %w", err)
+	}
 	if err := ensureNoSymlinkAncestors(root); err != nil {
 		return nil, fmt.Errorf("collector: unsafe destination root: %w", err)
 	}
