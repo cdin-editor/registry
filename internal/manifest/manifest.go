@@ -125,12 +125,19 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		collectedByKey[key] = source
 	}
 
+	environmentContracts := make([]EnvironmentContract, 0, len(graph.EnvironmentContracts))
+	for _, contract := range graph.EnvironmentContracts {
+		environmentContracts = append(environmentContracts, EnvironmentContract{
+			ContractID: contract.ContractID,
+			Version:    contract.Version,
+		})
+	}
 	doc := Document{
 		SchemaVersion:        schemaVersion,
 		RegistryVersion:      registryVersion,
 		Catalogs:             make([]Catalog, 0, len(graph.Catalogs)),
 		Roots:                make([]Root, 0, len(graph.Roots)),
-		EnvironmentContracts: append([]resolver.EnvironmentContract(nil), graph.EnvironmentContracts...),
+		EnvironmentContracts: environmentContracts,
 		Components:           make([]Component, 0, len(graph.Components)),
 		ResolutionOrder:      append([]resolver.Node(nil), graph.ResolutionOrder...),
 	}
