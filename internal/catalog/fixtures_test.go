@@ -45,7 +45,7 @@ func fixtureReleasePayload(t *testing.T, component, version, repository string) 
 			Revision:      "0123456789abcdef0123456789abcdef01234567",
 		}},
 		Dependencies: []Dependency{},
-		Contracts:     Contracts{Provides: []ContractProvider{}, Requires: []ContractRequirement{}},
+		Contracts:    Contracts{Provides: []ContractProvider{}, Requires: []ContractRequirement{}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestREG019LocalFixtureCatalogConflictingIdentityFailsClosed(t *testing.T) {
 	firstEntry := fixtureEntry("conflict", "engine", "1.0.0", firstPayload)
 	secondEntry := fixtureEntry("conflict", "engine", "1.0.0", secondPayload)
 	fixture := writeLocalCatalogFixture(t, "catalog.conflict", []Entry{firstEntry, secondEntry}, map[string][]byte{
-		firstEntry.MetadataURI: firstPayload,
+		firstEntry.MetadataURI:  firstPayload,
 		secondEntry.MetadataURI: secondPayload,
 	})
 
@@ -257,7 +257,6 @@ func TestREG019LocalFixtureCatalogDoesNotExposePartialResults(t *testing.T) {
 		t.Fatalf("LoadFromSource returned %#v, %v; failure must not expose a partial Catalog", got, err)
 	}
 }
-
 
 type hostileFixtureFetcher struct {
 	err error
