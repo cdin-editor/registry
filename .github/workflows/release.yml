@@ -30,6 +30,5 @@ jobs:
           {"id":"linux-arm64","os":"ubuntu-24.04"},
           {"id":"darwin-amd64","os":"macos-15"},
           {"id":"darwin-arm64","os":"macos-15"},
-          {"id":"windows-amd64","os":"windows-latest"},
-          {"id":"windows-arm64","os":"windows-11-arm"}
+          {"id":"windows-amd64","os":"windows-latest"}
         ]}

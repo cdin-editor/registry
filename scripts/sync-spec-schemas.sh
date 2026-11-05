@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE="$ROOT/schemas/registry/v1/SOURCE.toml"
 DEST="$ROOT/schemas/registry/v1"
+EMBEDDED_DEST="$ROOT/internal/schemas/registry/v1"
 MODE="${1:---check}"
 
 if [[ ! -f "$SOURCE" ]]; then
@@ -23,8 +24,18 @@ case "$MODE" in
   *) echo "Usage: $0 [--check|--update]" >&2; exit 2 ;;
 esac
 
+python_bin="${PYTHON:-python3}"
+if ! command -v "$python_bin" >/dev/null 2>&1; then
+  python_bin=python
+fi
+if ! command -v "$python_bin" >/dev/null 2>&1; then
+  echo "Python 3 is required to validate the downloaded JSON schemas." >&2
+  exit 2
+fi
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$EMBEDDED_DEST"
 
 schemas=(
   product-definition.schema.json
@@ -37,16 +48,21 @@ schemas=(
 for name in "${schemas[@]}"; do
   url="https://raw.githubusercontent.com/$repository/$revision/schemas/registry/v1/$name"
   curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 "$url" -o "$tmp/$name"
-  python3 -m json.tool "$tmp/$name" >/dev/null
+  "$python_bin" -m json.tool "$tmp/$name" >/dev/null
 
   if [[ "$MODE" == "--update" ]]; then
     install -m 0644 "$tmp/$name" "$DEST/$name"
-  elif ! cmp -s "$tmp/$name" "$DEST/$name"; then
-    echo "Schema drift detected: $name" >&2
-    echo "Update the Spec first, change SOURCE.toml to the accepted Spec commit, then run --update." >&2
-    diff -u "$DEST/$name" "$tmp/$name" || true
-    exit 1
+    install -m 0644 "$tmp/$name" "$EMBEDDED_DEST/$name"
+  else
+    for local_copy in "$DEST/$name" "$EMBEDDED_DEST/$name"; do
+      if [[ ! -f "$local_copy" ]] || ! cmp -s "$tmp/$name" "$local_copy"; then
+        echo "Schema drift detected: $local_copy" >&2
+        echo "Update the Spec first, advance SOURCE.toml to the accepted Spec commit, then run --update." >&2
+        [[ ! -f "$local_copy" ]] || diff -u "$local_copy" "$tmp/$name" || true
+        exit 1
+      fi
+    done
   fi
 done
 
-echo "Registry v1 schemas match $repository@$revision"
+echo "Registry v1 schemas and embedded copies match $repository@$revision"
