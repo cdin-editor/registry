@@ -582,7 +582,7 @@ func (s *solver) search(state *searchState, environment []EnvironmentContract) (
 		}
 		if groupEnd-index > 1 {
 			conflict := &Conflict{
-				Code: ConflictAmbiguousRelease,
+				Code:    ConflictAmbiguousRelease,
 				Message: fmt.Sprintf("multiple distinct releases have equal SemVer precedence for %s", next.String()),
 				InvolvedComponents: []string{next.componentID},
 			}
@@ -801,7 +801,7 @@ func dependenciesOf(release catalog.Release) []catalog.Dependency {
 // deliberately not excluded. Identical declarations within one release coalesce.
 func validateContracts(chosen map[key]candidate, environment []EnvironmentContract) *Conflict {
 	type providerCandidate struct {
-		version   semver.Version
+		version  semver.Version
 		evidence ContractProviderEvidence
 	}
 	providers := make(map[string][]providerCandidate)
@@ -827,7 +827,7 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 				evidence: ContractProviderEvidence{
 					Origin: "component", ComponentID: k.componentID, Variant: k.variant, Version: declaration.Version, ComponentVersion: release.Version,
 					CatalogID: selected.catalogID, ReleaseMetadataURI: release.MetadataURI,
-					ReleaseMetadataSHA:release.MetadataSHA,
+					ReleaseMetadataSHA: release.MetadataSHA,
 				},
 			})
 		}
@@ -841,7 +841,7 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 			return &Conflict{Code: ConflictInvalidEnvironmentContract, Message: fmt.Sprintf("environment contract %q has invalid version: %v", declaration.ContractID, err)}
 		}
 		providers[declaration.ContractID] = append(providers[declaration.ContractID], providerCandidate{
-			version: version,
+			version:  version,
 			evidence: ContractProviderEvidence{Origin: "environment", Version: declaration.Version},
 		})
 	}
@@ -1029,12 +1029,12 @@ func rejectedForFinalState(engine *solver, state *searchState) []RejectedCandida
 
 func rejectedBranchCandidate(candidate candidate, failure ConflictCode) RejectedCandidate {
 	return RejectedCandidate{
-		ComponentID: candidate.release.ComponentID,
-		Variant: candidate.release.Variant,
-		Version: candidate.release.Version,
-		ReasonCode: RejectionBranchConflict,
-		Detail: string(failure),
-		CatalogID: candidate.catalogID,
+		ComponentID:        candidate.release.ComponentID,
+		Variant:            candidate.release.Variant,
+		Version:            candidate.release.Version,
+		ReasonCode:         RejectionBranchConflict,
+		Detail:             string(failure),
+		CatalogID:          candidate.catalogID,
 		ReleaseMetadataURI: candidate.release.MetadataURI,
 		ReleaseMetadataSHA: candidate.release.MetadataSHA,
 	}
@@ -1163,7 +1163,7 @@ func populateConflictNodes(conflict *Conflict, state *searchState) {
 	}
 	seen := make(map[string]bool)
 	add := func(k key) {
-		if !wanted[k.componentID] || !validID(k.componentID,128) || !validID(k.variant,64) {
+		if !wanted[k.componentID] || !validID(k.componentID, 128) || !validID(k.variant, 64) {
 			return
 		}
 		identity := k.componentID + "\x00" + k.variant
@@ -1171,7 +1171,7 @@ func populateConflictNodes(conflict *Conflict, state *searchState) {
 			return
 		}
 		seen[identity] = true
-		node := Node{ComponentID:k.componentID,Variant:k.variant}
+		node := Node{ComponentID: k.componentID, Variant: k.variant}
 		if selected,ok:=state.chosen[k]; ok {
 			node.Version=selected.release.Version
 		}
