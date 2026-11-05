@@ -1,8 +1,13 @@
 /.deps/
-/build/
-/dist/
-/coverage/
+/.venv/
+/.tooling/
 /.pipeline/
-/.psx/
+/pipeline-report/
+build/
+dist/
+coverage/
+.pipeline-artifacts/
+.psx/
+.psx-project.yml
 *.out
 *.test

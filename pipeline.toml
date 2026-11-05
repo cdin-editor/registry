@@ -1,0 +1,73 @@
+schema_version = 1
+
+[project]
+name = "cdin-registry"
+description = "Provider-neutral validation, build and release tasks for the generic Registry engine"
+
+[defaults]
+timeout_seconds = 900
+fail_fast = true
+
+[tasks.deps]
+description = "Download the pinned Go module graph"
+command = ["go", "mod", "download"]
+timeout_seconds = 600
+
+[tasks.modules]
+description = "Verify downloaded module checksums"
+command = ["go", "mod", "verify"]
+depends_on = ["deps"]
+
+[tasks.format]
+description = "Fail when Go source files are not gofmt-formatted"
+command = ["bash", "scripts/check-format.sh"]
+
+[tasks.vet]
+description = "Run the Go static analyzer"
+command = ["go", "vet", "./..."]
+depends_on = ["deps"]
+
+[tasks.test]
+description = "Run all unit and CLI integration tests"
+command = ["go", "test", "./..."]
+depends_on = ["deps"]
+timeout_seconds = 600
+
+[tasks.build]
+description = "Compile every Go package"
+command = ["go", "build", "./..."]
+depends_on = ["deps"]
+timeout_seconds = 600
+
+[tasks.boundary]
+description = "Enforce Registry package and consumer-independence boundaries"
+command = ["bash", "scripts/check-boundaries.sh"]
+
+[tasks.schema-sync]
+description = "Verify local Registry schemas match the pinned CDIN Spec revision"
+command = ["bash", "scripts/sync-spec-schemas.sh", "--check"]
+timeout_seconds = 180
+
+[tasks.structure]
+description = "Check repository structure and governance with PSX"
+command = ["go", "run", "github.com/m-mdy-m/psx/cmd/psx@v0.3.2", "check"]
+depends_on = ["deps"]
+timeout_seconds = 300
+
+[tasks.race]
+description = "Run the race detector on supported native toolchains"
+command = ["go", "test", "-race", "./..."]
+depends_on = ["deps"]
+timeout_seconds = 900
+
+[tasks.release-check]
+description = "Run the cross-platform release verification gate"
+command = ["git", "diff", "--check"]
+depends_on = ["modules", "format", "vet", "test", "build", "boundary", "schema-sync", "structure"]
+timeout_seconds = 900
+
+[tasks.check]
+description = "Run the complete CI quality gate, including race detection"
+command = ["git", "diff", "--check"]
+depends_on = ["release-check", "race"]
+timeout_seconds = 1200

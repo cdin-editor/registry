@@ -3,80 +3,33 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
-    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.27.3"
-          cache: true
-
-      - name: Test source
-        run: go test ./...
-
-      - name: Build release binary
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          mkdir -p dist
-          name="registry-${GOOS}-${GOARCH}"
-          if [ "$GOOS" = "windows" ]; then name="${name}.exe"; fi
-          VERSION="${GITHUB_REF_NAME#v}"
-          go build -trimpath -ldflags "-s -w -X github.com/cdin-editor/registry/internal/buildinfo.Version=${VERSION} -X github.com/cdin-editor/registry/internal/buildinfo.Commit=${GITHUB_SHA}" -o "dist/${name}" ./cmd/registry
-          cp LICENSE NOTICE README.md dist/
-          if [ "$GOOS" = "windows" ]; then
-            zip -q -j "dist/${name%.exe}.zip" "dist/${name}" LICENSE NOTICE README.md
-            rm "dist/${name}"
-          else
-            tar -czf "dist/${name}.tar.gz" -C dist "${name}" LICENSE NOTICE README.md
-            rm "dist/${name}"
-          fi
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: registry-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*
-          if-no-files-found: error
-          retention-days: 7
-
-  publish:
-    needs: build
-    runs-on: ubuntu-24.04
+  release:
+    name: Cross-platform release (Pipeline)
     permissions:
       contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: registry-*
-          merge-multiple: true
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
+      id-token: write
+      attestations: write
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+    with:
+      pipeline-ref: c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+      go-version: "1.27.3"
+      test-command: "PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
+      build-command: "bash scripts/release/build.sh"
+      artifact-path: "dist/*"
+      changelog-path: "CHANGELOG.md"
+      working-directory: "."
+      build-matrix-json: >-
+        {"include":[
+          {"id":"linux-amd64","os":"ubuntu-24.04"},
+          {"id":"linux-arm64","os":"ubuntu-24.04"},
+          {"id":"darwin-amd64","os":"macos-15"},
+          {"id":"darwin-arm64","os":"macos-15"},
+          {"id":"windows-amd64","os":"windows-latest"},
+          {"id":"windows-arm64","os":"windows-11-arm"}
+        ]}

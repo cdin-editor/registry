@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose a generic Registry capability or workflow improvement.
+title: "[FEATURE] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Registry is consumer-independent. Requests should describe a generic capability, not a CDIN-only code path.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Who is affected and what limitation exists today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe observable behavior, inputs and outputs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: genericity
+    attributes:
+      label: Why is this consumer-independent?
+      description: Explain how unrelated products could use the same behavior.
+    validations:
+      required: true
+
+  - type: input
+    id: spec
+    attributes:
+      label: Spec requirement, ADR or contract
+      placeholder: "REG-012 / ADR-0022 / Registry contracts 1.0.0"
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and trade-offs
+    validations:
+      required: false

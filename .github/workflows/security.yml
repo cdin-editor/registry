@@ -1,0 +1,19 @@
+name: Security scan
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scanning (Pipeline)
+    uses: m-mdy-m/pipeline/.github/workflows/security-check.yml@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+    with:
+      scan-path: .
+      gitleaks-version: "v8.30.1"

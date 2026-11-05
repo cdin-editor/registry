@@ -64,8 +64,7 @@ func (v *Validator) Validate(kind Kind, input []byte, filename string) error {
 
 	var document any
 	var err error
-	extension := strings.ToLower(filepath.Ext(filename))
-	switch extension {
+	switch strings.ToLower(filepath.Ext(filename)) {
 	case ".yaml", ".yml":
 		if kind != ProductDefinition {
 			return fmt.Errorf("YAML input is supported only for Product Definitions")
@@ -84,21 +83,78 @@ func (v *Validator) Validate(kind Kind, input []byte, filename string) error {
 }
 
 func decodeJSON(input []byte) (any, error) {
-	decoder := json.NewDecoder(bytes.NewReader(input))
-	var raw json.RawMessage
-	if err := decoder.Decode(&raw); err != nil {
+	scanner := json.NewDecoder(bytes.NewReader(input))
+	scanner.UseNumber()
+	if err := scanJSONValue(scanner); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
+	if _, err := scanner.Token(); err != io.EOF {
 		if err == nil {
-			return nil, fmt.Errorf("unexpected second JSON value")
+			return nil, fmt.Errorf("unexpected trailing JSON value")
 		}
 		return nil, fmt.Errorf("invalid trailing JSON: %w", err)
 	}
-	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+
+	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(input))
 	if err != nil {
 		return nil, fmt.Errorf("invalid JSON document: %w", err)
 	}
 	return document, nil
+}
+
+func scanJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+
+	switch delim {
+	case '{':
+		seen := make(map[string]struct{})
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return fmt.Errorf("object key is not a string")
+			}
+			if _, exists := seen[key]; exists {
+				return fmt.Errorf("duplicate JSON object key %q", key)
+			}
+			seen[key] = struct{}{}
+			if err := scanJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		return expectJSONDelimiter(decoder, '}')
+
+	case '[':
+		for decoder.More() {
+			if err := scanJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		return expectJSONDelimiter(decoder, ']')
+
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delim)
+	}
+}
+
+func expectJSONDelimiter(decoder *json.Decoder, expected json.Delim) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	actual, ok := token.(json.Delim)
+	if !ok || actual != expected {
+		return fmt.Errorf("expected JSON delimiter %q", expected)
+	}
+	return nil
 }
