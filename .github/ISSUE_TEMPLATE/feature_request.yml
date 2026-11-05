@@ -31,6 +31,14 @@ body:
     validations:
       required: true
 
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that would make the proposal complete.
+    validations:
+      required: true
+
   - type: input
     id: spec
     attributes:
