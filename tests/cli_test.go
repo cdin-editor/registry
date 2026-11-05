@@ -71,3 +71,46 @@ func TestCanceledContextReturnsExitCodeOne(t *testing.T) {
 		t.Fatalf("Run() code = %d, want 1", code)
 	}
 }
+
+
+// TestResolveRequiresExplicitProductCatalogAndNetworkPolicy verifies the
+// dry-run CLI does not infer Product Definition, Catalog inputs or trusted
+// metadata hosts from ambient environment state (REG-026).
+func TestResolveRequiresExplicitProductCatalogAndNetworkPolicy(t *testing.T) {
+	cases := [][]string{
+		{"resolve"},
+		{"resolve", "--product", "product.yaml"},
+		{"resolve", "--product", "product.yaml", "--catalog", "catalog.json"},
+	}
+	for _, args := range cases {
+		var stdout, stderr bytes.Buffer
+		code := cli.Run(context.Background(), args, strings.NewReader(""), &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("Run(%v) code = %d, want usage code 2; stderr=%s", args, code, stderr.String())
+		}
+	}
+}
+
+// TestPrepareRequiresOutputAndKeepsExistingValidationEntryPoint verifies
+// prepare has an explicit publication target while existing validate remains
+// an independent syntax/schema-only command.
+func TestPrepareRequiresOutputAndKeepsExistingValidationEntryPoint(t *testing.T) {
+	args := []string{
+		"prepare",
+		"--product", "../../examples/product-definition.yaml",
+		"--catalog", "../../examples/catalog-index.json",
+		"--allow-host", "example.invalid",
+	}
+	var stdout, stderr bytes.Buffer
+	code := cli.Run(context.Background(), args, strings.NewReader(""), &stdout, &stderr)
+	if code != 2 || !strings.Contains(stderr.String(), "--output is required") {
+		t.Fatalf("prepare code=%d stderr=%s, want missing output usage error", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = cli.Run(context.Background(), []string{"validate", "product-definition", "../../examples/product-definition.yaml"}, strings.NewReader(""), &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("validate command regressed: code=%d stderr=%s", code, stderr.String())
+	}
+}
