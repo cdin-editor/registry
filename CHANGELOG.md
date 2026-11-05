@@ -15,6 +15,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pin the Registry schema mirror to an immutable CDIN Spec commit and add a drift-check/synchronization script.
 - Add cross-platform release target compilation through Pipeline's release runner.
 - Add a transport-injected Catalog Index loader with digest-before-parse verification, release identity checks, default-variant normalization, duplicate deduplication and conflict rejection.
+- Preserve typed dependency and contract declarations in Catalog releases for resolver consumption.
+- Add SemVer 2.0.0 parser/precedence and Registry 1.0.0 constraint parsing/evaluation.
+- Add deterministic dependency/version/contract resolver with backtracking, cycle diagnostics and structured in-memory results.
 
 ### Changed
 
@@ -25,8 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Not yet implemented
 
-- Full Catalog transport policy, caching and local fixture integration.
-- Deterministic version, dependency and contract resolution.
+- Full Catalog HTTP transport policy, SSRF/redirect controls, cache and local fixture integration.
 - Immutable Git source collection and transactional workspace publication.
-- Resolved Manifest and Resolution Report production.
-- Update discovery and release hardening.
+- Serialized Resolved Manifest and Resolution Report production, RFC 8785 canonical JSON and replay.
+- CLI composition, update discovery and release hardening.

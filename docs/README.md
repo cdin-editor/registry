@@ -12,6 +12,7 @@
 ## Implementation
 
 - [Catalog ingestion](implementation/catalog-ingestion.md) — digest verification, validation order, duplicate handling and implementation evidence.
+- [Resolver implementation](implementation/resolver.md) — SemVer, dependency solving, contract providers, algorithm decisions and test mapping.
 
 ## Development
 
