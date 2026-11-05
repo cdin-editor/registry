@@ -172,7 +172,6 @@ func TestKindsAreStableAndSorted(t *testing.T) {
 	}
 }
 
-
 // TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON ensures the CLI
 // and Resolver can consume one strict normalized data model without a second
 // YAML parser or a weaker validation path.
