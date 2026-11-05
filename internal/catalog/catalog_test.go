@@ -34,7 +34,11 @@ func digest(data []byte) string {
 }
 
 func releaseBytes(component, variant, version string) []byte {
-	return []byte(fmt.Sprintf(`{"schema_version":"1.0.0","component_id":%q,"variant":%q,"version":%q,"status":"active","source_units":[{"source_unit_id":"source","repository_uri":"https://example.invalid/repo.git","revision":"0123456789012345678901234567890123456789"}]}`, component, variant, version))
+	variantField := ""
+	if variant != "" {
+		variantField = fmt.Sprintf(`,"variant":%q`, variant)
+	}
+	return []byte(fmt.Sprintf(`{"schema_version":"1.0.0","component_id":%q%s,"version":%q,"status":"active","source_units":[{"source_unit_id":"source","repository_uri":"https://example.invalid/repo.git","revision":"0123456789012345678901234567890123456789"}]}`, component, variantField, version))
 }
 
 func indexBytes(entries ...Entry) []byte {
