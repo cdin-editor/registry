@@ -27,8 +27,8 @@ type gixFile struct {
 	Gix struct {
 		Version string `yaml:"version"`
 	} `yaml:"gix"`
-	Remote string                `yaml:"remote"`
-	Branch map[string]gixBranch  `yaml:"branch"`
+	Remote string               `yaml:"remote"`
+	Branch map[string]gixBranch `yaml:"branch"`
 }
 
 func repositoryRoot(t *testing.T) string {
