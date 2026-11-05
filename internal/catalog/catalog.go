@@ -21,6 +21,13 @@ type Fetcher interface {
 	Fetch(context.Context, string) ([]byte, error)
 }
 
+// DigestFetcher is an optional extension for transports/caches that can bind
+// retrieval to the immutable digest declared by the Catalog Index. Load still
+// verifies the returned bytes independently before parsing (REG-019).
+type DigestFetcher interface {
+	FetchWithDigest(context.Context, string, string) ([]byte, error)
+}
+
 // Validator validates a JSON document against one embedded Registry v1 schema.
 // Catalog delegates schema authority to validation instead of duplicating rules.
 type Validator interface {
@@ -180,13 +187,19 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 		}
 		key := identity{entry.ComponentID, variant, entry.Version}
 
-		payload, err := fetcher.Fetch(ctx, entry.MetadataURI)
+		expected := strings.ToLower(entry.MetadataSHA)
+		var payload []byte
+		var err error
+		if digestFetcher, ok := fetcher.(DigestFetcher); ok {
+			payload, err = digestFetcher.FetchWithDigest(ctx, entry.MetadataURI, expected)
+		} else {
+			payload, err = fetcher.Fetch(ctx, entry.MetadataURI)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("catalog: fetch entry %d metadata %q: %w", i, entry.MetadataURI, err)
 		}
 		sum := sha256.Sum256(payload)
 		actual := hex.EncodeToString(sum[:])
-		expected := strings.ToLower(entry.MetadataSHA)
 		if actual != expected {
 			return nil, fmt.Errorf("catalog: metadata digest mismatch for %s/%s@%s: expected %s, got %s",
 				key.component, key.variant, key.version, expected, actual)
