@@ -135,3 +135,20 @@ func TestLoadHonorsCancellationAndRequiredDependencies(t *testing.T) {
 		t.Fatal("expected missing fetcher error")
 	}
 }
+
+func TestLoadUsesEmbeddedRegistrySchemas(t *testing.T) {
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := releaseBytes("engine", "", "1.2.3")
+	got, err := Load(context.Background(), indexBytes(Entry{
+		ComponentID: "engine", Version: "1.2.3", MetadataURI: "mem://release", MetadataSHA: digest(payload),
+	}), mapFetcher{"mem://release": payload}, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Releases) != 1 || got.Releases[0].Variant != "default" {
+		t.Fatalf("unexpected catalog result: %#v", got)
+	}
+}
