@@ -1,0 +1,37 @@
+name: Spec or contract change
+description: Request a public Registry contract or architecture change.
+title: "[SPEC] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Public Registry contracts are owned by cdin-editor/spec. Changes to schemas, version-selection semantics, source identity or manifest/workspace behavior must be reviewed there before implementation changes are made in this repository.
+
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed contract change
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation and use cases
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and migration impact
+    validations:
+      required: true
+
+  - type: input
+    id: spec-issue
+    attributes:
+      label: Related Spec issue or PR
+      placeholder: "https://github.com/cdin-editor/spec/issues/..."
+    validations:
+      required: false

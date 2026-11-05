@@ -74,13 +74,13 @@ func yamlValue(node *yaml.Node, active map[*yaml.Node]bool) (any, error) {
 		result := make(map[string]any, len(node.Content)/2)
 		for i := 0; i < len(node.Content); i += 2 {
 			keyNode := node.Content[i]
+			if keyNode.Tag == "!!merge" || (keyNode.Kind == yaml.ScalarNode && keyNode.Value == "<<") {
+				return nil, fmt.Errorf("YAML merge keys are not supported (line %d)", keyNode.Line)
+			}
 			if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != "!!str" {
 				return nil, fmt.Errorf("mapping keys must be strings (line %d)", keyNode.Line)
 			}
 			key := keyNode.Value
-			if key == "<<" {
-				return nil, fmt.Errorf("YAML merge keys are not supported (line %d)", keyNode.Line)
-			}
 			if _, exists := result[key]; exists {
 				return nil, fmt.Errorf("duplicate YAML mapping key %q (line %d)", key, keyNode.Line)
 			}
