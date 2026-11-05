@@ -2,6 +2,7 @@ package validation
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -168,5 +169,24 @@ func TestKindsAreStableAndSorted(t *testing.T) {
 		if kinds[i-1] > kinds[i] {
 			t.Fatalf("Kinds() is not sorted: %v", kinds)
 		}
+	}
+}
+
+
+// TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON ensures the CLI
+// and Resolver can consume one strict normalized data model without a second
+// YAML parser or a weaker validation path.
+func TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON(t *testing.T) {
+	validator := newTestValidator(t)
+	input := []byte("schema_version: \"1.0.0\"\ncomponents: []\n")
+	normalized, err := validator.Normalize(ProductDefinition, input, "product.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(normalized) || !bytes.Contains(normalized, []byte("\"schema_version\"")) {
+		t.Fatalf("Normalize() did not return JSON: %s", normalized)
+	}
+	if _, err := validator.Normalize(ProductDefinition, []byte("{\"schema_version\":\"1.0.0\",\"components\":[],\"components\":[]}"), "product.json"); err == nil {
+		t.Fatal("Normalize() accepted duplicate JSON keys")
 	}
 }
