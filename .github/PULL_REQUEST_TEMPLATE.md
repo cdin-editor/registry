@@ -40,6 +40,7 @@ Breaking changes, trade-offs and deferred work:
 
 - [ ] `pipeline run check --json` passes.
 - [ ] `psx check` passes.
+- [ ] `gix config list` passes and the branch flow is unchanged or intentionally updated.
 - [ ] Schema mirror check passes against the pinned Spec revision.
 - [ ] Positive and negative tests cover the changed behavior.
 - [ ] Failure cleanup and path-safety cases are tested where relevant.
