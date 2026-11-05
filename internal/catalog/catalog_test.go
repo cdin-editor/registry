@@ -183,3 +183,29 @@ func TestLoadPreservesDependencyAndContractDeclarationsForResolver(t *testing.T)
 		t.Fatalf("required contract was not preserved: %#v", release.Contracts.Requires)
 	}
 }
+
+
+// TestREG023CatalogIndexIdentityIsPreserved records the exact catalog source URI
+// and SHA-256 of the bytes used for resolution, allowing the Manifest to identify
+// the metadata input that produced the selected graph.
+func TestREG023CatalogIndexIdentityIsPreserved(t *testing.T) {
+	payload := releaseBytes("engine", "", "1.2.3")
+	index := indexBytes(Entry{
+		ComponentID: "engine",
+		Version: "1.2.3",
+		MetadataURI: "mem://release",
+		MetadataSHA: digest(payload),
+	})
+	got, err := LoadFromSource(context.Background(), index, "https://catalog.example.invalid/index.json", mapFetcher{
+		"mem://release": payload,
+	}, &acceptingValidator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MetadataURI != "https://catalog.example.invalid/index.json" {
+		t.Fatalf("catalog metadata URI = %q", got.MetadataURI)
+	}
+	if got.MetadataSHA != digest(index) {
+		t.Fatalf("catalog metadata digest = %q, want %q", got.MetadataSHA, digest(index))
+	}
+}
