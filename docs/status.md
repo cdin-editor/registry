@@ -5,7 +5,7 @@
 The Registry architecture and data contracts are accepted in CDIN Spec. This repository now has the Go CLI foundation, strict input validation, mirrored schemas, a shared Pipeline task graph, PSX/GIX repository governance and reusable CI/release entry points.
 
 | Capability | Status |
-|---|---|
+| --- | --- |
 | CLI entry point, version, help and schema inspection | Implemented |
 | Embedded Registry v1 schemas | Implemented; pinned to a Spec commit |
 | JSON Schema compilation and document validation | Implemented |
