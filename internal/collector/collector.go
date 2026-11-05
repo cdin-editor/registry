@@ -88,7 +88,7 @@ func (p HTTPSAllowList) ValidateRepository(uri string) error {
 	if parsed.User != nil {
 		return fmt.Errorf("collector: repository URI must not contain embedded credentials")
 	}
-	host := strings.ToLower(parsed.Hostname())
+	host := strings.ToLower(parsed.Host)
 	if !containsHost(p, host) {
 		return fmt.Errorf("collector: repository host %q is not allow-listed", host)
 	}
@@ -223,6 +223,12 @@ func parseRepositoryURI(value string) (repositoryURI, error) {
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" || parsed.Opaque != "" {
 		return repositoryURI{}, fmt.Errorf("collector: repository URI must be an absolute hierarchical URI")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return repositoryURI{}, fmt.Errorf("collector: repository URI must not contain query or fragment components")
+	}
+	if port := parsed.Port(); port != "" && port != "443" {
+		return repositoryURI{}, fmt.Errorf("collector: HTTPS repository URI must use the default port")
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
 		return repositoryURI{}, fmt.Errorf("collector: repository URI must not contain query or fragment components")
