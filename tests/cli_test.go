@@ -96,8 +96,8 @@ func TestResolveRequiresExplicitProductCatalogAndNetworkPolicy(t *testing.T) {
 func TestPrepareRequiresOutputAndKeepsExistingValidationEntryPoint(t *testing.T) {
 	args := []string{
 		"prepare",
-		"--product", "../../examples/product-definition.yaml",
-		"--catalog", "../../examples/catalog-index.json",
+		"--product", "../examples/product-definition.yaml",
+		"--catalog", "../examples/catalog-index.json",
 		"--allow-host", "example.invalid",
 	}
 	var stdout, stderr bytes.Buffer
@@ -108,7 +108,7 @@ func TestPrepareRequiresOutputAndKeepsExistingValidationEntryPoint(t *testing.T)
 
 	stdout.Reset()
 	stderr.Reset()
-	code = cli.Run(context.Background(), []string{"validate", "product-definition", "../../examples/product-definition.yaml"}, strings.NewReader(""), &stdout, &stderr)
+	code = cli.Run(context.Background(), []string{"validate", "product-definition", "../examples/product-definition.yaml"}, strings.NewReader(""), &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("validate command regressed: code=%d stderr=%s", code, stderr.String())
 	}
