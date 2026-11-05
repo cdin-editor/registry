@@ -34,24 +34,29 @@ go build -trimpath -o build/registry ./cmd/registry
 pipeline run check --json
 ```
 
-The `check` task runs module verification, formatting, vet, unit/integration tests, build, boundary checks, pinned Spec-schema synchronization, PSX structure checks and `git diff --check`.
+The `check` graph includes:
 
-The race detector is a separate task because supported Go race-detector platforms differ:
+1. Go module download and checksum verification.
+2. Formatting, `go vet`, unit tests, CLI integration tests and build.
+3. Executable governance tests for the PR template, issue forms, PSX policy and exact GIX topology.
+4. GIX's own read-only `config list` parser/validator.
+5. Package-boundary checks and byte-for-byte schema synchronization with the pinned Spec commit.
+6. PSX repository-structure checks.
+7. `git diff --check` and the Go race detector.
 
-```sh
-pipeline run race --json
-```
-
-For a release matrix target, Pipeline runs the portable `release-check` task before invoking the project-owned cross-compilation script.
+The GIX parser task is not a substitute for review: it validates configuration syntax and semantics without creating, merging or deleting branches. The Go governance tests check that the configuration still expresses Registry's intended main/develop flow.
 
 ## Individual checks
 
 ```sh
 pipeline run test --json
+pipeline run governance --json
+pipeline run gix-config --json
 pipeline run vet --json
 pipeline run structure --json
 pipeline run schema-sync --json
 pipeline run boundary --json
+pipeline run race --json
 ```
 
 The schema synchronization command downloads from the immutable Spec commit recorded in `schemas/registry/v1/SOURCE.toml`. It never follows a moving branch. Use `bash scripts/sync-spec-schemas.sh --update` only after changing that lock to an accepted Spec commit.
