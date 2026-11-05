@@ -380,3 +380,45 @@ func TestREG009MissingReleaseReportsNoCompatibleCandidate(t *testing.T) {
 	r:=Resolve(product(Requirement{ComponentID:"missing",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{catalogOf("empty")})
 	if r.Graph!=nil || len(r.Report.Conflicts)!=1 || r.Report.Conflicts[0].Code!=ConflictNoCompatibleRelease { t.Fatalf("missing release not reported: %+v",r.Report) }
 }
+
+
+// REG-015/016: a component may provide its own requirement, and duplicate
+// identical declarations in that release are coalesced into one provider.
+func TestREG015SelfProviderAndDuplicateDeclarations(t *testing.T) {
+	component:=release("self","default","1.0.0","active")
+	component.Contracts.Provides=[]catalog.ContractProvider{
+		{ContractID:"org.example.api",Version:"1.2.0"},
+		{ContractID:"org.example.api",Version:"1.2.0"},
+	}
+	component.Contracts.Requires=[]catalog.ContractRequirement{{ContractID:"org.example.api",VersionConstraint:">=1.0.0 <2.0.0"}}
+	r:=Resolve(product(Requirement{ComponentID:"self",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{catalogOf("self",component)})
+	if r.Graph==nil { t.Fatalf("self-provider contract should resolve: %+v",r.Report) }
+}
+
+// REG-015/016: incompatible declarations are retained with their declared
+// contract version and selected component release version kept distinct.
+func TestREG016IncompatibleProviderEvidence(t *testing.T) {
+	consumer:=release("consumer","default","1.0.0","active")
+	consumer.Contracts.Requires=[]catalog.ContractRequirement{{ContractID:"org.example.api",VersionConstraint:">=1.0.0 <2.0.0"}}
+	provider:=release("provider","default","4.0.0","active")
+	provider.Contracts.Provides=[]catalog.ContractProvider{{ContractID:"org.example.api",Version:"3.0.0"}}
+	r:=Resolve(product(Requirement{ComponentID:"consumer",VersionConstraint:"=1.0.0"},Requirement{ComponentID:"provider",VersionConstraint:"=4.0.0"}),[]*catalog.Catalog{catalogOf("contracts",consumer,provider)})
+	if r.Graph!=nil || len(r.Report.Conflicts)!=1 { t.Fatalf("incompatible provider should fail: %+v",r.Report) }
+	e:=r.Report.Conflicts[0].ContractEvidence
+	if r.Report.Conflicts[0].Code!=ConflictContractProviderMissing || e==nil || len(e.Providers)!=1 { t.Fatalf("incompatible-provider evidence missing: %+v",r.Report.Conflicts) }
+	p:=e.Providers[0]
+	if p.Compatible || p.Version!="3.0.0" || p.ComponentVersion!="4.0.0" || p.CatalogID!="contracts" { t.Fatalf("contract/package versions or provenance are wrong: %+v",p) }
+}
+
+// REG-015/016: repeated environment declarations count as distinct providers;
+// their evidence remains duplicated and stable rather than index-dependent.
+func TestREG016DuplicateEnvironmentProvidersAreAmbiguous(t *testing.T) {
+	consumer:=release("consumer","default","1.0.0","active")
+	consumer.Contracts.Requires=[]catalog.ContractRequirement{{ContractID:"org.example.api",VersionConstraint:">=1.0.0 <2.0.0"}}
+	def:=product(Requirement{ComponentID:"consumer",VersionConstraint:"=1.0.0"})
+	def.EnvironmentContracts=[]EnvironmentContract{{ContractID:"org.example.api",Version:"1.5.0"},{ContractID:"org.example.api",Version:"1.5.0"}}
+	r:=Resolve(def,[]*catalog.Catalog{catalogOf("env",consumer)})
+	if r.Graph!=nil || len(r.Report.Conflicts)!=1 || r.Report.Conflicts[0].Code!=ConflictContractProviderAmbiguous { t.Fatalf("duplicate environment providers should be ambiguous: %+v",r.Report) }
+	p:=r.Report.Conflicts[0].ContractEvidence.Providers
+	if len(p)!=2 || p[0].Origin!="environment" || p[1].Origin!="environment" || p[0].Version!="1.5.0" { t.Fatalf("environment provider multiplicity/evidence lost: %+v",p) }
+}
