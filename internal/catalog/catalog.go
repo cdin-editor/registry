@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/cdin-editor/registry/internal/validation"
@@ -105,8 +106,33 @@ type Release struct {
 // Catalog is one fully loaded index and its validated release records. Load
 // never returns a partial Catalog after a fetch/validation failure.
 type Catalog struct {
-	ID       string
-	Releases []Release
+	ID          string
+	MetadataURI string
+	MetadataSHA string
+	Releases    []Release
+}
+
+// LoadFromSource is the production entry point when the caller knows the
+// immutable Catalog Index URI. It hashes the exact index bytes so a Manifest can
+// identify the catalog input that produced the selected graph (REG-023/024).
+// The URI is recorded as provenance; Fetcher policy still governs each metadata
+// request and is not inferred from this field.
+func LoadFromSource(ctx context.Context, indexBytes []byte, indexURI string, fetcher Fetcher, validator Validator) (*Catalog, error) {
+	if strings.TrimSpace(indexURI) == "" {
+		return nil, fmt.Errorf("catalog: source URI is required")
+	}
+	parsed, err := url.Parse(indexURI)
+	if err != nil || !parsed.IsAbs() || parsed.Scheme == "" {
+		return nil, fmt.Errorf("catalog: source URI must be absolute")
+	}
+	loaded, err := Load(ctx, indexBytes, fetcher, validator)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(indexBytes)
+	loaded.MetadataURI = indexURI
+	loaded.MetadataSHA = hex.EncodeToString(sum[:])
+	return loaded, nil
 }
 
 type identity struct {
