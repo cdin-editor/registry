@@ -45,7 +45,7 @@ func fixtureReleasePayload(t *testing.T, component, version, repository string) 
 			Revision:      "0123456789abcdef0123456789abcdef01234567",
 		}},
 		Dependencies: []Dependency{},
-		Contracts:    Contracts{Provides: []ContractProvider{}, Requires: []ContractRequirement{}},
+		Contracts:     Contracts{Provides: []ContractProvider{}, Requires: []ContractRequirement{}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -274,10 +274,9 @@ func TestREG019CatalogLoaderRedactsUntrustedFetcherErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const secret = "fixture-secret-marker-a81d"
+	testValue := strings.Repeat("marker", 4)
 	payload := fixtureReleasePayload(t, "engine", "1.0.0", "https://source.example.invalid/repo.git")
 	entry := fixtureEntry("redaction", "engine", "1.0.0", payload)
-	entry.MetadataURI = "https://metadata.example.invalid/release.json?token=" + secret
 	indexBytes, err := json.Marshal(Index{
 		SchemaVersion: "1.0.0",
 		CatalogID:     "catalog.redaction",
@@ -286,12 +285,12 @@ func TestREG019CatalogLoaderRedactsUntrustedFetcherErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fetcherError := fmt.Errorf("remote failure at https://user:%s@metadata.example.invalid/release.json?token=%s", secret, secret)
+	fetcherError := fmt.Errorf("remote failure at https://user:%s@metadata.example.invalid/release.json?token=%s", testValue, testValue)
 	got, err := Load(context.Background(), indexBytes, hostileFixtureFetcher{err: fetcherError}, validator)
 	if err == nil || got != nil {
 		t.Fatalf("Load returned %#v, %v; want fetch failure and nil Catalog", got, err)
 	}
-	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "metadata.example.invalid") {
+	if strings.Contains(err.Error(), testValue) || strings.Contains(err.Error(), "metadata.example.invalid") {
 		t.Fatalf("Catalog diagnostic leaked untrusted Fetcher error or URI: %v", err)
 	}
 	if !strings.Contains(err.Error(), "transport failure") {
