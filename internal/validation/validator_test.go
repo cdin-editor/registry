@@ -177,7 +177,7 @@ func TestKindsAreStableAndSorted(t *testing.T) {
 // YAML parser or a weaker validation path.
 func TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON(t *testing.T) {
 	validator := newTestValidator(t)
-	input := []byte("schema_version: \"1.0.0\"\ncomponents: []\n")
+	input := []byte("schema_version: \"1.0.0\"\ncomponents:\n  - component_id: engine\n    version_constraint: \">=1.0.0 <2.0.0\"\n")
 	normalized, err := validator.Normalize(ProductDefinition, input, "product.yaml")
 	if err != nil {
 		t.Fatal(err)
