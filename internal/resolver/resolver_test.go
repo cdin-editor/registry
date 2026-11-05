@@ -1,6 +1,7 @@
 package resolver
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -282,4 +283,100 @@ func TestREG011RejectsFallbackTie(t *testing.T) {
 	if result.Graph != nil || len(result.Report.Conflicts) == 0 || result.Report.Conflicts[0].Code != "AMBIGUOUS_RELEASE" {
 		t.Fatalf("fallback tie was not rejected: %+v", result.Report)
 	}
+}
+
+
+func countApplied(report Report, id string) int { n:=0; for _,c:=range report.AppliedConstraints { if c.ComponentID==id { n++ } }; return n }
+func hasRejected(report Report, id, version string, reason RejectionReasonCode) bool {
+	for _,c:=range report.RejectedCandidates { if c.ComponentID==id && c.Version==version && c.ReasonCode==reason { return true } }; return false
+}
+
+// REG-008: a diamond selects the shared node once and retains both edge constraints.
+func TestREG008DiamondGraphEvidence(t *testing.T) {
+	cat:=catalogOf("diamond",
+		release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"left",VersionConstraint:"=1.0.0"},catalog.Dependency{ComponentID:"right",VersionConstraint:"=1.0.0"}),
+		release("left","default","1.0.0","active",catalog.Dependency{ComponentID:"shared",VersionConstraint:">=1.0.0 <2.0.0"}),
+		release("right","default","1.0.0","active",catalog.Dependency{ComponentID:"shared",VersionConstraint:"=1.0.0"}),
+		release("shared","default","1.0.0","active"))
+	r:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{cat})
+	if r.Graph==nil { t.Fatalf("diamond failed: %+v",r.Report) }
+	n:=0; sources:=map[string]bool{}
+	for _,c:=range r.Graph.Components { if c.ComponentID=="shared" { n++ } }
+	for _,c:=range r.Report.AppliedConstraints { if c.ComponentID=="shared" { sources[c.Source.ComponentID]=true } }
+	if n!=1 || countApplied(r.Report,"shared")!=2 || !sources["left"] || !sources["right"] { t.Fatalf("shared evidence incomplete: %+v",r.Report) }
+}
+
+// REG-010: repeated roots and duplicate dependency declarations remain auditable.
+func TestREG010RepeatedRootsAndDependencies(t *testing.T) {
+	cat:=catalogOf("dupes",
+		release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"lib",VersionConstraint:"=1.0.0"},catalog.Dependency{ComponentID:"lib",VersionConstraint:"=1.0.0"}),
+		release("lib","default","1.0.0","active"))
+	r:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:">=1.0.0"},Requirement{ComponentID:"app",VersionConstraint:"<2.0.0"}),[]*catalog.Catalog{cat})
+	if r.Graph==nil || countApplied(r.Report,"app")!=2 || countApplied(r.Report,"lib")!=2 { t.Fatalf("duplicate constraint evidence lost: %+v",r.Report) }
+}
+
+// REG-010: conflicting constraints from two transitive paths retain both sources.
+func TestREG010ConflictingDiamondEvidence(t *testing.T) {
+	cat:=catalogOf("conflict",
+		release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"left",VersionConstraint:"=1.0.0"},catalog.Dependency{ComponentID:"right",VersionConstraint:"=1.0.0"}),
+		release("left","default","1.0.0","active",catalog.Dependency{ComponentID:"engine",VersionConstraint:">=2.0.0"}),
+		release("right","default","1.0.0","active",catalog.Dependency{ComponentID:"engine",VersionConstraint:"<2.0.0"}),
+		release("engine","default","2.0.0","active"))
+	r:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{cat})
+	if r.Graph!=nil || len(r.Report.Conflicts)!=1 || r.Report.Conflicts[0].Code!=ConflictConstraintIntersectionEmpty { t.Fatalf("expected empty intersection: %+v",r.Report) }
+	sources:=map[string]string{}
+	for _,c:=range r.Report.AppliedConstraints { if c.ComponentID=="engine" { sources[c.Source.ComponentID]=c.VersionConstraint } }
+	if sources["left"]!=">=2.0.0" || sources["right"]!="<2.0.0" { t.Fatalf("missing path provenance: %v",sources) }
+}
+
+// REG-011: a failed higher candidate is reported when a lower candidate succeeds.
+func TestREG011SuccessfulFallbackReportsBranchRejection(t *testing.T) {
+	cat:=catalogOf("fallback",
+		release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"engine",VersionConstraint:">=1.0.0 <3.0.0"}),
+		release("engine","default","2.0.0","active",catalog.Dependency{ComponentID:"missing",VersionConstraint:"=1.0.0"}),
+		release("engine","default","1.0.0","active"))
+	r:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{cat})
+	found:=false
+	for _,c:=range r.Report.RejectedCandidates { if c.ComponentID=="engine" && c.Version=="2.0.0" && c.ReasonCode==RejectionBranchConflict && c.Detail==string(ConflictNoCompatibleRelease) && c.CatalogID=="fallback" { found=true } }
+	if r.Graph==nil || !found { t.Fatalf("fallback reason/provenance missing: %+v",r.Report) }
+}
+
+// REG-025: failed sibling-branch evidence must not leak into the surfaced failure.
+func TestREG025SiblingBranchEvidenceIsolation(t *testing.T) {
+	cat:=catalogOf("isolation",
+		release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"engine",VersionConstraint:">=1.0.0 <3.0.0"}),
+		release("engine","default","2.0.0","active",catalog.Dependency{ComponentID:"alpha",VersionConstraint:"=1.0.0"}),
+		release("engine","default","1.0.0","active",catalog.Dependency{ComponentID:"beta",VersionConstraint:"=1.0.0"}),
+		release("alpha","default","1.0.0","withdrawn"),release("beta","default","1.0.0","withdrawn"))
+	r:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{cat})
+	if r.Graph!=nil || len(r.Report.Conflicts)!=1 || r.Report.Conflicts[0].Code!=ConflictNoCompatibleRelease { t.Fatalf("expected resolution failure: %+v",r.Report) }
+	if countApplied(r.Report,"alpha")!=1 || countApplied(r.Report,"beta")!=0 || !hasRejected(r.Report,"alpha","1.0.0",RejectionWithdrawn) || hasRejected(r.Report,"beta","1.0.0",RejectionWithdrawn) || !hasRejected(r.Report,"engine","2.0.0",RejectionBranchConflict) { t.Fatalf("sibling branch leaked or surfaced evidence missing: %+v",r.Report) }
+}
+
+// REG-011: candidate and dependency input permutations cannot change output bytes.
+func TestREG011CandidateDependencyPermutation(t *testing.T) {
+	a:=release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"left",VersionConstraint:">=1.0.0"},catalog.Dependency{ComponentID:"right",VersionConstraint:">=1.0.0"})
+	b:=release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"right",VersionConstraint:">=1.0.0"},catalog.Dependency{ComponentID:"left",VersionConstraint:">=1.0.0"})
+	left,right:=release("left","default","1.0.0","active"),release("right","default","1.0.0","active")
+	first:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{catalogOf("perm",a,left,right)})
+	second:=Resolve(product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{catalogOf("perm",right,left,b)})
+	if first.Graph==nil || second.Graph==nil { t.Fatalf("permutation failed: %+v / %+v",first.Report,second.Report) }
+	fa,_:=json.Marshal(first.Report); sa,_:=json.Marshal(second.Report)
+	fg,_:=json.Marshal(first.Graph); sg,_:=json.Marshal(second.Graph)
+	if string(fa)!=string(sa) || string(fg)!=string(sg) { t.Fatal("permutation changed report or graph") }
+}
+
+// REG-011: the configured state ceiling has a stable structured failure report.
+func TestREG011SearchLimitReportStable(t *testing.T) {
+	cat:=catalogOf("limit",release("app","default","1.0.0","active",catalog.Dependency{ComponentID:"base",VersionConstraint:"=1.0.0"}),release("base","default","1.0.0","active"))
+	def:=product(Requirement{ComponentID:"app",VersionConstraint:"=1.0.0"})
+	a:=resolveWithMaxSearchStates(def,[]*catalog.Catalog{cat},1); b:=resolveWithMaxSearchStates(def,[]*catalog.Catalog{cat},1)
+	if a.Graph!=nil || len(a.Report.Conflicts)!=1 || a.Report.Conflicts[0].Code!=ConflictResolutionLimit || len(a.Report.AppliedConstraints)!=1 { t.Fatalf("limit failure incomplete: %+v",a.Report) }
+	aa,_:=json.Marshal(a.Report); bb,_:=json.Marshal(b.Report); if string(aa)!=string(bb) { t.Fatalf("limit report unstable: %s != %s",aa,bb) }
+}
+
+// REG-009: a missing required component fails without producing a graph.
+func TestREG009MissingReleaseReportsNoCompatibleCandidate(t *testing.T) {
+	r:=Resolve(product(Requirement{ComponentID:"missing",VersionConstraint:"=1.0.0"}),[]*catalog.Catalog{catalogOf("empty")})
+	if r.Graph!=nil || len(r.Report.Conflicts)!=1 || r.Report.Conflicts[0].Code!=ConflictNoCompatibleRelease { t.Fatalf("missing release not reported: %+v",r.Report) }
 }
