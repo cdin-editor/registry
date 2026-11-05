@@ -13,10 +13,10 @@ A package or interface is not complete until its behavior and failure paths are 
 
 ## Phase 2 — Catalog
 
-- [ ] Catalog Index loading and validation.
-- [ ] Metadata SHA-256 verification before parsing.
-- [ ] Duplicate and conflicting catalog-entry detection.
-- [ ] Local fixture catalogs and negative tests.
+- [x] Catalog Index loading and schema validation.
+- [x] Metadata SHA-256 verification before release metadata validation/decoding.
+- [x] Duplicate identical entry deduplication and conflicting metadata identity rejection.
+- [ ] Local fixture catalogs, transport integration and broader negative tests.
 
 ## Phase 3 — Resolver
 
