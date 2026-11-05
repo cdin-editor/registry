@@ -3,7 +3,7 @@
 The Registry implementation uses Go's cmd/ and internal/ layout. Its package boundaries follow the responsibility split in CDIN Spec without pretending that planned modules are already implemented.
 
 | Package | Owns | Must not own |
-|---|---|---|
+| --- | --- | --- |
 | cmd/registry | Process entry point and exit code | Resolver or filesystem policy |
 | internal/cli | Commands, arguments, streams and user-facing diagnostics | Product-specific behavior |
 | internal/validation | Document decoding and schema validation | Catalog fetching or source checkout |
