@@ -134,6 +134,7 @@ type executionOptions struct {
 	catalogs     []string
 	allowedHosts []string
 	outputPath   string
+	cacheDir     string
 }
 
 // parseExecutionOptions accepts repeated --catalog and --allow-host flags.
@@ -165,6 +166,11 @@ func parseExecutionOptions(args []string, preparing bool) (executionOptions, err
 				return options, fmt.Errorf("--output may be specified only once")
 			}
 			options.outputPath = value
+		case "--cache-dir":
+			if options.cacheDir != "" {
+				return options, fmt.Errorf("--cache-dir may be specified only once")
+			}
+			options.cacheDir = value
 		default:
 			return options, fmt.Errorf("unknown option %q", args[i])
 		}
@@ -221,7 +227,10 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		fmt.Fprintf(stderr, "registry: decode normalized Product Definition: %v\n", err)
 		return exitInvalid
 	}
-	fetcher, err := catalog.NewHTTPFetcher(catalog.HTTPFetcherOptions{AllowedHosts: options.allowedHosts})
+	fetcher, err := catalog.NewHTTPFetcher(catalog.HTTPFetcherOptions{
+		AllowedHosts: options.allowedHosts,
+		CacheDir:     options.cacheDir,
+	})
 	if err != nil {
 		fmt.Fprintf(stderr, "registry: configure Catalog transport: %v\n", err)
 		return exitInvalid
@@ -387,8 +396,8 @@ Usage:
   registry schema list
   registry schema show <kind>
   registry validate <kind> <file|->
-  registry resolve --product <file> --catalog <file|https-uri>... --allow-host <host>...
-  registry prepare --product <file> --catalog <file|https-uri>... --allow-host <host>... --output <dir>
+  registry resolve --product <file> --catalog <file|https-uri>... --allow-host <host>... [--cache-dir <dir>]
+  registry prepare --product <file> --catalog <file|https-uri>... --allow-host <host>... --output <dir> [--cache-dir <dir>]
 
 Document kinds:
   product-definition
@@ -402,5 +411,6 @@ Notes:
   Standard input (-) is read as JSON.
   resolve emits a Resolution Report and never collects component source.
   prepare publishes a complete workspace only after all checks succeed.
-  Network catalog hosts must be explicitly allow-listed with --allow-host.`))
+  Network catalog hosts must be explicitly allow-listed with --allow-host.
+  --cache-dir enables the integrity-checked, digest-addressed metadata cache.`))
 }
