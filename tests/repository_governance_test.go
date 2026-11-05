@@ -223,10 +223,10 @@ func TestRepositoryGovernanceIssueForms(t *testing.T) {
 			seenIDs := make(map[string]bool)
 			requiredFields := 0
 			allowedTypes := map[string]bool{
-				"markdown": true,
-				"input": true,
-				"dropdown": true,
-				"textarea": true,
+				"markdown":   true,
+				"input":      true,
+				"dropdown":   true,
+				"textarea":   true,
 				"checkboxes": true,
 			}
 			for index, rawField := range body {
