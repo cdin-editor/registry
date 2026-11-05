@@ -88,9 +88,9 @@ func (p HTTPSAllowList) ValidateRepository(uri string) error {
 	if parsed.User != nil {
 		return fmt.Errorf("collector: repository URI must not contain embedded credentials")
 	}
-	// Hostname excludes an explicitly written default :443 port, so
-	// equivalent HTTPS URI spellings share the same allow-list identity.
-	host := strings.ToLower(parsed.Hostname())
+	// parseRepositoryURI stores url.URL.Hostname(), excluding an explicit
+	// default :443 port so equivalent HTTPS spellings share one allow-list key.
+	host := strings.ToLower(parsed.Host)
 	if !containsHost(p, host) {
 		return fmt.Errorf("collector: repository host %q is not allow-listed", host)
 	}
