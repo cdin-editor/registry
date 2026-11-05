@@ -28,11 +28,11 @@ type Index struct {
 }
 
 type Entry struct {
-	ComponentID  string `json:"component_id"`
-	Variant      string `json:"variant"`
-	Version      string `json:"version"`
-	MetadataURI  string `json:"metadata_uri"`
-	MetadataSHA  string `json:"metadata_sha256"`
+	ComponentID string `json:"component_id"`
+	Variant     string `json:"variant"`
+	Version     string `json:"version"`
+	MetadataURI string `json:"metadata_uri"`
+	MetadataSHA string `json:"metadata_sha256"`
 }
 
 type SourceUnit struct {
