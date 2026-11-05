@@ -13,7 +13,7 @@ develop ── release/* ──> main + develop
 ```
 
 | Branch kind | Prefix | Parent | Finish targets |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Main | — | — | — |
 | Develop | — | main | — |
 | Feature | `feature/` | develop | develop |
