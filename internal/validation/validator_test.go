@@ -1,9 +1,12 @@
 package validation
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/cdin-editor/registry/internal/schemas"
 )
 
 func newTestValidator(t *testing.T) *Validator {
@@ -13,6 +16,31 @@ func newTestValidator(t *testing.T) *Validator {
 		t.Fatalf("New() error = %v", err)
 	}
 	return validator
+}
+
+func TestEmbeddedSchemasMatchCanonicalCopies(t *testing.T) {
+	names := []string{
+		"product-definition.schema.json",
+		"catalog-index.schema.json",
+		"component-release.schema.json",
+		"resolved-manifest.schema.json",
+		"resolution-report.schema.json",
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			canonical, err := os.ReadFile("../../schemas/registry/v1/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			embedded, err := schemas.FS.ReadFile("registry/v1/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(canonical, embedded) {
+				t.Fatalf("embedded schema %s differs from canonical Spec mirror", name)
+			}
+		})
+	}
 }
 
 func TestValidateExampleDocuments(t *testing.T) {
