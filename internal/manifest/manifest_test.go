@@ -124,11 +124,34 @@ func TestREG024CanonicalJSONOrdersKeysByUTF16(t *testing.T) {
 	}
 }
 
-// TestREG024CanonicalJSONRejectsNumbers fails closed rather than approximating
-// ECMAScript number serialization for a future contract extension.
-func TestREG024CanonicalJSONRejectsNumbers(t *testing.T) {
-	if _, err := MarshalCanonical(map[string]any{"count": 1}); err == nil {
-		t.Fatal("expected numeric JSON value to be rejected")
+// TestREG024CanonicalJSONNumbersUseECMAScriptFormatting verifies the number
+// formatting edge cases required by RFC 8785, including notation thresholds.
+func TestREG024CanonicalJSONNumbersUseECMAScriptFormatting(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{input: "333333333.33333329", want: "333333333.3333333"},
+		{input: "4.50", want: "4.5"},
+		{input: "2e-3", want: "0.002"},
+		{input: "1e-6", want: "0.000001"},
+		{input: "1e-7", want: "1e-7"},
+		{input: "1e20", want: "100000000000000000000"},
+		{input: "1e21", want: "1e+21"},
+		{input: "-0", want: "0"},
+	}
+	for _, test := range cases {
+		got, err := MarshalCanonical(map[string]any{"n": json.Number(test.input)})
+		if err != nil {
+			t.Fatalf("number %s: %v", test.input, err)
+		}
+		want := "{\"n\":" + test.want + "}"
+		if string(got) != want {
+			t.Errorf("number %s: got %s, want %s", test.input, got, want)
+		}
+	}
+	if _, err := MarshalCanonical(map[string]any{"n": json.Number("1e400")}); err == nil {
+		t.Fatal("expected non-finite/out-of-range number to be rejected")
 	}
 }
 
