@@ -104,7 +104,7 @@ func TestREG019HTTPFetcherFollowsOnlyAllowListedRedirects(t *testing.T) {
 		calls++
 		return &http.Response{
 			StatusCode: http.StatusFound,
-				Header:     http.Header{"Location": []string{"https://other.example.invalid/private.json"}},
+			Header:     http.Header{"Location": []string{"https://other.example.invalid/private.json"}},
 			Body:       io.NopCloser(strings.NewReader("")),
 		}, nil
 	}, 1024, "")
