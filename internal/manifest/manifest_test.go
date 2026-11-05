@@ -124,8 +124,6 @@ func TestREG024CanonicalJSONOrdersKeysByUTF16(t *testing.T) {
 	}
 }
 
-// TestREG024CanonicalJSONNumbersUseECMAScriptFormatting verifies the number
-// formatting edge cases required by RFC 8785, including notation thresholds.
 // TestREG024CanonicalInputVerifierRejectsNonCanonicalBytes ensures replay
 // inputs are verified byte-for-byte rather than silently normalized. In
 // particular, duplicate properties cannot be accepted as ordinary JSON maps.
