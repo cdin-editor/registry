@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,9 +26,9 @@ func testHTTPFetcher(t *testing.T, handler roundTripFunc, maxBytes int64, cacheD
 	t.Helper()
 	fetcher, err := NewHTTPFetcher(HTTPFetcherOptions{
 		AllowedHosts: []string{"catalog.example.invalid"},
-		MaxBytes: maxBytes,
-		CacheDir: cacheDir,
-		Timeout: time.Second,
+		MaxBytes:     maxBytes,
+		CacheDir:     cacheDir,
+		Timeout:      time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -43,9 +43,9 @@ func testHTTPFetcher(t *testing.T, handler roundTripFunc, maxBytes int64, cacheD
 
 func httpResponse(status int, body string, contentLength int64) *http.Response {
 	return &http.Response{
-		StatusCode: status,
-		Header: http.Header{"Content-Length": []string{stringInt(contentLength)}},
-		Body: io.NopCloser(strings.NewReader(body)),
+		StatusCode:    status,
+		Header:        http.Header{"Content-Length": []string{stringInt(contentLength)}},
+		Body:          io.NopCloser(strings.NewReader(body)),
 		ContentLength: contentLength,
 	}
 }
