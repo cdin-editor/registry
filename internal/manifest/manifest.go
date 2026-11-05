@@ -2,13 +2,14 @@
 // public Registry v1 Manifest and Resolution Report contracts.
 //
 // Spec traceability:
-//   REG-023: exact selected releases, source identities, dependency edges,
-//            contract declarations and workspace-relative source paths.
-//   REG-024: deterministic output without host paths, timestamps or random IDs.
-//   REG-025: no successful Manifest is built from a failed or incomplete graph.
-//   Contracts: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#7-resolved-manifest-and-resolution-report
-//   Architecture: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry.md#5-source-collection-and-handoff
-//   Local design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/manifest.md
+//
+//	REG-023: exact selected releases, source identities, dependency edges,
+//	         contract declarations and workspace-relative source paths.
+//	REG-024: deterministic output without host paths, timestamps or random IDs.
+//	REG-025: no successful Manifest is built from a failed or incomplete graph.
+//	Contracts: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#7-resolved-manifest-and-resolution-report
+//	Architecture: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry.md#5-source-collection-and-handoff
+//	Local design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/manifest.md
 //
 // The package does no selection, network access, Git operations or workspace
 // writes. It translates typed values, sorts set-like arrays and emits RFC 8785
@@ -40,18 +41,18 @@ const schemaVersion = "1.0.0"
 // Document is the public Resolved Manifest v1 data model. It is a
 // reproducibility record, not a mutable product configuration or lockfile.
 type Document struct {
-	SchemaVersion string "json:\"schema_version\""
-	RegistryVersion string "json:\"registry_version\""
-	Catalogs []Catalog "json:\"catalogs\""
-	Roots []Root "json:\"roots\""
+	SchemaVersion        string                "json:\"schema_version\""
+	RegistryVersion      string                "json:\"registry_version\""
+	Catalogs             []Catalog             "json:\"catalogs\""
+	Roots                []Root                "json:\"roots\""
 	EnvironmentContracts []EnvironmentContract "json:\"environment_contracts,omitempty\""
-	Components []Component "json:\"components\""
-	ResolutionOrder []resolver.Node "json:\"resolution_order\""
+	Components           []Component           "json:\"components\""
+	ResolutionOrder      []resolver.Node       "json:\"resolution_order\""
 }
 
 // Catalog records the exact Catalog Index source bytes used for resolution.
 type Catalog struct {
-	CatalogID string "json:\"catalog_id\""
+	CatalogID   string "json:\"catalog_id\""
 	MetadataURI string "json:\"metadata_uri\""
 	MetadataSHA string "json:\"metadata_sha256\""
 }
@@ -59,42 +60,42 @@ type Catalog struct {
 // Root records the exact resolved version for a Product Definition root.
 type Root struct {
 	ComponentID string "json:\"component_id\""
-	Variant string "json:\"variant\""
-	Version string "json:\"version\""
+	Variant     string "json:\"variant\""
+	Version     string "json:\"version\""
 }
 
 // EnvironmentContract records a target-environment provider declared as data.
 type EnvironmentContract struct {
 	ContractID string "json:\"contract_id\""
-	Version string "json:\"version\""
+	Version    string "json:\"version\""
 }
 
 // Component records one selected immutable Component Release.
 type Component struct {
-	ComponentID string "json:\"component_id\""
-	Variant string "json:\"variant\""
-	Version string "json:\"version\""
-	ReleaseMetadataURI string "json:\"release_metadata_uri\""
-	ReleaseMetadataSHA string "json:\"release_metadata_sha256\""
-	SourceUnits []SourceUnit "json:\"source_units\""
-	Dependencies []Dependency "json:\"dependencies\""
-	Contracts catalog.Contracts "json:\"contracts,omitempty\""
+	ComponentID        string            "json:\"component_id\""
+	Variant            string            "json:\"variant\""
+	Version            string            "json:\"version\""
+	ReleaseMetadataURI string            "json:\"release_metadata_uri\""
+	ReleaseMetadataSHA string            "json:\"release_metadata_sha256\""
+	SourceUnits        []SourceUnit      "json:\"source_units\""
+	Dependencies       []Dependency      "json:\"dependencies\""
+	Contracts          catalog.Contracts "json:\"contracts,omitempty\""
 }
 
 // SourceUnit records the verified full Git commit and deterministic workspace path.
 type SourceUnit struct {
-	SourceUnitID string "json:\"source_unit_id\""
+	SourceUnitID  string "json:\"source_unit_id\""
 	RepositoryURI string "json:\"repository_uri\""
-	Revision string "json:\"revision\""
-	Subdirectory string "json:\"subdirectory,omitempty\""
+	Revision      string "json:\"revision\""
+	Subdirectory  string "json:\"subdirectory,omitempty\""
 	WorkspacePath string "json:\"workspace_path\""
 }
 
 // Dependency records a concrete selected edge, not the original constraint.
 type Dependency struct {
 	ComponentID string "json:\"component_id\""
-	Variant string "json:\"variant\""
-	Version string "json:\"version\""
+	Variant     string "json:\"variant\""
+	Version     string "json:\"version\""
 }
 
 // Build creates a Manifest only when every selected source unit has a matching
@@ -120,13 +121,13 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 	}
 
 	doc := Document{
-		SchemaVersion: schemaVersion,
-		RegistryVersion: registryVersion,
-		Catalogs: make([]Catalog, 0, len(graph.Catalogs)),
-		Roots: make([]Root, 0, len(graph.Roots)),
+		SchemaVersion:        schemaVersion,
+		RegistryVersion:      registryVersion,
+		Catalogs:             make([]Catalog, 0, len(graph.Catalogs)),
+		Roots:                make([]Root, 0, len(graph.Roots)),
 		EnvironmentContracts: append([]resolver.EnvironmentContract(nil), graph.EnvironmentContracts...),
-		Components: make([]Component, 0, len(graph.Components)),
-		ResolutionOrder: append([]resolver.Node(nil), graph.ResolutionOrder...),
+		Components:           make([]Component, 0, len(graph.Components)),
+		ResolutionOrder:      append([]resolver.Node(nil), graph.ResolutionOrder...),
 	}
 
 	for _, source := range graph.Catalogs {
@@ -138,7 +139,7 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 			return Document{}, fmt.Errorf("manifest: catalog %q has invalid metadata URI", source.CatalogID)
 		}
 		doc.Catalogs = append(doc.Catalogs, Catalog{
-			CatalogID: source.CatalogID,
+			CatalogID:   source.CatalogID,
 			MetadataURI: source.MetadataURI,
 			MetadataSHA: strings.ToLower(source.MetadataSHA),
 		})
@@ -164,8 +165,8 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		}
 		doc.Roots = append(doc.Roots, Root{
 			ComponentID: root.ComponentID,
-			Variant: variant,
-			Version: resolved.Version,
+			Variant:     variant,
+			Version:     resolved.Version,
 		})
 	}
 
@@ -178,14 +179,14 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 			contracts.Requires = []catalog.ContractRequirement{}
 		}
 		component := Component{
-			ComponentID: resolved.ComponentID,
-			Variant: resolved.Variant,
-			Version: resolved.Version,
+			ComponentID:        resolved.ComponentID,
+			Variant:            resolved.Variant,
+			Version:            resolved.Version,
 			ReleaseMetadataURI: resolved.ReleaseMetadataURI,
 			ReleaseMetadataSHA: strings.ToLower(resolved.ReleaseMetadataSHA),
-			SourceUnits: make([]SourceUnit, 0, len(resolved.SourceUnits)),
-			Dependencies: make([]Dependency, 0, len(resolved.Dependencies)),
-			Contracts: contracts,
+			SourceUnits:        make([]SourceUnit, 0, len(resolved.SourceUnits)),
+			Dependencies:       make([]Dependency, 0, len(resolved.Dependencies)),
+			Contracts:          contracts,
 		}
 		if component.ReleaseMetadataURI == "" || !validSHA256(component.ReleaseMetadataSHA) {
 			return Document{}, fmt.Errorf("manifest: release %s/%s@%s has no verified metadata identity", resolved.ComponentID, resolved.Variant, resolved.Version)
@@ -208,10 +209,10 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 				return Document{}, fmt.Errorf("manifest: non-canonical workspace path for %s: %q", key, collectedSource.WorkspacePath)
 			}
 			component.SourceUnits = append(component.SourceUnits, SourceUnit{
-				SourceUnitID: source.ID,
+				SourceUnitID:  source.ID,
 				RepositoryURI: source.RepositoryURI,
-				Revision: strings.ToLower(collectedSource.Revision),
-				Subdirectory: source.Subdirectory,
+				Revision:      strings.ToLower(collectedSource.Revision),
+				Subdirectory:  source.Subdirectory,
 				WorkspacePath: expectedPath,
 			})
 			delete(collectedByKey, key)
@@ -220,8 +221,8 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		for _, dependency := range resolved.Dependencies {
 			component.Dependencies = append(component.Dependencies, Dependency{
 				ComponentID: dependency.ComponentID,
-				Variant: dependency.Variant,
-				Version: dependency.Version,
+				Variant:     dependency.Variant,
+				Version:     dependency.Version,
 			})
 		}
 		sort.Slice(component.SourceUnits, func(i, j int) bool {
@@ -314,15 +315,25 @@ func MarshalReport(report resolver.Report) ([]byte, error) {
 	report.Warnings = append([]resolver.Warning(nil), report.Warnings...)
 	sort.Slice(report.Selected, func(i, j int) bool {
 		a, b := report.Selected[i], report.Selected[j]
-		if a.ComponentID != b.ComponentID { return a.ComponentID < b.ComponentID }
-		if a.Variant != b.Variant { return a.Variant < b.Variant }
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
 		return a.Version < b.Version
 	})
 	sort.Slice(report.RejectedCandidates, func(i, j int) bool {
 		a, b := report.RejectedCandidates[i], report.RejectedCandidates[j]
-		if a.ComponentID != b.ComponentID { return a.ComponentID < b.ComponentID }
-		if a.Variant != b.Variant { return a.Variant < b.Variant }
-		if a.Version != b.Version { return a.Version < b.Version }
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		if a.Version != b.Version {
+			return a.Version < b.Version
+		}
 		return a.ReasonCode < b.ReasonCode
 	})
 	for i := range report.Conflicts {
@@ -330,11 +341,15 @@ func MarshalReport(report resolver.Report) ([]byte, error) {
 		sort.Strings(report.Conflicts[i].InvolvedComponents)
 	}
 	sort.Slice(report.Conflicts, func(i, j int) bool {
-		if report.Conflicts[i].Code != report.Conflicts[j].Code { return report.Conflicts[i].Code < report.Conflicts[j].Code }
+		if report.Conflicts[i].Code != report.Conflicts[j].Code {
+			return report.Conflicts[i].Code < report.Conflicts[j].Code
+		}
 		return report.Conflicts[i].Message < report.Conflicts[j].Message
 	})
 	sort.Slice(report.Warnings, func(i, j int) bool {
-		if report.Warnings[i].Code != report.Warnings[j].Code { return report.Warnings[i].Code < report.Warnings[j].Code }
+		if report.Warnings[i].Code != report.Warnings[j].Code {
+			return report.Warnings[i].Code < report.Warnings[j].Code
+		}
 		return report.Warnings[i].Message < report.Warnings[j].Message
 	})
 	return MarshalCanonical(report)
@@ -352,7 +367,11 @@ func appendCanonical(out *bytes.Buffer, value any) error {
 	case nil:
 		out.WriteString("null")
 	case bool:
-		if item { out.WriteString("true") } else { out.WriteString("false") }
+		if item {
+			out.WriteString("true")
+		} else {
+			out.WriteString("false")
+		}
 	case string:
 		appendJSONString(out, item)
 	case json.Number:
@@ -360,20 +379,30 @@ func appendCanonical(out *bytes.Buffer, value any) error {
 	case []any:
 		out.WriteByte('[')
 		for i, child := range item {
-			if i > 0 { out.WriteByte(',') }
-			if err := appendCanonical(out, child); err != nil { return err }
+			if i > 0 {
+				out.WriteByte(',')
+			}
+			if err := appendCanonical(out, child); err != nil {
+				return err
+			}
 		}
 		out.WriteByte(']')
 	case map[string]any:
 		keys := make([]string, 0, len(item))
-		for key := range item { keys = append(keys, key) }
+		for key := range item {
+			keys = append(keys, key)
+		}
 		sort.Slice(keys, func(i, j int) bool { return lessUTF16(keys[i], keys[j]) })
 		out.WriteByte('{')
 		for i, key := range keys {
-			if i > 0 { out.WriteByte(',') }
+			if i > 0 {
+				out.WriteByte(',')
+			}
 			appendJSONString(out, key)
 			out.WriteByte(':')
-			if err := appendCanonical(out, item[key]); err != nil { return err }
+			if err := appendCanonical(out, item[key]); err != nil {
+				return err
+			}
 		}
 		out.WriteByte('}')
 	default:
@@ -423,7 +452,9 @@ func lessUTF16(left, right string) bool {
 	a := utf16.Encode([]rune(left))
 	b := utf16.Encode([]rune(right))
 	for i := 0; i < len(a) && i < len(b); i++ {
-		if a[i] != b[i] { return a[i] < b[i] }
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
 	}
 	return len(a) < len(b)
 }
@@ -437,17 +468,25 @@ func sourceKey(component, variant, unit string) string {
 }
 
 func validSHA256(value string) bool {
-	if len(value) != 64 { return false }
+	if len(value) != 64 {
+		return false
+	}
 	for _, r := range value {
-		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') { return false }
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+			return false
+		}
 	}
 	return true
 }
 
 func safeWorkspacePath(value string) bool {
-	if value == "" || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") { return false }
+	if value == "" || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") {
+		return false
+	}
 	for _, part := range strings.Split(value, "/") {
-		if part == "" || part == "." || part == ".." { return false }
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
 	}
 	return true
 }
