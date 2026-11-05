@@ -69,9 +69,10 @@ const (
 type RejectionReasonCode string
 
 const (
-	RejectionWithdrawn         RejectionReasonCode = "WITHDRAWN"
+	RejectionWithdrawn          RejectionReasonCode = "WITHDRAWN"
 	RejectionPrereleaseDisabled RejectionReasonCode = "PRERELEASE_DISABLED"
 	RejectionConstraintMismatch RejectionReasonCode = "CONSTRAINT_MISMATCH"
+	RejectionBranchConflict     RejectionReasonCode = "BRANCH_CONFLICT"
 )
 
 // ConstraintSourceType identifies the declaration that contributed a version constraint.
@@ -285,6 +286,7 @@ type searchState struct {
 	constraints map[key][]constraintSource
 	chosen      map[key]candidate
 	expanded    map[key]bool
+	rejected    []RejectedCandidate
 }
 
 func newState() *searchState {
@@ -306,6 +308,7 @@ func (s *searchState) clone() *searchState {
 	for k, value := range s.expanded {
 		out.expanded[k] = value
 	}
+	out.rejected = append([]RejectedCandidate(nil), s.rejected...)
 	return out
 }
 
@@ -561,12 +564,14 @@ func (s *solver) search(state *searchState, environment []EnvironmentContract) (
 		return state, nil
 	}
 
-	eligible, _, conflict := s.candidatesFor(next, state.constraints[next])
+	eligible, rejected, conflict := s.candidatesFor(next, state.constraints[next])
+	state.rejected = append(state.rejected, rejected...)
 	if conflict != nil {
 		return state, conflict
 	}
 	var firstFailure *Conflict
 	var firstFailureState *searchState
+	branchRejections := make([]RejectedCandidate, 0)
 	for index := 0; index < len(eligible); {
 		// Equal-precedence identities are ambiguous at the point they would be
 		// selected. Check each precedence group when reached, including fallback
@@ -587,17 +592,21 @@ func (s *solver) search(state *searchState, environment []EnvironmentContract) (
 		}
 		candidate := eligible[index]
 		branch := state.clone()
+		branch.rejected = append(branch.rejected, branchRejections...)
 		branch.chosen[next] = candidate
 		resolved, failure := s.search(branch, environment)
 		if failure == nil {
 			return resolved, nil
 		}
+		if failure.Code == ConflictResolutionLimit {
+			return resolved, failure
+		}
+		marker := rejectedBranchCandidate(candidate, failure.Code)
+		resolved.rejected = append(resolved.rejected, marker)
+		branchRejections = append(branchRejections, marker)
 		if firstFailure == nil {
 			firstFailure = failure
 			firstFailureState = resolved
-		}
-		if failure.Code == ConflictResolutionLimit {
-			return resolved, failure
 		}
 		index = groupEnd
 	}
@@ -986,12 +995,25 @@ func topologicalOrder(chosen map[key]candidate) ([]Node, *Conflict) {
 
 // rejectedForFinalState recomputes rejections against the winning branch, avoiding diagnostics leaked from discarded branches.
 func rejectedForFinalState(engine *solver, state *searchState) []RejectedCandidate {
-	out := make([]RejectedCandidate, 0)
+	out := append([]RejectedCandidate(nil), state.rejected...)
 	for _, k := range sortedConstraintKeys(state.constraints) {
 		_, rejected, _ := engine.candidatesFor(k, state.constraints[k])
 		out = append(out, rejected...)
 	}
 	return out
+}
+
+func rejectedBranchCandidate(candidate candidate, failure ConflictCode) RejectedCandidate {
+	return RejectedCandidate{
+		ComponentID: candidate.release.ComponentID,
+		Variant: candidate.release.Variant,
+		Version: candidate.release.Version,
+		ReasonCode: RejectionBranchConflict,
+		Detail: string(failure),
+		CatalogID: candidate.catalogID,
+		ReleaseMetadataURI: candidate.release.MetadataURI,
+		ReleaseMetadataSHA: candidate.release.MetadataSHA,
+	}
 }
 
 func normalizeRejected(input []RejectedCandidate) []RejectedCandidate {
