@@ -17,7 +17,7 @@ type allowTestRepository struct{}
 func (allowTestRepository) ValidateRepository(string) error { return nil }
 
 type recordingGit struct {
-	delegate CommandGit
+	delegate      CommandGit
 	hooksDisabled bool
 }
 
@@ -74,8 +74,8 @@ func graphForSources(revision, repository string, units ...catalog.SourceUnit) *
 	}
 	return &resolver.Graph{Components: []resolver.ResolvedComponent{{
 		ComponentID: "engine",
-		Variant: "default",
-		Version: "1.0.0",
+		Variant:     "default",
+		Version:     "1.0.0",
 		SourceUnits: units,
 	}}}
 }
