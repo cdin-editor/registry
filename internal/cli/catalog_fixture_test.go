@@ -95,7 +95,7 @@ func TestREG019ResolveComposesMultipleLocalFixtureCatalogsOffline(t *testing.T) 
 	firstIndex, engineURI := writeCLIIndexFixture(t, directory, "catalog-one", "engine", engine)
 	secondIndex, frontendURI := writeCLIIndexFixture(t, directory, "catalog-two", "frontend", frontend)
 	fetcher := offlineCatalogFetcher{
-		engineURI:    engine,
+		engineURI:   engine,
 		frontendURI: frontend,
 	}
 
