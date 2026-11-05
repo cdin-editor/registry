@@ -97,6 +97,13 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: create destination parent: %w", err)
 	}
+	// Resolve OS-owned symlink aliases such as macOS /tmp before applying
+	// root-confinement checks. All subsequent writes use this canonical parent.
+	parent, err = filepath.EvalSymlinks(parent)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("workspace: canonicalize destination parent: %w", err)
+	}
+	destination = filepath.Join(parent, base)
 	if err := ensureNoSymlinkAncestors(parent); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: unsafe destination parent: %w", err)
 	}
