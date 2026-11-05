@@ -1,12 +1,42 @@
 # Traceability
 
+Each row describes executable behavior present in the Registry implementation
+and the current test evidence. A schema declaration, interface, comment or
+roadmap entry alone is not counted as runtime implementation.
+
 | Spec requirement | Current implementation | Evidence |
 | --- | --- | --- |
-| REG-001 | Product Definition is parsed as declarative data; no product-specific execution exists. | `internal/validation` |
-| REG-002 | No consumer-identity branching is introduced in the validation/catalog packages; full engine conformance remains pending. | `scripts/check-boundaries.sh`; resolver/collector not implemented |
-| REG-004 | Catalog loader normalizes an omitted variant to `default` before identity checks. | `internal/catalog/catalog.go:Load`; `TestLoadVerifiesDigestBeforeReleaseValidation` |
-| REG-005 | Five versioned schemas are embedded and compiled; catalog loader invokes schema validation for index and release metadata. | `internal/schemas`, `internal/validation`, `internal/catalog` |
-| REG-019 | Exact fetched metadata bytes are SHA-256 checked before release validation and JSON decoding. | `internal/catalog/catalog.go:Load`; `TestLoadRejectsDigestMismatchBeforeParsing` |
-| REG-003, REG-006–REG-018, REG-020–REG-026 | Not yet implemented or not covered by executable conformance evidence. | [Implementation roadmap](development/implementation-roadmap.md) |
+| REG-001 | Product Definition remains declarative input; no product-specific branch or component execution is introduced. | internal/validation; internal/resolver; internal/cli |
+| REG-002 | Domain packages are composed at the CLI boundary; repository boundary check passes. | scripts/check-boundaries.sh; Pipeline boundary task |
+| REG-003 | Component, variant and source-unit IDs are validated before selection/collection. | internal/resolver/resolver.go; internal/collector/collector.go; TestREG003REG004NormalizesDefaultAndRejectsUnstableIDs |
+| REG-004 | Omitted variants normalize to default in Catalog ingestion and Resolver keys. | internal/catalog/catalog.go; TestLoadVerifiesDigestBeforeReleaseValidation; TestREG003REG004NormalizesDefaultAndRejectsUnstableIDs |
+| REG-005 | Five versioned schemas are embedded/compiled; Product Definition YAML is normalized to validated JSON. | internal/schemas; internal/validation; TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON; TestValidateExampleDocuments |
+| REG-006 | SemVer 2.0.0 parser and precedence, including unbounded numeric identifiers and build metadata. | internal/semver; TestREG006SemVerPrecedence; TestREG006RejectsInvalidSemVer; TestREG006SupportsUnboundedNumericIdentifiers |
+| REG-007 | Contract exact-version/conjunction grammar and comparator evaluation. | internal/semver; TestREG007ConstraintGrammar; TestREG007ConstraintEvaluation |
+| REG-008 | Resolver expands transitive dependencies and backtracks from unsatisfiable branches. | internal/resolver; TestREG008REG009SelectsHighestAndExpandsTransitiveDependencies; TestREG008BacktracksAcrossTransitiveConstraintConflicts |
+| REG-009 | Resolver selects one release per normalized component/variant key. | internal/resolver.Graph; resolver selection tests |
+| REG-010 | All constraints for a key accumulate; empty intersections and incompatible candidates fail structurally. | TestREG010IntersectsRootAndDependencyConstraints; TestREG010ReportsEmptyConstraintIntersection |
+| REG-011 | Candidate selection is precedence-descending and independent of Catalog order; duplicate immutable releases use stable URI/catalog provenance; distinct equal-precedence identities fail. | TestREG011IsIndependentOfCatalogOrder; TestREG011DuplicateReleaseProvenanceIsIndependentOfCatalogOrder; TestREG011RejectsEqualPrecedenceMetadataIdentities; TestREG011RejectsFallbackTie |
+| REG-012 | Prereleases are filtered unless Product Definition policy explicitly allows them. | TestREG012REG013AppliesPrereleaseAndWithdrawnPolicies |
+| REG-013 | Withdrawn releases are excluded from new resolution. | TestREG012REG013AppliesPrereleaseAndWithdrawnPolicies |
+| REG-014 | Cycles fail with explicit paths; successful graphs use dependency-first deterministic order. | TestREG014CycleReportsExactPath; topologicalOrder |
+| REG-015 | Selected component and target-environment contract declarations are matched by opaque ID and SemVer constraints. | TestREG015REG016MatchesExactlyOneProvider |
+| REG-016 | Missing and ambiguous providers yield distinct structured conflict codes. | TestREG015REG016MatchesExactlyOneProvider; TestREG016ReportsMissingContractProvider |
+| REG-017 | Collector materializes every declared source unit at its stable component/variant/source path, including multiple units from one repository. | internal/collector/collector.go; TestREG017CollectsMultipleDeclaredSourceUnits |
+| REG-018 | Collector fetches the declared full 40/64-character object ID, verifies it is a commit, checks out detached and verifies HEAD. | internal/collector/collector.go; TestREG017CollectsMultipleDeclaredSourceUnits; TestREG018RejectsNonObjectRevision; Workspace missing-commit failure test |
+| REG-019 | HTTP metadata bytes are digest-checked before cache write; Catalog independently re-hashes before schema validation and JSON decoding. | internal/catalog/httpfetcher.go; internal/catalog/catalog.go:Load; TestLoadRejectsDigestMismatchBeforeParsing; HTTPFetcher digest/cache tests |
+| REG-020 | Source subdirectories are checked component-by-component; source symlinks/special files and workspace path escapes are rejected; destination ancestors are checked. | TestREG020RejectsParentTraversal; TestREG020RejectsSymlinkSourceTrees; internal/workspace/workspace.go |
+| REG-021 | Workspace uses the canonical components/{component}/{variant}/sources/{source-unit} layout and writes the Manifest and Report. | TestREG021REG022PublishesCompleteWorkspace; internal/workspace/workspace.go |
+| REG-022 | Workspace stages beside the destination, validates all sources/documents, uses an exclusive sibling lock, refuses existing destinations, cleans failures and renames the complete stage. | TestREG021REG022PublishesCompleteWorkspace; TestREG022CollectionFailureDoesNotPublishDestination; TestREG022NeverOverwritesAnExistingDestination; TestREG022RejectsFailedResolution |
+| REG-023 | Manifest records Catalog/release identities, selected components, source revisions/paths, dependency and contract data; Workspace validates it against the embedded v1 schema. | internal/manifest/manifest.go; TestREG023BuildManifestMatchesPublicContract; TestREG021REG022PublishesCompleteWorkspace |
+| REG-024 | Set-like collections are sorted; canonical serializer implements UTF-16 key ordering, required string escapes and ECMAScript number formatting; strict verifier rejects non-canonical bytes. | TestREG024CanonicalJSONOrdersKeysByUTF16; TestREG024CanonicalJSONNumbersUseECMAScriptFormatting; TestREG024CanonicalInputVerifierRejectsNonCanonicalBytes; Resolver Catalog-permutation tests |
+| REG-025 | Resolver emits structured success/failure reports and no graph on failure; Workspace refuses failed/incomplete resolution and does not publish on collection failure. | TestREG025FailureCannotBuildManifest; TestREG022RejectsFailedResolution; TestREG022CollectionFailureDoesNotPublishDestination |
+| REG-026 | JSON/YAML is treated as data; HTTP metadata uses allow-listed HTTPS with redirect, IP and size checks; Git uses argument vectors, disables prompts/hooks/global config/LFS smudge/submodule recursion and rejects symlinks/special files. Git DNS/IP egress policy remains a deployment responsibility. | internal/validation; internal/catalog/httpfetcher.go; internal/collector/collector.go; TestREG026HTTPSAllowListMatchesHostnameWithExplicitDefaultPort; Collector symlink/hook tests |
 
-The catalog loader is a partial implementation slice, not full Registry conformance. This table records behavior and test evidence only; schema presence, interfaces and documentation do not establish runtime conformance.
+## Evidence boundaries
+
+Manifest replay, update discovery, Git-object caching/eviction, fuzz coverage and
+a Linux/macOS/Windows integration matrix are not yet implemented or established.
+The Collector host allow-list is not a substitute for deployment egress
+controls. Workspace's lock coordinates cooperating Registry processes only;
+platform-specific crash-durability still needs dedicated tests.

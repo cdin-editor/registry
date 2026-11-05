@@ -8,39 +8,54 @@
 
 **Generic component delivery and orchestration for independent products.**
 
-CDIN Registry is a standalone delivery-plane engine. It validates component
-metadata, resolves declared requirements, collects immutable source revisions
-and prepares reproducible workspaces. It serves CDIN Editor and unrelated
-products through the same generic contracts.
+CDIN Registry is a standalone delivery-plane engine. Product-specific
+requirements enter as declarative Product Definitions. Registry validates
+release metadata, resolves compatible component graphs, collects immutable
+source revisions and prepares reproducible workspaces for independent products.
 
 > **Registry must understand requirements, not consumer identity.**
 
-Product-specific requirements enter as declarative Product Definitions.
-Registry code must not contain product-ID conditionals, consumer plugins or
-hardcoded product workflows.
+Registry code must not branch on product IDs/names, contain consumer plugins or
+hardcode product workflows. It is build-time infrastructure, never a runtime
+dependency of a product component.
 
 ## Status
 
-This repository is at its foundation stage.
+The repository now contains an executable Registry preparation vertical slice:
+strict Catalog transport and ingestion, SemVer/dependency/contract resolution,
+immutable Git source collection, transactional workspace publication, and
+canonical Resolved Manifest/Resolution Report output. It is not yet complete
+Registry 1.0 conformance; the remaining work is listed below and tracked in
+[Issue #5](https://github.com/cdin-editor/registry/issues/5).
 
 | Capability | Status |
 | --- | --- |
-| Go CLI entry point and build metadata | Implemented |
-| Embedded Registry v1 schemas synchronized from Spec | Implemented |
-| JSON document validation | Implemented |
-| Product Definition YAML validation | Implemented; unsafe YAML forms are rejected |
-| Pipeline task graph and reusable CI/release workflows | Implemented |
-| PSX repository-structure checks | Implemented |
-| GIX branch-flow parsing and topology checks | Implemented |
-| PR/Issue form governance tests | Implemented |
-| Catalog ingestion and metadata integrity | Planned |
-| Version, dependency and contract resolution | Planned |
-| Git source collection | Planned |
-| Prepared workspace and manifest/report production | Planned |
-| Update discovery | Planned |
+| Standalone Go CLI, build metadata, schema inspection and validation | Implemented |
+| Five embedded Registry v1 schemas pinned to Spec | Implemented |
+| Strict JSON and Product Definition YAML validation/normalization | Implemented |
+| Pipeline, PSX, GIX and repository governance | Implemented |
+| Catalog Index loading, digest-before-parse and identity checks | Implemented |
+| Production HTTPS Catalog transport, redirect/host/IP policy and bounded reads | Implemented |
+| Digest-bound metadata cache with integrity checks | Implemented |
+| SemVer 2.0.0 and Registry 1.0.0 constraint evaluator | Implemented; tested |
+| Deterministic dependency resolution, backtracking and contract checks | Implemented; tested |
+| Prerelease/withdrawal policy, ambiguity rejection and cycle diagnostics | Implemented; tested |
+| Immutable Git source collection and full commit verification | Implemented; integration-tested |
+| Stable source paths, subdirectory validation and symlink/special-file rejection | Implemented; tested |
+| Transactional workspace staging and publication | Implemented; integration-tested |
+| Resolved Manifest and Resolution Report serialization/schema validation | Implemented |
+| RFC 8785-style canonical JSON and canonical-input verification | Implemented; tested |
+| CLI resolve and prepare composition | Implemented |
+| Persisted Manifest replay and update discovery | Not implemented |
+| Git-object cache/eviction, fuzzing and performance budgets | Not implemented |
+| Deployment Git egress enforcement and cross-platform crash-durability proof | Deployment/test work remains |
 
-The current executable is a working schema-validation foundation. It is **not
-yet** a complete package manager, dependency resolver or source collector.
+The `resolve` command reports the selected graph without collecting component
+source. The `prepare` command collects the declared immutable source units,
+validates both output documents and publishes a complete workspace only after
+all preparation steps succeed. Neither command runs component code. See
+[Implementation status](docs/status.md) and [REG traceability](docs/traceability.md)
+for the tested boundary and its limitations.
 
 ## Quick start
 
@@ -79,6 +94,30 @@ Validate the other document kinds as JSON:
 ./build/registry validate resolution-report report.json
 ```
 
+Resolve a Product Definition against one or more Catalog Indexes without
+retrieving component source:
+
+```sh
+./build/registry resolve \
+  --product ./product-definition.yaml \
+  --catalog https://registry.example/catalog/index.json \
+  --allow-host registry.example
+```
+
+Prepare and atomically publish the selected workspace:
+
+```sh
+./build/registry prepare \
+  --product ./product-definition.yaml \
+  --catalog https://registry.example/catalog/index.json \
+  --allow-host registry.example \
+  --output ./prepared
+```
+
+Every Catalog metadata host and every source repository host must be explicitly
+allow-listed. The deployment must still enforce Git network egress policy;
+the Collector hostname allow-list is not a firewall.
+
 Use `-` to read JSON from standard input. YAML is accepted only for Product
 Definitions and is selected by the `.yaml` or `.yml` extension.
 
@@ -88,31 +127,28 @@ Definitions and is selected by the `.yaml` or `.yml` extension.
 - `internal/cli/` — command parsing and process exit behavior.
 - `internal/validation/` — strict JSON/YAML decoding and JSON Schema validation.
 - `internal/schemas/` — embedded Registry schemas mirrored from the Spec.
+- `internal/catalog/` — Catalog Index ingestion, HTTPS metadata transport, digest cache and typed release metadata.
+- `internal/semver/` — strict SemVer 2.0.0 and contract 1.0.0 constraint semantics.
+- `internal/resolver/` — deterministic dependency/version/contract resolution.
+- `internal/collector/` — immutable Git source retrieval, commit verification and safe materialization.
+- `internal/workspace/` — private staging, output validation and complete-workspace publication.
+- `internal/manifest/` — Resolved Manifest/Resolution Report models, canonical serialization and digests.
 - `schemas/registry/v1/` — versioned schema copies and immutable source lock.
-- `tests/` and package-local tests — CLI, validation, templates and governance.
+- `tests/` and package-local tests — validation, Catalog, Resolver, Collector, Workspace and governance.
 - `pipeline.toml` — provider-neutral task graph.
-- `docs/` — architecture, contracts, development, status and verification.
-- `scripts/` — boundary, format, schema-sync and release helpers.
+- `docs/` — architecture, contracts, implementation, status and verification.
 
-The CLI is the first supported interface. No public Go library API is exposed
-yet.
+The CLI is the first supported interface. The core packages have no consumer-
+specific runtime dependency.
 
 ## Shared engineering tools
 
-Registry uses the same engineering ecosystem as the other CDIN repositories:
+- [Pipeline](https://github.com/m-mdy-m/pipeline) owns the task runner and reusable GitHub workflows.
+- [PSX](https://github.com/m-mdy-m/psx) validates repository structure and required governance files.
+- [GIX](https://github.com/m-mdy-m/gix) manages the branch flow declared in `.gix/config`.
 
-- [Pipeline](https://github.com/m-mdy-m/pipeline) owns the task runner and
-  reusable GitHub CI, documentation, security and release workflows. Its task
-  graph is defined in `pipeline.toml`.
-- [PSX](https://github.com/m-mdy-m/psx) validates repository structure and
-  required governance files using `psx.yml`.
-- [GIX](https://github.com/m-mdy-m/gix) manages the
-  `main → develop → topic branches` flow declared in `.gix/config`.
-
-Go governance tests validate the PR and Issue templates. A dedicated Pipeline
-task runs GIX's own config parser as well as PSX's repository checks. See
-[Development tooling](docs/development/tooling.md) and
-[Branching](docs/development/branching.md).
+See [Development tooling](docs/development/tooling.md),
+[Branching](docs/development/branching.md) and [Build and test](docs/development/build-and-test.md).
 
 ## Architecture and contracts
 
@@ -123,17 +159,16 @@ The normative source of truth is [CDIN Spec](https://github.com/cdin-editor/spec
 - [ADR-0022](https://github.com/cdin-editor/spec/blob/main/docs/adr/ADR-0022-minimal-static-release-catalog.md)
 
 The five local JSON Schemas are synchronized from the exact Spec commit
-recorded in `schemas/registry/v1/SOURCE.toml`. They are embedded for offline
-validation and release packaging. Change the public contract in Spec first,
-then update the source lock and synchronize this copy.
+recorded in `schemas/registry/v1/SOURCE.toml`. Change public contracts in Spec
+first, then update the source lock and synchronize this copy.
 
 ## Development
 
 Start with [Build and test](docs/development/build-and-test.md),
 [Module boundaries](docs/architecture/module-boundaries.md),
-[Tooling](docs/development/tooling.md),
-[Branching](docs/development/branching.md) and
-[Contributing](CONTRIBUTING.md).
+[Implementation roadmap](docs/development/implementation-roadmap.md),
+[Resolver implementation](docs/implementation/resolver.md),
+[Traceability](docs/traceability.md) and [Conformance](docs/testing/conformance.md).
 
 ## License
 
