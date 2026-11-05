@@ -307,7 +307,10 @@ func sourceDirectory(repository, subdirectory string) (string, error) {
 	if subdirectory == "" {
 		return repository, nil
 	}
-	if strings.Contains(subdirectory, "\\") || !fs.ValidPath(subdirectory) || path.Clean(subdirectory) != subdirectory || strings.HasPrefix(subdirectory, "../") {
+	drivePrefix := len(subdirectory) >= 2 &&
+		((subdirectory[0] >= 'a' && subdirectory[0] <= 'z') || (subdirectory[0] >= 'A' && subdirectory[0] <= 'Z')) &&
+		subdirectory[1] == ':'
+	if drivePrefix || strings.Contains(subdirectory, "\\") || !fs.ValidPath(subdirectory) || path.Clean(subdirectory) != subdirectory || strings.HasPrefix(subdirectory, "../") {
 		return "", fmt.Errorf("collector: unsafe source subdirectory %q", subdirectory)
 	}
 	candidate := repository
