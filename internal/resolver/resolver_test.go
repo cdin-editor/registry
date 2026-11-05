@@ -285,7 +285,6 @@ func TestREG011RejectsFallbackTie(t *testing.T) {
 	}
 }
 
-
 func countApplied(report Report, id string) int {
 	n := 0
 	for _, constraint := range report.AppliedConstraints {
