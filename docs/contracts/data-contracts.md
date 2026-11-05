@@ -5,7 +5,7 @@ The normative contract is owned by [CDIN Spec Registry data contracts](https://g
 The five local schema files under `schemas/registry/v1/` are exact mirrors of the accepted Spec revision recorded in [SOURCE.toml](../../schemas/registry/v1/SOURCE.toml).
 
 | Kind | Schema |
-|---|---|
+| --- | --- |
 | Product Definition | `product-definition.schema.json` |
 | Catalog Index | `catalog-index.schema.json` |
 | Component Release Metadata | `component-release.schema.json` |
