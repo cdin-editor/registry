@@ -11,7 +11,7 @@ A Product Definition is data. Registry must not contain product-ID branches, pro
 ## System boundary
 
 | Owner | Responsibility |
-|---|---|
+| --- | --- |
 | Component repositories | Own source, package versions, release metadata, component tests and publication. |
 | Product Definition | Declares root components, variants, constraints and target-environment contracts. |
 | Catalog publisher | Publishes indexes that reference immutable release metadata. |
