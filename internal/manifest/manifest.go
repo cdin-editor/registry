@@ -13,8 +13,8 @@
 //
 // The package does no selection, network access, Git operations or workspace
 // writes. It translates typed values, sorts set-like arrays and emits RFC 8785
-// canonical JSON for the current string/object output model. Numeric JSON values
-// are rejected because the current Manifest/Report contracts define none.
+// canonical JSON, including ECMAScript-compatible IEEE-754 number formatting
+// for extension fields allowed by the public JSON contracts.
 package manifest
 
 import (
@@ -24,8 +24,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -288,9 +290,8 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 	return doc, nil
 }
 
-// MarshalCanonical emits RFC 8785 canonical JSON for current Registry output
-// fields. Numeric values fail closed: no current Manifest/Report field is
-// numeric, so an approximate formatter would be less correct than rejection.
+// MarshalCanonical emits RFC 8785 canonical JSON. Property names are ordered
+// by UTF-16 code units and numbers use ECMAScript-compatible binary64 formatting.
 func MarshalCanonical(value any) ([]byte, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -381,7 +382,11 @@ func appendCanonical(out *bytes.Buffer, value any) error {
 	case string:
 		appendJSONString(out, item)
 	case json.Number:
-		return fmt.Errorf("manifest: numeric JSON value is not supported in current Registry outputs: %s", item)
+		canonical, err := canonicalNumber(item.String())
+		if err != nil {
+			return err
+		}
+		out.WriteString(canonical)
 	case []any:
 		out.WriteByte('[')
 		for i, child := range item {
@@ -415,6 +420,63 @@ func appendCanonical(out *bytes.Buffer, value any) error {
 		return fmt.Errorf("manifest: unsupported JSON value type %T", value)
 	}
 	return nil
+}
+
+// canonicalNumber converts a JSON number through IEEE-754 binary64 and emits
+// the shortest round-trippable ECMAScript decimal representation required by
+// RFC 8785. Fixed notation is used for 1e-6 <= abs(x) < 1e21; other values use
+// normalized exponent notation with an explicit plus sign for positive powers.
+func canonicalNumber(raw string) (string, error) {
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsInf(value, 0) || math.IsNaN(value) {
+		return "", fmt.Errorf("manifest: JSON number is outside the finite IEEE-754 range: %q", raw)
+	}
+	if value == 0 {
+		return "0", nil
+	}
+
+	negative := math.Signbit(value)
+	absolute := math.Abs(value)
+	scientific := strconv.FormatFloat(absolute, 'e', -1, 64)
+	parts := strings.Split(scientific, "e")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("manifest: cannot normalize JSON number %q", raw)
+	}
+	exponent, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("manifest: invalid normalized number exponent %q: %w", parts[1], err)
+	}
+	digits := strings.ReplaceAll(parts[0], ".", "")
+	if digits == "" {
+		return "", fmt.Errorf("manifest: invalid normalized number mantissa %q", parts[0])
+	}
+
+	var result string
+	if absolute >= 1e-6 && absolute < 1e21 {
+		decimalPosition := exponent + 1
+		switch {
+		case decimalPosition <= 0:
+			result = "0." + strings.Repeat("0", -decimalPosition) + digits
+		case decimalPosition >= len(digits):
+			result = digits + strings.Repeat("0", decimalPosition-len(digits))
+		default:
+			result = digits[:decimalPosition] + "." + digits[decimalPosition:]
+		}
+	} else {
+		result = digits[:1]
+		if len(digits) > 1 {
+			result += "." + digits[1:]
+		}
+		result += "e"
+		if exponent >= 0 {
+			result += "+"
+		}
+		result += strconv.Itoa(exponent)
+	}
+	if negative {
+		result = "-" + result
+	}
+	return result, nil
 }
 
 // appendJSONString applies only the minimal JSON escapes required by JCS and
