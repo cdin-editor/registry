@@ -46,30 +46,38 @@ func createSourceRepository(t *testing.T) (string, string) {
 	return repository, runGit("rev-parse", "HEAD")
 }
 
+func fileRepositoryURI(repository string) string {
+	path := filepath.ToSlash(repository)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return "file://" + path
+}
+
 func successfulResolution(repository, revision string) resolver.Result {
 	return resolver.Result{
 		Graph: &resolver.Graph{
 			SchemaVersion: "1.0.0",
 			Catalogs: []resolver.CatalogReference{{
-				CatalogID: "stable",
+				CatalogID:   "stable",
 				MetadataURI: "https://catalog.example.invalid/index.json",
 				MetadataSHA: strings.Repeat("a", 64),
 			}},
 			Roots: []resolver.Requirement{{
-				ComponentID: "engine",
-				Variant: "default",
+				ComponentID:       "engine",
+				Variant:           "default",
 				VersionConstraint: "=1.0.0",
 			}},
 			Components: []resolver.ResolvedComponent{{
-				ComponentID: "engine",
-				Variant: "default",
-				Version: "1.0.0",
+				ComponentID:        "engine",
+				Variant:            "default",
+				Version:            "1.0.0",
 				ReleaseMetadataURI: "https://catalog.example.invalid/engine-1.0.0.json",
 				ReleaseMetadataSHA: strings.Repeat("b", 64),
 				SourceUnits: []catalog.SourceUnit{{
-					ID: "source",
-					RepositoryURI: repository,
-					Revision: revision,
+					ID:            "source",
+					RepositoryURI: fileRepositoryURI(repository),
+					Revision:      revision,
 				}},
 				Dependencies: []resolver.ResolvedDependency{},
 				Contracts: catalog.Contracts{
@@ -79,8 +87,8 @@ func successfulResolution(repository, revision string) resolver.Result {
 			}},
 			ResolutionOrder: []resolver.Node{{
 				ComponentID: "engine",
-				Variant: "default",
-				Version: "1.0.0",
+				Variant:     "default",
+				Version:     "1.0.0",
 			}},
 		},
 		Report: resolver.Report{
@@ -88,8 +96,8 @@ func successfulResolution(repository, revision string) resolver.Result {
 			Result: "success",
 			Selected: []resolver.SelectedCandidate{{
 				ComponentID: "engine",
-				Variant: "default",
-				Version: "1.0.0",
+				Variant:     "default",
+				Version:     "1.0.0",
 			}},
 			RejectedCandidates: []resolver.RejectedCandidate{},
 			Conflicts: []resolver.Conflict{},
@@ -104,11 +112,11 @@ func workspaceOptions(destination string) Options {
 		panic(err)
 	}
 	return Options{
-		Destination: destination,
-		RegistryVersion: "1.2.3",
-		Git: collector.CommandGit{},
+		Destination:      destination,
+		RegistryVersion:  "1.2.3",
+		Git:              collector.CommandGit{},
 		RepositoryPolicy: localRepositoryPolicy{},
-		Validator: validator,
+		Validator:        validator,
 	}
 }
 
