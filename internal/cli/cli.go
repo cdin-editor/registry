@@ -200,6 +200,18 @@ func parseExecutionOptions(args []string, preparing bool) (executionOptions, err
 // Resolver. The prepare variant then adds immutable source collection, Manifest/
 // Report validation and atomic workspace publication. REG-001/005/019/022-026.
 func runExecution(ctx context.Context, args []string, preparing bool, stdout, stderr io.Writer) int {
+	return runExecutionWithFetcherFactory(ctx, args, preparing, stdout, stderr,
+		func(options catalog.HTTPFetcherOptions) (catalog.Fetcher, error) {
+			return catalog.NewHTTPFetcher(options)
+		})
+}
+
+// catalogFetcherFactory is injected at the CLI composition boundary so local
+// fixture catalogs can exercise the same validation → load → resolve path
+// without network access. Production always supplies NewHTTPFetcher.
+type catalogFetcherFactory func(catalog.HTTPFetcherOptions) (catalog.Fetcher, error)
+
+func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparing bool, stdout, stderr io.Writer, newFetcher catalogFetcherFactory) int {
 	options, err := parseExecutionOptions(args, preparing)
 	if err != nil {
 		return usageError(stderr, "%v", err)
@@ -228,7 +240,11 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		fmt.Fprintf(stderr, "registry: decode normalized Product Definition: %v\n", err)
 		return exitInvalid
 	}
-	fetcher, err := catalog.NewHTTPFetcher(catalog.HTTPFetcherOptions{
+	if newFetcher == nil {
+		fmt.Fprintln(stderr, "registry: Catalog fetcher factory is required")
+		return exitInvalid
+	}
+	fetcher, err := newFetcher(catalog.HTTPFetcherOptions{
 		AllowedHosts: options.allowedHosts,
 		CacheDir:     options.cacheDir,
 	})
@@ -237,19 +253,19 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		return exitInvalid
 	}
 	catalogs := make([]*catalog.Catalog, 0, len(options.catalogs))
-	for _, catalogInput := range options.catalogs {
+	for catalogIndex, catalogInput := range options.catalogs {
 		if err := ctx.Err(); err != nil {
 			fmt.Fprintf(stderr, "registry: %v\n", err)
 			return exitInvalid
 		}
 		indexBytes, indexURI, err := readCatalogInput(ctx, catalogInput, fetcher)
 		if err != nil {
-			fmt.Fprintf(stderr, "registry: Catalog %q: %v\n", catalogInput, err)
+			fmt.Fprintf(stderr, "registry: Catalog input %d: %v\n", catalogIndex+1, err)
 			return exitInvalid
 		}
 		loaded, err := catalog.LoadFromSource(ctx, indexBytes, indexURI, fetcher, validator)
 		if err != nil {
-			fmt.Fprintf(stderr, "registry: Catalog %q: %v\n", catalogInput, err)
+			fmt.Fprintf(stderr, "registry: Catalog input %d: %v\n", catalogIndex+1, err)
 			return exitInvalid
 		}
 		catalogs = append(catalogs, loaded)
@@ -317,7 +333,7 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 // URI recorded in the Manifest is absolute and stable for the current host;
 // callers that require portable provenance should publish Catalog Indexes at an
 // immutable HTTPS URI.
-func readCatalogInput(ctx context.Context, input string, fetcher *catalog.HTTPFetcher) ([]byte, string, error) {
+func readCatalogInput(ctx context.Context, input string, fetcher catalog.Fetcher) ([]byte, string, error) {
 	if strings.HasPrefix(strings.ToLower(input), "https://") {
 		data, err := fetcher.Fetch(ctx, input)
 		if err != nil {

@@ -18,6 +18,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -26,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cdin-editor/registry/internal/resolver"
@@ -44,19 +46,27 @@ type CommandGit struct {
 	Binary string
 }
 
-// Run executes Git and returns combined output for actionable diagnostics.
-// The caller supplies an isolated environment that disables prompts and hooks.
-func (g CommandGit) Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
+// Run executes Git with a deliberately small environment. Ambient credential
+// helpers, askpass programs, SSH agents, proxy settings and Git config variables
+// are not inherited. Private-repository authentication is not supported.
+func (g CommandGit) Run(ctx context.Context, dir string, _ []string, args ...string) ([]byte, error) {
 	binary := g.Binary
 	if binary == "" {
 		binary = "git"
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
-	cmd.Env = mergeEnvironment(os.Environ(), env)
+	cmd.Env = isolatedGitEnvironment(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return output, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			return nil, fmt.Errorf("collector: Git command failed with exit code %d", exitError.ExitCode())
+		}
+		return nil, fmt.Errorf("collector: Git command could not be started")
 	}
 	return output, nil
 }
@@ -255,10 +265,9 @@ func collectOne(ctx context.Context, options Options, hooksDir, repository, revi
 		return "", fmt.Errorf("create temporary repository: %w", err)
 	}
 	defer os.RemoveAll(repoDir)
-	env := []string{"GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull}
 	run := func(args ...string) ([]byte, error) {
 		withConfig := []string{"-c", "core.hooksPath=" + hooksDir, "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
-		return options.Git.Run(ctx, repoDir, env, append(withConfig, args...)...)
+		return options.Git.Run(ctx, repoDir, nil, append(withConfig, args...)...)
 	}
 	initArgs := []string{"init", "--quiet"}
 	if len(revision) == 64 {
@@ -432,25 +441,45 @@ func ensureNoSymlinkAncestors(value string) error {
 	}
 }
 
-// mergeEnvironment applies Git-specific overrides without duplicate environment
-// keys. Duplicate keys have platform-dependent precedence and could otherwise
-// re-enable prompts or global/system configuration (REG-026).
-func mergeEnvironment(base, overrides []string) []string {
-	replaced := make(map[string]bool, len(overrides))
-	for _, value := range overrides {
-		if index := strings.IndexByte(value, '='); index > 0 {
-			replaced[value[:index]] = true
-		}
+// isolatedGitEnvironment retains only operating-system variables needed to find
+// and start Git. In particular it excludes HOME/USERPROFILE, all ambient GIT_*
+// configuration, askpass helpers, SSH agent state, credential helpers and proxy
+// variables. The explicit controls below force non-interactive, config-isolated
+// public retrieval (REG-026). Private-source credentials are not supported.
+func isolatedGitEnvironment(base []string) []string {
+	allowed := map[string]bool{
+		"PATH": true, "PATHEXT": true, "SYSTEMROOT": true, "WINDIR": true,
+		"SYSTEMDRIVE": true, "COMSPEC": true, "TMP": true, "TEMP": true,
+		"TMPDIR": true, "LANG": true, "LC_ALL": true,
 	}
-	result := make([]string, 0, len(base)+len(overrides))
-	for _, value := range base {
-		index := strings.IndexByte(value, '=')
-		if index > 0 && replaced[value[:index]] {
+	values := make(map[string]string)
+	for _, item := range base {
+		index := strings.IndexByte(item, '=')
+		if index <= 0 {
 			continue
 		}
-		result = append(result, value)
+		key := strings.ToUpper(item[:index])
+		if allowed[key] {
+			values[key] = item[index+1:]
+		}
 	}
-	return append(result, overrides...)
+	values["GIT_TERMINAL_PROMPT"] = "0"
+	values["GIT_CONFIG_NOSYSTEM"] = "1"
+	values["GIT_CONFIG_GLOBAL"] = os.DevNull
+	values["GIT_ASKPASS"] = ""
+	values["SSH_ASKPASS"] = ""
+	values["GCM_INTERACTIVE"] = "Never"
+
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]string, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, key+"="+values[key])
+	}
+	return result
 }
 
 // ensureContained compares absolute, cleaned paths and requires target to be a
