@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.3"
+          cache: true
+
+      - name: Test source
+        run: go test ./...
+
+      - name: Build release binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          name="registry-${GOOS}-${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then name="${name}.exe"; fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          go build -trimpath -ldflags "-s -w -X github.com/cdin-editor/registry/internal/buildinfo.Version=${VERSION} -X github.com/cdin-editor/registry/internal/buildinfo.Commit=${GITHUB_SHA}" -o "dist/${name}" ./cmd/registry
+          cp LICENSE NOTICE README.md dist/
+          if [ "$GOOS" = "windows" ]; then
+            (cd dist && zip -q "../${name%.exe}.zip" "${name}" LICENSE NOTICE README.md)
+          else
+            tar -czf "dist/${name}.tar.gz" -C dist "${name}" LICENSE NOTICE README.md
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: registry-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: registry-*
+          merge-multiple: true
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

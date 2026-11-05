@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "component_id": "backend",
+  "variant": "default",
+  "version": "1.0.0",
+  "status": "active",
+  "source_units": [
+    {
+      "source_unit_id": "backend-source",
+      "repository_uri": "https://github.com/example/backend",
+      "revision": "0123456789abcdef0123456789abcdef01234567"
+    }
+  ],
+  "dependencies": [],
+  "contracts": {
+    "provides": [],
+    "requires": []
+  }
+}
