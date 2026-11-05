@@ -95,7 +95,6 @@ func TestREG006SupportsUnboundedNumericIdentifiers(t *testing.T) {
 	}
 }
 
-
 // TestREG006OfficialSemVerV20ParserExamples supplements the canonical precedence
 // sequence with representative valid and invalid SemVer 2.0.0 parser vectors.
 func TestREG006OfficialSemVerV20ParserExamples(t *testing.T) {
@@ -105,7 +104,9 @@ func TestREG006OfficialSemVerV20ParserExamples(t *testing.T) {
 		"1.0.0-beta+exp.sha.5114f85", "1.0.0+21AF26D3----117B344092BD",
 	}
 	for _, value := range valid {
-		if _, err := Parse(value); err != nil { t.Errorf("valid SemVer %q rejected: %v", value, err) }
+		if _, err := Parse(value); err != nil {
+			t.Errorf("valid SemVer %q rejected: %v", value, err)
+		}
 	}
 	invalid := []string{
 		"1", "1.2", "1.2.3.4", "v1.2.3", "=1.2.3", "01.2.3",
@@ -113,6 +114,8 @@ func TestREG006OfficialSemVerV20ParserExamples(t *testing.T) {
 		"1.2.3-#", "1.2.3-α",
 	}
 	for _, value := range invalid {
-		if _, err := Parse(value); err == nil { t.Errorf("invalid SemVer %q unexpectedly accepted", value) }
+		if _, err := Parse(value); err == nil {
+			t.Errorf("invalid SemVer %q unexpectedly accepted", value)
+		}
 	}
 }
