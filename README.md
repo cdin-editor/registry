@@ -21,29 +21,41 @@ dependency of a product component.
 
 ## Status
 
-The repository has a tested foundation, Catalog ingestion and a first executable
-in-memory Resolver. It is not yet a complete source collector/workspace engine.
+The repository now contains an executable Registry preparation vertical slice:
+strict Catalog transport and ingestion, SemVer/dependency/contract resolution,
+immutable Git source collection, transactional workspace publication, and
+canonical Resolved Manifest/Resolution Report output. It is not yet complete
+Registry 1.0 conformance; the remaining work is listed below and tracked in
+[Issue #5](https://github.com/cdin-editor/registry/issues/5).
 
 | Capability | Status |
 | --- | --- |
-| Standalone Go CLI, build metadata and schema inspection | Implemented |
+| Standalone Go CLI, build metadata, schema inspection and validation | Implemented |
 | Five embedded Registry v1 schemas pinned to Spec | Implemented |
-| Strict JSON and Product Definition YAML validation | Implemented |
+| Strict JSON and Product Definition YAML validation/normalization | Implemented |
 | Pipeline, PSX, GIX and repository governance | Implemented |
-| Catalog Index loading, metadata digest-before-parse and identity checks | Implemented; injected Fetcher |
-| Typed dependency and contract metadata for the resolver | Implemented |
-| SemVer 2.0.0 parser and Registry 1.0.0 constraint evaluator | Implemented; tested |
-| Dependency closure, constraint intersection and deterministic selection | Implemented; first resolver slice |
-| Prerelease/withdrawal policy, contract providers and cycle detection | Implemented; tested |
-| Production catalog HTTP transport, SSRF policy and metadata cache | Not implemented |
-| Immutable Git source collection and actual commit verification | Not implemented |
-| Safe source subdirectory/symlink containment | Not implemented |
-| Transactional workspace staging and publication | Not implemented |
-| Serialized Resolved Manifest and Resolution Report | Not implemented; typed in-memory values exist |
-| RFC 8785 serialization, manifest replay and update discovery | Not implemented |
+| Catalog Index loading, digest-before-parse and identity checks | Implemented |
+| Production HTTPS Catalog transport, redirect/host/IP policy and bounded reads | Implemented |
+| Digest-bound metadata cache with integrity checks | Implemented |
+| SemVer 2.0.0 and Registry 1.0.0 constraint evaluator | Implemented; tested |
+| Deterministic dependency resolution, backtracking and contract checks | Implemented; tested |
+| Prerelease/withdrawal policy, ambiguity rejection and cycle diagnostics | Implemented; tested |
+| Immutable Git source collection and full commit verification | Implemented; integration-tested |
+| Stable source paths, subdirectory validation and symlink/special-file rejection | Implemented; tested |
+| Transactional workspace staging and publication | Implemented; integration-tested |
+| Resolved Manifest and Resolution Report serialization/schema validation | Implemented |
+| RFC 8785-style canonical JSON and canonical-input verification | Implemented; tested |
+| CLI resolve and prepare composition | Implemented |
+| Persisted Manifest replay and update discovery | Not implemented |
+| Git-object cache/eviction, fuzzing and performance budgets | Not implemented |
+| Deployment Git egress enforcement and cross-platform crash-durability proof | Deployment/test work remains |
 
-A successful resolver call produces only an in-memory selected graph and report.
-It does not fetch component sources, write a Manifest, or publish a workspace.
+The `resolve` command reports the selected graph without collecting component
+source. The `prepare` command collects the declared immutable source units,
+validates both output documents and publishes a complete workspace only after
+all preparation steps succeed. Neither command runs component code. See
+[Implementation status](docs/status.md) and [REG traceability](docs/traceability.md)
+for the tested boundary and its limitations.
 
 ## Quick start
 
@@ -82,6 +94,30 @@ Validate the other document kinds as JSON:
 ./build/registry validate resolution-report report.json
 ```
 
+Resolve a Product Definition against one or more Catalog Indexes without
+retrieving component source:
+
+```sh
+./build/registry resolve \
+  --product ./product-definition.yaml \
+  --catalog https://registry.example/catalog/index.json \
+  --allow-host registry.example
+```
+
+Prepare and atomically publish the selected workspace:
+
+```sh
+./build/registry prepare \
+  --product ./product-definition.yaml \
+  --catalog https://registry.example/catalog/index.json \
+  --allow-host registry.example \
+  --output ./prepared
+```
+
+Every Catalog metadata host and every source repository host must be explicitly
+allow-listed. The deployment must still enforce Git network egress policy;
+the Collector hostname allow-list is not a firewall.
+
 Use `-` to read JSON from standard input. YAML is accepted only for Product
 Definitions and is selected by the `.yaml` or `.yml` extension.
 
@@ -91,13 +127,14 @@ Definitions and is selected by the `.yaml` or `.yml` extension.
 - `internal/cli/` — command parsing and process exit behavior.
 - `internal/validation/` — strict JSON/YAML decoding and JSON Schema validation.
 - `internal/schemas/` — embedded Registry schemas mirrored from the Spec.
-- `internal/catalog/` — Catalog Index ingestion, digest integrity and typed release metadata.
+- `internal/catalog/` — Catalog Index ingestion, HTTPS metadata transport, digest cache and typed release metadata.
 - `internal/semver/` — strict SemVer 2.0.0 and contract 1.0.0 constraint semantics.
 - `internal/resolver/` — deterministic dependency/version/contract resolution.
-- Future `internal/collector/` — immutable source retrieval.
-- Future `internal/workspace/` — transactional staging and publication.
+- `internal/collector/` — immutable Git source retrieval, commit verification and safe materialization.
+- `internal/workspace/` — private staging, output validation and complete-workspace publication.
+- `internal/manifest/` — Resolved Manifest/Resolution Report models, canonical serialization and digests.
 - `schemas/registry/v1/` — versioned schema copies and immutable source lock.
-- `tests/` and package-local tests — CLI, validation, resolver and governance.
+- `tests/` and package-local tests — validation, Catalog, Resolver, Collector, Workspace and governance.
 - `pipeline.toml` — provider-neutral task graph.
 - `docs/` — architecture, contracts, implementation, status and verification.
 
