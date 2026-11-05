@@ -39,6 +39,18 @@ command = ["go", "build", "./..."]
 depends_on = ["deps"]
 timeout_seconds = 600
 
+[tasks.governance]
+description = "Validate repository templates, PSX policy and GIX topology with executable tests"
+command = ["go", "test", "./tests", "-run", "^TestRepositoryGovernance", "-count=1"]
+depends_on = ["deps"]
+timeout_seconds = 300
+
+[tasks.gix-config]
+description = "Parse and validate the committed GIX branch flow with GIX itself"
+command = ["go", "run", "github.com/m-mdy-m/gix/cmd/gix@v1.2.0", "config", "list"]
+depends_on = ["deps"]
+timeout_seconds = 300
+
 [tasks.boundary]
 description = "Enforce Registry package and consumer-independence boundaries"
 command = ["bash", "scripts/check-boundaries.sh"]
@@ -63,7 +75,7 @@ timeout_seconds = 900
 [tasks.release-check]
 description = "Run the cross-platform release verification gate"
 command = ["git", "diff", "--check"]
-depends_on = ["modules", "format", "vet", "test", "build", "boundary", "schema-sync", "structure"]
+depends_on = ["modules", "format", "vet", "test", "governance", "gix-config", "build", "boundary", "schema-sync", "structure"]
 timeout_seconds = 900
 
 [tasks.check]
