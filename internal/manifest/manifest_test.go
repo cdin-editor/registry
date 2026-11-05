@@ -32,7 +32,7 @@ func resolvedFixture() (*resolver.Graph, []collector.Source) {
 			Version:            "1.0.0",
 			ReleaseMetadataURI: "https://catalog.example.invalid/releases/engine-1.0.0.json",
 			ReleaseMetadataSHA: testDigest,
-			SourceUnits:        []catalogModel.SourceUnit{{
+			SourceUnits: []catalogModel.SourceUnit{{
 				ID:            "source",
 				RepositoryURI: "https://github.com/example/engine.git",
 				Revision:      testRevision,
@@ -106,10 +106,10 @@ func TestREG023RejectsMissingOrExtraCollectorResults(t *testing.T) {
 // string escaping, including a supplementary Unicode code point.
 func TestREG024CanonicalJSONOrdersKeysByUTF16(t *testing.T) {
 	input := map[string]any{
-		"z": "<&",
+		"z":          "<&",
 		"\U0001F600": "emoji",
-		"\uE000": "bmp",
-		"a": "line\nfeed",
+		"\uE000":     "bmp",
+		"a":          "line\nfeed",
 	}
 	got, err := MarshalCanonical(input)
 	if err != nil {
@@ -161,7 +161,7 @@ func TestREG024ReportSerializationNormalizesEmptyCollections(t *testing.T) {
 	report := resolver.Report{
 		SchemaVersion: schemaVersion,
 		Result:        "failure",
-		Conflicts:     []resolver.Conflict{
+		Conflicts: []resolver.Conflict{
 			{Code: "Z_CONFLICT", Message: "last", InvolvedComponents: []string{"z", "a"}},
 			{Code: "A_CONFLICT", Message: "first"},
 		},
