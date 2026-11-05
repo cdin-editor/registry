@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Add Registry Resolver 1.1.0 report evidence: sourced applied constraints, immutable candidate provenance, typed conflict/rejection codes and structured contract-provider diagnostics.
+- Add adversarial Resolver coverage for diamond graphs, duplicated constraints/providers, transitive conflicts, fallback branch isolation, permutation invariance and bounded search.
+- Add SemVer 2.0.0 parser vectors alongside precedence and unbounded-identifier tests.
 - Add the provider-neutral Pipeline task graph and pin reusable CI, documentation, security and release workflows to a reviewed Pipeline commit.
 - Add PSX repository-structure validation and executable governance tests for PR/Issue templates and repository policy.
 - Add GIX branch-flow validation using GIX itself, plus a main/develop Git Flow matching the CDIN repositories.
@@ -17,7 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add a transport-injected Catalog Index loader with digest-before-parse verification, release identity checks, default-variant normalization, duplicate deduplication and conflict rejection.
 - Preserve typed dependency and contract declarations in Catalog releases for resolver consumption.
 - Add SemVer 2.0.0 parser/precedence and Registry 1.0.0 constraint parsing/evaluation.
-- Add deterministic dependency/version/contract resolver with backtracking, cycle diagnostics and structured in-memory results.
+- Add deterministic dependency/version/contract resolver with backtracking, cycle diagnostics, branch-scoped evidence and structured in-memory results.
 
 ### Changed
 
