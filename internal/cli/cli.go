@@ -2,17 +2,17 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
-	"encoding/json"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/cdin-editor/registry/internal/buildinfo"
-	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/catalog"
+	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/resolver"
 	"github.com/cdin-editor/registry/internal/schemas"
@@ -299,8 +299,7 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		return exitInvalid
 	}
 	if _, err := stdout.Write(append(encoded, '\n')); err != nil {
-		fmt.Fprintf(stderr, "registry: write prepare receipt: %v
-", err)
+		fmt.Fprintf(stderr, "registry: write prepare receipt: %v\n", err)
 		return exitInvalid
 	}
 	return exitOK
@@ -358,7 +357,6 @@ type catalogRepositoryPolicy struct {
 func (p catalogRepositoryPolicy) ValidateRepository(uri string) error {
 	return (collector.HTTPSAllowList(p.hosts)).ValidateRepository(uri)
 }
-
 
 func readInput(path string, stdin io.Reader) (inputFile, error) {
 	if path == "-" {
