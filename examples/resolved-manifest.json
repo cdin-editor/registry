@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "registry_version": "0.1.0-dev",
+  "catalogs": [
+    {
+      "catalog_id": "cdin-components",
+      "metadata_uri": "https://example.invalid/catalog/index.json",
+      "metadata_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "roots": [
+    {
+      "component_id": "backend",
+      "variant": "default",
+      "version": "1.0.0"
+    }
+  ],
+  "components": [
+    {
+      "component_id": "backend",
+      "variant": "default",
+      "version": "1.0.0",
+      "release_metadata_uri": "https://example.invalid/components/backend/1.0.0.json",
+      "release_metadata_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "source_units": [
+        {
+          "source_unit_id": "backend-source",
+          "repository_uri": "https://github.com/example/backend",
+          "revision": "0123456789abcdef0123456789abcdef01234567",
+          "workspace_path": "components/backend/default/sources/backend-source"
+        }
+      ],
+      "dependencies": []
+    }
+  ],
+  "resolution_order": [
+    {
+      "component_id": "backend",
+      "variant": "default",
+      "version": "1.0.0"
+    }
+  ]
+}

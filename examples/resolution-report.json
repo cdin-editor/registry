@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "result": "success",
+  "selected": [
+    {
+      "component_id": "backend",
+      "variant": "default",
+      "version": "1.0.0"
+    }
+  ],
+  "rejected_candidates": [],
+  "conflicts": [],
+  "warnings": []
+}

@@ -1,0 +1,8 @@
+/.deps/
+/build/
+/dist/
+/coverage/
+/.pipeline/
+/.psx/
+*.out
+*.test
