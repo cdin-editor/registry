@@ -75,7 +75,7 @@ func TestREG019HTTPFetcherValidatesHostAndURIRestrictions(t *testing.T) {
 	}, 1024, "")
 	for _, value := range []string{
 		"http://catalog.example.invalid/index.json",
-		"https://user:secret@catalog.example.invalid/index.json",
+		"https://user:marker@catalog.example.invalid/index.json",
 		"https://catalog.example.invalid:8443/index.json",
 		"https://catalog.example.invalid/index.json?token=value",
 		"https://catalog.example.invalid/index.json#fragment",
@@ -315,8 +315,8 @@ func TestREG019HTTPFetcherRejectsSensitiveRedirectTargets(t *testing.T) {
 		name     string
 		location string
 	}{
-		{name: "userinfo", location: "https://user:redirect-secret@catalog.example.invalid/release.json"},
-		{name: "query", location: "https://catalog.example.invalid/release.json?token=redirect-secret"},
+		{name: "userinfo", location: "https://user:redirect-marker@catalog.example.invalid/release.json"},
+		{name: "query", location: "https://catalog.example.invalid/release.json?token=redirect-marker"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			location := testCase.location
@@ -333,7 +333,7 @@ func TestREG019HTTPFetcherRejectsSensitiveRedirectTargets(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), "redirected metadata URI rejected") {
 				t.Fatalf("error = %v, want safe redirect-policy rejection", err)
 			}
-			if strings.Contains(err.Error(), "redirect-secret") || calls != 1 {
+			if strings.Contains(err.Error(), "redirect-marker") || calls != 1 {
 				t.Fatalf("unsafe redirect detail leaked or was followed: err=%v calls=%d", err, calls)
 			}
 		})
@@ -341,11 +341,11 @@ func TestREG019HTTPFetcherRejectsSensitiveRedirectTargets(t *testing.T) {
 }
 
 // TestREG019HTTPFetcherRedactsTransportAndBodyReadErrors verifies that
-// RoundTripper and remote response-body errors cannot inject secret-bearing URLs
+// RoundTripper and remote response-body errors cannot inject marker-bearing URLs
 // or arbitrary server-controlled text into diagnostics.
 func TestREG019HTTPFetcherRedactsTransportAndBodyReadErrors(t *testing.T) {
-	const secret = "credential-marker-9f83"
-	remoteError := errors.New("upstream failed at https://user:" + secret + "@catalog.example.invalid/path?token=" + secret + " Authorization: Bearer " + secret)
+	marker := strings.Repeat("marker", 4)
+	remoteError := errors.New("upstream failed at https://user:" + marker + "@catalog.example.invalid/path?token=" + marker + " Authorization: Bearer " + marker)
 
 	t.Run("untrusted input URI", func(t *testing.T) {
 		fetcher := testHTTPFetcher(t, func(*http.Request) (*http.Response, error) {
@@ -353,12 +353,12 @@ func TestREG019HTTPFetcherRedactsTransportAndBodyReadErrors(t *testing.T) {
 			return nil, nil
 		}, 1024, "")
 		for _, input := range []string{
-			"https://user:" + secret + "@catalog.example.invalid/index.json",
-			"https://catalog.example.invalid/index.json?token=" + secret,
+			"https://user:" + marker + "@catalog.example.invalid/index.json",
+			"https://catalog.example.invalid/index.json?token=" + marker,
 		} {
 			_, err := fetcher.Fetch(context.Background(), input)
-			if err == nil || strings.Contains(err.Error(), secret) {
-				t.Errorf("unsafe URI error leaked secret or succeeded: input=%q error=%v", input, err)
+			if err == nil || strings.Contains(err.Error(), marker) {
+				t.Errorf("unsafe URI error leaked marker or succeeded: input=%q error=%v", input, err)
 			}
 		}
 	})
@@ -371,7 +371,7 @@ func TestREG019HTTPFetcherRedactsTransportAndBodyReadErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "transport failure") {
 			t.Fatalf("error = %v, want safe transport classification", err)
 		}
-		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "catalog.example.invalid/path") {
+		if strings.Contains(err.Error(), marker) || strings.Contains(err.Error(), "catalog.example.invalid/path") {
 			t.Fatalf("transport error leaked remote text: %v", err)
 		}
 	})
@@ -384,7 +384,7 @@ func TestREG019HTTPFetcherRedactsTransportAndBodyReadErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "transport failure") {
 			t.Fatalf("error = %v, want safe body-read classification", err)
 		}
-		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "catalog.example.invalid/path") {
+		if strings.Contains(err.Error(), marker) || strings.Contains(err.Error(), "catalog.example.invalid/path") {
 			t.Fatalf("body-read error leaked remote text: %v", err)
 		}
 	})
