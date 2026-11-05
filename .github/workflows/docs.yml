@@ -13,8 +13,8 @@ permissions:
 jobs:
   documentation:
     name: Markdown and workflow syntax
-    uses: m-mdy-m/pipeline/.github/workflows/docs-check.yml@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+    uses: m-mdy-m/pipeline/.github/workflows/docs-check.yml@5053d145dc581159d931c90fb72f06d7ab17e420
 
   yaml:
     name: YAML lint
-    uses: m-mdy-m/pipeline/.github/workflows/yamllint.yml@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+    uses: m-mdy-m/pipeline/.github/workflows/yamllint.yml@5053d145dc581159d931c90fb72f06d7ab17e420
