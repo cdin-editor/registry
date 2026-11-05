@@ -386,12 +386,12 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 		return roots[i].VersionConstraint < roots[j].VersionConstraint
 	})
 	engine := &solver{candidates: candidateMap, allowPrerelease: def.Policy.AllowPrerelease, maxStates: maxSearchStates}
-	selected, failureState := engine.search(state, def.EnvironmentContracts)
-	if failureState != nil {
-		result.Report.AppliedConstraints = appliedConstraintsForState(failureState)
-		result.Report.RejectedCandidates = normalizeRejected(rejectedForFinalState(engine, failureState))
-		populateConflictNodes(failureState, selected)
-		result.Report.Conflicts = append(result.Report.Conflicts, *failureState)
+	selected, failure := engine.search(state, def.EnvironmentContracts)
+	if failure != nil {
+		result.Report.AppliedConstraints = appliedConstraintsForState(selected)
+		result.Report.RejectedCandidates = normalizeRejected(rejectedForFinalState(engine, selected))
+		populateConflictNodes(failure, selected)
+		result.Report.Conflicts = append(result.Report.Conflicts, *failure)
 		return result
 	}
 	graph, reportSelected, graphConflict := buildGraph(selected, catalogRefs, roots, def.EnvironmentContracts)
