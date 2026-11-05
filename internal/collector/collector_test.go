@@ -80,6 +80,26 @@ func graphForSources(revision, repository string, units ...catalog.SourceUnit) *
 	}}}
 }
 
+// TestREG026HTTPSAllowListMatchesHostnameWithExplicitDefaultPort verifies
+// equivalent HTTPS host spellings do not differ merely because :443 is explicit,
+// while the policy still rejects non-default ports, credentials and other schemes.
+func TestREG026HTTPSAllowListMatchesHostnameWithExplicitDefaultPort(t *testing.T) {
+	policy := HTTPSAllowList{"example.invalid"}
+	if err := policy.ValidateRepository("https://example.invalid:443/repository.git"); err != nil {
+		t.Fatalf("explicit default HTTPS port should be accepted: %v", err)
+	}
+	for _, uri := range []string{
+		"https://example.invalid:8443/repository.git",
+		"https://user:secret@example.invalid/repository.git",
+		"http://example.invalid/repository.git",
+		"https://sub.example.invalid/repository.git",
+	} {
+		if err := policy.ValidateRepository(uri); err == nil {
+			t.Errorf("ValidateRepository(%q) unexpectedly succeeded", uri)
+		}
+	}
+}
+
 // TestREG017CollectsMultipleDeclaredSourceUnits verifies each source unit is
 // materialized at its own stable path, including two units from one repository.
 func TestREG017CollectsMultipleDeclaredSourceUnits(t *testing.T) {
