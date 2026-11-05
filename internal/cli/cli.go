@@ -195,10 +195,6 @@ func parseExecutionOptions(args []string, preparing bool) (executionOptions, err
 // Resolver. The prepare variant then adds immutable source collection, Manifest/
 // Report validation and atomic workspace publication. REG-001/005/019/022-026.
 func runExecution(ctx context.Context, args []string, preparing bool, stdout, stderr io.Writer) int {
-	command := "resolve"
-	if preparing {
-		command = "prepare"
-	}
 	options, err := parseExecutionOptions(args, preparing)
 	if err != nil {
 		return usageError(stderr, "%v", err)
@@ -276,7 +272,7 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 	prepared, err := workspace.Prepare(ctx, result, workspace.Options{
 		Destination: options.outputPath,
 		RegistryVersion: buildinfo.Version,
-		Git: catalogGitRunner{},
+		Git: collector.CommandGit{},
 		RepositoryPolicy: catalogRepositoryPolicy{hosts: options.allowedHosts},
 		Validator: validator,
 	})
@@ -299,17 +295,14 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 	}
 	encoded, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
-		fmt.Fprintf(stderr, "registry: encode prepare receipt: %v
-", err)
+		fmt.Fprintf(stderr, "registry: encode prepare receipt: %v\n", err)
 		return exitInvalid
 	}
-	if _, err := stdout.Write(append(encoded, '
-')); err != nil {
+	if _, err := stdout.Write(append(encoded, '\n')); err != nil {
 		fmt.Fprintf(stderr, "registry: write prepare receipt: %v
 ", err)
 		return exitInvalid
 	}
-	_ = command
 	return exitOK
 }
 
@@ -318,17 +311,31 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 // callers that require portable provenance should publish Catalog Indexes at an
 // immutable HTTPS URI.
 func readCatalogInput(ctx context.Context, input string, fetcher *catalog.HTTPFetcher) ([]byte, string, error) {
-	parsed, err := url.Parse(input)
-	if err == nil && parsed.IsAbs() && parsed.Scheme != "" && parsed.Scheme != "file" {
-		if strings.ToLower(parsed.Scheme) != "https" {
-			return nil, "", fmt.Errorf("Catalog Index URI must use HTTPS")
-		}
+	if strings.HasPrefix(strings.ToLower(input), "https://") {
 		data, err := fetcher.Fetch(ctx, input)
 		if err != nil {
 			return nil, "", err
 		}
 		return data, input, nil
 	}
+	if strings.HasPrefix(strings.ToLower(input), "file://") {
+		parsed, err := url.Parse(input)
+		if err != nil || parsed.Host != "" || parsed.Path == "" {
+			return nil, "", fmt.Errorf("Catalog Index file URI must be local and absolute")
+		}
+		path := filepath.FromSlash(parsed.Path)
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, "", fmt.Errorf("resolve Catalog Index path: %w", err)
+		}
+		data, err := os.ReadFile(absolute)
+		if err != nil {
+			return nil, "", err
+		}
+		return data, (&url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}).String(), nil
+	}
+	// Treat the input as a path by default. This deliberately avoids parsing
+	// Windows drive letters (for example C:\\repo\\catalog.json) as URI schemes.
 	absolute, err := filepath.Abs(input)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve Catalog Index path: %w", err)
@@ -341,18 +348,12 @@ func readCatalogInput(ctx context.Context, input string, fetcher *catalog.HTTPFe
 	return data, indexURI, nil
 }
 
-// catalogGitRunner adapts the production Git process runner without coupling
-// the CLI to collector implementation details.
-type catalogGitRunner struct{}
-
-func (catalogGitRunner) Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
-	return collector.CommandGit{}.Run(ctx, dir, env, args...)
-}
-
 // catalogRepositoryPolicy applies the same exact allow-list to source repository
 // URIs. Git retrieval never silently trusts a host simply because it appeared in
 // a release metadata document.
-type catalogRepositoryPolicy struct { hosts []string }
+type catalogRepositoryPolicy struct {
+	hosts []string
+}
 
 func (p catalogRepositoryPolicy) ValidateRepository(uri string) error {
 	return (collector.HTTPSAllowList(p.hosts)).ValidateRepository(uri)
