@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -209,7 +210,7 @@ type repositoryURI struct {
 // contract says repository_uri is a URI; accepting an alternate SSH shorthand
 // would create a second parser with different security behavior.
 func parseRepositoryURI(value string) (repositoryURI, error) {
-	parsed, err := urlParse(value)
+	parsed, err := url.Parse(value)
 	if err != nil {
 		return repositoryURI{}, fmt.Errorf("collector: invalid repository URI: %w", err)
 	}
@@ -425,7 +426,3 @@ func containsHost(hosts []string, target string) bool {
 	}
 	return false
 }
-
-// urlParse is kept as a package variable to let tests supply URI fixtures while
-// exercising the same production validation path.
-var urlParse = func(value string) (*url.URL, error) { return url.Parse(value) }
