@@ -153,10 +153,12 @@ func TestREG018RejectsNonObjectRevision(t *testing.T) {
 func TestREG020RejectsParentTraversal(t *testing.T) {
 	repository, revision := initTestRepository(t, nil)
 	destination := filepath.Join(t.TempDir(), "prepared")
-	graph := graphForSources(revision, repository, catalog.SourceUnit{ID: "source", Subdirectory: "../outside"})
-	_, err := Collect(context.Background(), graph, destination, Options{Git: CommandGit{}, Policy: allowTestRepository{}})
-	if err == nil || !strings.Contains(err.Error(), "unsafe source subdirectory") {
-		t.Fatalf("expected path traversal rejection, got %v", err)
+	for _, subdirectory := range []string{"../outside", "C:/outside", "C:outside"} {
+		graph := graphForSources(revision, repository, catalog.SourceUnit{ID: "source", Subdirectory: subdirectory})
+		_, err := Collect(context.Background(), graph, destination, Options{Git: CommandGit{}, Policy: allowTestRepository{}})
+		if err == nil || !strings.Contains(err.Error(), "unsafe source subdirectory") {
+			t.Errorf("subdirectory %q: expected unsafe-path rejection, got %v", subdirectory, err)
+		}
 	}
 }
 
