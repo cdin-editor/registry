@@ -49,6 +49,14 @@ type HTTPFetcherOptions struct {
 	CacheDir     string
 }
 
+// safePolicyError is produced only by local URL/redirect policy checks. It can
+// safely cross the net/http URL-error wrapper without exposing the rejected URL.
+type safePolicyError struct {
+	message string
+}
+
+func (e *safePolicyError) Error() string { return e.message }
+
 // HTTPFetcher retrieves Catalog release metadata over HTTPS. The allow-list is
 // exact-host matching; wildcards, HTTP, embedded credentials, non-default ports,
 // query strings and fragments are rejected.
@@ -61,6 +69,7 @@ type HTTPFetcher struct {
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
 	lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)
+	dialIP       func(context.Context, string, string) (net.Conn, error)
 	allowPrivate bool
 }
 
@@ -106,6 +115,10 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		maxBytes:     maxBytes,
 		cacheDir:     cacheDir,
 		lookupIPAddr: net.DefaultResolver.LookupIPAddr,
+		dialIP: (&net.Dialer{
+			Timeout:   8 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
 	}
 	transport := &http.Transport{
 		Proxy:                 nil,
@@ -125,10 +138,10 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		Timeout:   timeout,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			if len(via) > redirects {
-				return fmt.Errorf("catalog: metadata redirect limit exceeded")
+				return &safePolicyError{message: "catalog: metadata redirect limit exceeded"}
 			}
 			if err := fetcher.validateURL(request.URL); err != nil {
-				return fmt.Errorf("catalog: redirected metadata URI rejected: %w", err)
+				return &safePolicyError{message: "catalog: redirected metadata URI rejected: " + err.Error()}
 			}
 			return nil
 		},
@@ -227,7 +240,10 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, f.maxBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("catalog: read metadata response: %w", err)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("catalog: read metadata response: %w", scrubURLError(err))
 	}
 	if int64(len(data)) > f.maxBytes {
 		return nil, fmt.Errorf("catalog: metadata response exceeds configured size limit")
@@ -282,11 +298,16 @@ func (f *HTTPFetcher) dialContext(ctx context.Context, network, address string) 
 			return nil, fmt.Errorf("catalog: metadata host resolved to a non-public address")
 		}
 	}
-	dialer := &net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}
+	dial := f.dialIP
+	if dial == nil {
+		dial = (&net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	}
 	var failures []error
 	for _, resolved := range addresses {
+		// Dial the exact IP that was checked above; do not resolve the hostname
+		// a second time after validating its address set.
 		target := net.JoinHostPort(resolved.IP.String(), port)
-		connection, dialErr := dialer.DialContext(ctx, network, target)
+		connection, dialErr := dial(ctx, network, target)
 		if dialErr == nil {
 			return connection, nil
 		}
@@ -429,12 +450,27 @@ func httpMetadataDigest(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// scrubURLError keeps transport errors useful without retaining a full URL
-// object that could include sensitive query strings or userinfo.
+// scrubURLError preserves local cancellation, timeout and URL-policy failures,
+// but intentionally discards arbitrary transport/remote error text. RoundTripper,
+// resolver and server-controlled errors may echo credentials or complete URLs.
 func scrubURLError(err error) error {
-	var urlError *url.Error
-	if errors.As(err, &urlError) {
-		return urlError.Err
+	var policyError *safePolicyError
+	if errors.As(err, &policyError) {
+		return policyError
 	}
-	return err
+	var urlError *url.Error
+	if errors.As(err, &urlError) && urlError.Timeout() {
+		return context.DeadlineExceeded
+	}
+	if errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	var networkError net.Error
+	if errors.As(err, &networkError) && networkError.Timeout() {
+		return context.DeadlineExceeded
+	}
+	return errors.New("transport failure")
 }

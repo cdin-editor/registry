@@ -11,6 +11,9 @@
 
 - `GitRunner` injects process execution; `CommandGit` passes an argument vector directly to `exec.CommandContext`, never a shell string.
 - `RepositoryPolicy` is mandatory. The production `HTTPSAllowList` allows HTTPS only, rejects embedded credentials, and requires exact host matching. Tests inject a deliberately local-only policy for temporary Git fixtures.
+- Public, unauthenticated Git retrieval is the only supported production mode. `CommandGit` inherits only the operating-system variables needed to start Git, forces non-interactive/config-isolated operation, and does not inherit ambient askpass helpers, SSH-agent state, credential helpers or proxy variables.
+- Private-repository authentication is not currently supported. Future authentication must use an explicit injected credential-provider boundary; credentials must never be placed in repository URIs, Git command arguments, diagnostics or logs.
+- Failed Git commands expose a safe exit classification rather than raw arguments or remote stderr, which may contain secret-bearing URLs.
 - The collector does not own version resolution, auth UI, credential storage or catalog ingestion.
 
 ## Collection algorithm
@@ -29,7 +32,7 @@ The collector writes only into a caller-supplied staging root; Workspace owns fi
 
 ## Security qualification
 
-The HTTPS host allow-list validates the URI but cannot by itself enforce a deployment's DNS/IP egress policy. Git's underlying network behavior must be constrained by an egress firewall or sandbox. The production transport should block private/link-local destinations and DNS rebinding. Secrets must be provided by an injected execution environment; no token is placed into a Git command argument by this package.
+The HTTPS host allow-list validates the URI but cannot by itself enforce a deployment's DNS/IP egress policy. Git's underlying network behavior must be constrained by an egress firewall or sandbox. The production deployment must block private/link-local destinations and DNS rebinding. Since private-repository credentials are unsupported, no token or ambient credential helper is supplied to Git.
 
 ## Tests
 
