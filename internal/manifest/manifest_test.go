@@ -129,11 +129,11 @@ func TestREG024CanonicalJSONOrdersKeysByUTF16(t *testing.T) {
 // particular, duplicate properties cannot be accepted as ordinary JSON maps.
 func TestREG024CanonicalInputVerifierRejectsNonCanonicalBytes(t *testing.T) {
 	for _, input := range []string{
-		`{"b":2,"a":1}`,       // Object properties are not in JCS order.
-		`{"a":1, "b":2}`,      // Canonical JSON contains no insignificant whitespace.
-		`{"a":1,"a":1}`,       // Duplicate object names are invalid for deterministic replay.
-		`{"n":1.0}`,           // JCS serializes this number as 1.
-		`{"a":1}{"b":2}`,      // A second top-level JSON value is forbidden.
+		`{"b":2,"a":1}`,  // Object properties are not in JCS order.
+		`{"a":1, "b":2}`, // Canonical JSON contains no insignificant whitespace.
+		`{"a":1,"a":1}`,  // Duplicate object names are invalid for deterministic replay.
+		`{"n":1.0}`,      // JCS serializes this number as 1.
+		`{"a":1}{"b":2}`, // A second top-level JSON value is forbidden.
 	} {
 		if err := ParseCanonicalStringOnly([]byte(input)); err == nil {
 			t.Errorf("ParseCanonicalStringOnly(%q) unexpectedly succeeded", input)
