@@ -42,23 +42,23 @@ const (
 // Options contains the external boundaries required for one prepare operation.
 // Destination must not already exist; Registry never mutates an older workspace.
 type Options struct {
-	Destination     string
-	RegistryVersion string
-	TempDir         string
-	Git             collector.GitRunner
+	Destination      string
+	RegistryVersion  string
+	TempDir          string
+	Git              collector.GitRunner
 	RepositoryPolicy collector.RepositoryPolicy
-	Validator       *validation.Validator
+	Validator        *validation.Validator
 }
 
 // Prepared is returned only after the complete workspace is atomically
 // published. Digests are detached SHA-256 values over exact canonical bytes.
 type Prepared struct {
-	WorkspacePath string
-	ManifestPath  string
-	ReportPath    string
+	WorkspacePath  string
+	ManifestPath   string
+	ReportPath     string
 	ManifestSHA256 string
 	ReportSHA256   string
-	Sources       []collector.Source
+	Sources        []collector.Source
 }
 
 // Prepare collects a successful resolver graph, builds and validates both
@@ -130,8 +130,8 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	defer os.RemoveAll(stage)
 
 	sources, err := collector.Collect(ctx, resolution.Graph, stage, collector.Options{
-		Git: options.Git,
-		Policy: options.RepositoryPolicy,
+		Git:     options.Git,
+		Policy:  options.RepositoryPolicy,
 		TempDir: options.TempDir,
 	})
 	if err != nil {
@@ -186,12 +186,12 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	}
 
 	return Prepared{
-		WorkspacePath: destination,
-		ManifestPath: filepath.Join(destination, manifestFilename),
-		ReportPath: filepath.Join(destination, reportFilename),
+		WorkspacePath:  destination,
+		ManifestPath:   filepath.Join(destination, manifestFilename),
+		ReportPath:     filepath.Join(destination, reportFilename),
 		ManifestSHA256: manifest.Digest(manifestBytes),
-		ReportSHA256: manifest.Digest(reportBytes),
-		Sources: append([]collector.Source(nil), sources...),
+		ReportSHA256:   manifest.Digest(reportBytes),
+		Sources:        append([]collector.Source(nil), sources...),
 	}, nil
 }
 
