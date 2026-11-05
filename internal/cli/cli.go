@@ -127,6 +127,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "OK %s schema 1.0.0: %s\n", kind, file.name)
 	return exitOK
 }
+
 // executionOptions is deliberately CLI-only. The core Resolver and Collector
 // receive typed data and injected boundaries; they never inspect process args.
 type executionOptions struct {
