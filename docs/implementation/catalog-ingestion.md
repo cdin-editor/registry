@@ -16,9 +16,13 @@ The catalog package loads one Catalog Index and materializes the referenced Comp
 
 The loader returns no partially populated Catalog when any entry fails. The input bytes are copied into the returned release record so later caller mutation cannot change the validated payload.
 
-## Security boundary
+## Security and credential boundary
 
-The package does not execute metadata and does not implement network policy. A production Fetcher must impose request timeouts, response-size limits, redirect policy, host allow-lists and credential isolation. In particular, untrusted catalog URIs must not be fetched by an unrestricted HTTP client. The transport adapter is intentionally injected rather than hidden inside the schema/contract layer.
+The package does not execute metadata and does not implement network policy. A production Fetcher is injected and must impose request timeouts, response-size limits, redirect policy, host allow-lists and credential isolation.
+
+The production HTTP Fetcher currently supports public, unauthenticated HTTPS metadata only. It does not infer credentials from URI userinfo, query parameters, cookies, proxy environment variables, netrc files or other ambient machine state. Private Catalog authentication is not supported. Any future support must arrive through an explicit credential-provider interface at the transport boundary, not through the metadata parser or Resolver.
+
+Transport and remote error strings are untrusted input. Diagnostics must not echo metadata URIs or arbitrary remote error text; only safe local policy errors, cancellation and timeout classifications may be surfaced.
 
 ## Evidence
 

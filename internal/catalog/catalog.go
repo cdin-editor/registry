@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -196,7 +197,19 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 			payload, err = fetcher.Fetch(ctx, entry.MetadataURI)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("catalog: fetch entry %d metadata %q: %w", i, entry.MetadataURI, err)
+			// Preserve caller cancellation and the local redirect-policy error type.
+			// Arbitrary Fetcher errors are untrusted and may echo URLs or credentials.
+			if errors.Is(err, context.Canceled) {
+				return nil, context.Canceled
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				return nil, context.DeadlineExceeded
+			}
+			var policyError *safePolicyError
+			if errors.As(err, &policyError) {
+				return nil, fmt.Errorf("catalog: fetch entry %d metadata: %w", i, policyError)
+			}
+			return nil, fmt.Errorf("catalog: fetch entry %d metadata: transport failure", i)
 		}
 		sum := sha256.Sum256(payload)
 		actual := hex.EncodeToString(sum[:])
