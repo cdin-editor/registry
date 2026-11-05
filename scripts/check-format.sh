@@ -10,6 +10,10 @@ fi
 unformatted="$(find cmd internal tests -type f -name '*.go' -print0 | xargs -0 gofmt -l)"
 if [[ -n "$unformatted" ]]; then
   printf 'The following Go files need gofmt:\n%s\n' "$unformatted" >&2
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    gofmt -d "$file" >&2
+  done <<< "$unformatted"
   exit 1
 fi
 
