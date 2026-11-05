@@ -320,6 +320,38 @@ func MarshalCanonical(value any) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
+// ParseCanonicalStringOnly verifies that input is already RFC 8785 canonical
+// JSON. Unlike MarshalCanonical, this function never normalizes caller bytes:
+// whitespace, property-order differences, duplicate object names, non-canonical
+// number spellings and trailing values are rejected by the byte-for-byte check.
+// The decoder preserves number tokens so comparison uses the same JCS rules as
+// the serializer. This is the verification boundary for persisted/replayed
+// Manifest and Report bytes (REG-024); see RFC 8785:
+// https://www.rfc-editor.org/rfc/rfc8785.
+func ParseCanonicalStringOnly(input []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(input))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		return fmt.Errorf("manifest: decode canonical JSON: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("manifest: canonical JSON contains a trailing value")
+		}
+		return fmt.Errorf("manifest: canonical JSON has trailing data: %w", err)
+	}
+
+	var canonical bytes.Buffer
+	if err := appendCanonical(&canonical, decoded); err != nil {
+		return err
+	}
+	if !bytes.Equal(input, canonical.Bytes()) {
+		return fmt.Errorf("manifest: input is not RFC 8785 canonical JSON")
+	}
+	return nil
+}
+
 // MarshalReport sorts set-like report arrays before canonical serialization.
 // CyclePath remains ordered because its sequence describes a graph walk.
 func MarshalReport(report resolver.Report) ([]byte, error) {
