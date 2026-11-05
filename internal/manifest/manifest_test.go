@@ -115,7 +115,7 @@ func TestREG024CanonicalJSONOrdersKeysByUTF16(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "{\"a\":\"line\\nfeed\",\"z\":\"<&\",\"\uE000\":\"bmp\",\"\U0001F600\":\"emoji\"}"
+	want := "{\"a\":\"line\\nfeed\",\"z\":\"<&\",\"\U0001F600\":\"emoji\",\"\uE000\":\"bmp\"}"
 	if string(got) != want {
 		t.Fatalf("canonical output\n got: %s\nwant: %s", got, want)
 	}
@@ -156,7 +156,7 @@ func TestREG024ReportSerializationNormalizesEmptyCollections(t *testing.T) {
 			t.Fatalf("%s must be an array, got %#v", field, decoded[field])
 		}
 	}
-	if !strings.Index(string(encoded), "A_CONFLICT") < !strings.Index(string(encoded), "Z_CONFLICT") {
+	if strings.Index(string(encoded), "A_CONFLICT") > strings.Index(string(encoded), "Z_CONFLICT") {
 		t.Fatal("report conflicts are not sorted")
 	}
 }
