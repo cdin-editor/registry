@@ -152,3 +152,27 @@ func TestLoadUsesEmbeddedRegistrySchemas(t *testing.T) {
 		t.Fatalf("unexpected catalog result: %#v", got)
 	}
 }
+
+
+// TestLoadPreservesDependencyAndContractDeclarationsForResolver verifies that
+// validated release metadata keeps its typed dependency and contract fields.
+// This is required so the resolver consumes data, not raw metadata or custom
+// parsing logic (REG-008, REG-015 and REG-016).
+func TestLoadPreservesDependencyAndContractDeclarationsForResolver(t *testing.T) {
+	payload := []byte(`{"schema_version":"1.0.0","component_id":"consumer","version":"1.0.0","status":"active","source_units":[{"source_unit_id":"source","repository_uri":"https://example.invalid/repo.git","revision":"0123456789abcdef0123456789abcdef01234567"}],"dependencies":[{"component_id":"engine","version_constraint":">=1.0.0 <2.0.0"}],"contracts":{"provides":[{"contract_id":"org.example.consumer","version":"1.0.0"}],"requires":[{"contract_id":"org.example.api","version_constraint":">=1.0.0 <2.0.0"}]}}`)
+	got, err := Load(context.Background(), indexBytes(Entry{
+		ComponentID:"consumer", Version:"1.0.0", MetadataURI:"mem://consumer", MetadataSHA:digest(payload),
+	}), mapFetcher{"mem://consumer":payload}, &acceptingValidator{})
+	if err != nil { t.Fatal(err) }
+	if len(got.Releases) != 1 { t.Fatalf("got %d releases, want 1", len(got.Releases)) }
+	release := got.Releases[0]
+	if len(release.Dependencies) != 1 || release.Dependencies[0].ComponentID != "engine" || release.Dependencies[0].VersionConstraint != ">=1.0.0 <2.0.0" {
+		t.Fatalf("dependency declaration was not preserved: %#v", release.Dependencies)
+	}
+	if len(release.Contracts.Provides) != 1 || release.Contracts.Provides[0].ContractID != "org.example.consumer" {
+		t.Fatalf("provided contract was not preserved: %#v", release.Contracts.Provides)
+	}
+	if len(release.Contracts.Requires) != 1 || release.Contracts.Requires[0].ContractID != "org.example.api" {
+		t.Fatalf("required contract was not preserved: %#v", release.Contracts.Requires)
+	}
+}
