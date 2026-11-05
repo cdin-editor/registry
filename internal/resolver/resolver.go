@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	manifestSchemaVersion = "1.0.0"
-	reportSchemaVersion   = "1.1.0"
+	manifestSchemaVersion  = "1.0.0"
+	reportSchemaVersion    = "1.1.0"
 	defaultMaxSearchStates = 100000
 )
 
@@ -39,29 +39,29 @@ const (
 type ConflictCode string
 
 const (
-	ConflictNoRootRequirements          ConflictCode = "NO_ROOT_REQUIREMENTS"
-	ConflictInvalidComponentID          ConflictCode = "INVALID_COMPONENT_ID"
-	ConflictInvalidVersionConstraint    ConflictCode = "INVALID_VERSION_CONSTRAINT"
-	ConflictInvalidCatalog              ConflictCode = "INVALID_CATALOG"
-	ConflictInvalidReleaseIdentity      ConflictCode = "INVALID_RELEASE_IDENTITY"
-	ConflictInvalidReleaseVersion       ConflictCode = "INVALID_RELEASE_VERSION"
-	ConflictInvalidReleaseStatus        ConflictCode = "INVALID_RELEASE_STATUS"
-	ConflictMissingSourceUnits          ConflictCode = "MISSING_SOURCE_UNITS"
-	ConflictInvalidSourceIdentity       ConflictCode = "INVALID_SOURCE_IDENTITY"
-	ConflictResolutionLimit             ConflictCode = "RESOLUTION_LIMIT"
-	ConflictInvalidDependencyID         ConflictCode = "INVALID_DEPENDENCY_ID"
-	ConflictInvalidDependencyConstraint ConflictCode = "INVALID_DEPENDENCY_CONSTRAINT"
-	ConflictConstraintIntersectionEmpty ConflictCode = "CONSTRAINT_INTERSECTION_EMPTY"
-	ConflictAmbiguousRelease            ConflictCode = "AMBIGUOUS_RELEASE"
-	ConflictNoCompatibleRelease         ConflictCode = "NO_COMPATIBLE_RELEASE"
-	ConflictDependencyConflict          ConflictCode = "DEPENDENCY_CONFLICT"
-	ConflictDependencyCycle             ConflictCode = "DEPENDENCY_CYCLE"
-	ConflictInvalidContractID           ConflictCode = "INVALID_CONTRACT_ID"
-	ConflictInvalidContractVersion      ConflictCode = "INVALID_CONTRACT_VERSION"
-	ConflictInvalidEnvironmentContract  ConflictCode = "INVALID_ENVIRONMENT_CONTRACT"
-	ConflictInvalidContractConstraint   ConflictCode = "INVALID_CONTRACT_CONSTRAINT"
-	ConflictContractProviderMissing     ConflictCode = "CONTRACT_PROVIDER_MISSING"
-	ConflictContractProviderAmbiguous   ConflictCode = "CONTRACT_PROVIDER_AMBIGUOUS"
+	ConflictNoRootRequirements           ConflictCode = "NO_ROOT_REQUIREMENTS"
+	ConflictInvalidComponentID           ConflictCode = "INVALID_COMPONENT_ID"
+	ConflictInvalidVersionConstraint     ConflictCode = "INVALID_VERSION_CONSTRAINT"
+	ConflictInvalidCatalog               ConflictCode = "INVALID_CATALOG"
+	ConflictInvalidReleaseIdentity       ConflictCode = "INVALID_RELEASE_IDENTITY"
+	ConflictInvalidReleaseVersion        ConflictCode = "INVALID_RELEASE_VERSION"
+	ConflictInvalidReleaseStatus         ConflictCode = "INVALID_RELEASE_STATUS"
+	ConflictMissingSourceUnits           ConflictCode = "MISSING_SOURCE_UNITS"
+	ConflictInvalidSourceIdentity        ConflictCode = "INVALID_SOURCE_IDENTITY"
+	ConflictResolutionLimit              ConflictCode = "RESOLUTION_LIMIT"
+	ConflictInvalidDependencyID          ConflictCode = "INVALID_DEPENDENCY_ID"
+	ConflictInvalidDependencyConstraint  ConflictCode = "INVALID_DEPENDENCY_CONSTRAINT"
+	ConflictConstraintIntersectionEmpty  ConflictCode = "CONSTRAINT_INTERSECTION_EMPTY"
+	ConflictAmbiguousRelease             ConflictCode = "AMBIGUOUS_RELEASE"
+	ConflictNoCompatibleRelease          ConflictCode = "NO_COMPATIBLE_RELEASE"
+	ConflictDependencyConflict           ConflictCode = "DEPENDENCY_CONFLICT"
+	ConflictDependencyCycle              ConflictCode = "DEPENDENCY_CYCLE"
+	ConflictInvalidContractID            ConflictCode = "INVALID_CONTRACT_ID"
+	ConflictInvalidContractVersion       ConflictCode = "INVALID_CONTRACT_VERSION"
+	ConflictInvalidEnvironmentContract   ConflictCode = "INVALID_ENVIRONMENT_CONTRACT"
+	ConflictInvalidContractConstraint    ConflictCode = "INVALID_CONTRACT_CONSTRAINT"
+	ConflictContractProviderMissing      ConflictCode = "CONTRACT_PROVIDER_MISSING"
+	ConflictContractProviderAmbiguous    ConflictCode = "CONTRACT_PROVIDER_AMBIGUOUS"
 	ConflictInternalUnresolvedDependency ConflictCode = "INTERNAL_UNRESOLVED_DEPENDENCY"
 )
 
@@ -108,7 +108,7 @@ type ProductDefinition struct {
 	Policy               Policy                `json:"policy,omitempty"`
 }
 
-// Policy carries only the selection policy frozen in contract 1.0.0.
+// Policy carries only the selection policy frozen in contract 1.1.0.
 type Policy struct {
 	AllowPrerelease bool `json:"allow_prerelease"`
 }
@@ -143,9 +143,9 @@ type ConstraintSource struct {
 // AppliedConstraint preserves one root or dependency constraint without
 // coalescing duplicate declarations; each declaration remains auditable.
 type AppliedConstraint struct {
-	ComponentID       string          `json:"component_id"`
-	Variant           string          `json:"variant"`
-	VersionConstraint string          `json:"version_constraint"`
+	ComponentID       string           `json:"component_id"`
+	Variant           string           `json:"variant"`
+	VersionConstraint string           `json:"version_constraint"`
 	Source            ConstraintSource `json:"source"`
 }
 
@@ -188,22 +188,22 @@ type ContractProviderEvidence struct {
 // ContractEvidence records the exact requirement and every declared provider,
 // including providers that exist but have an incompatible version.
 type ContractEvidence struct {
-	ContractID          string                      `json:"contract_id"`
-	RequestedConstraint string                      `json:"requested_constraint"`
-	RequiringComponent  Node                        `json:"requiring_component"`
-	Providers           []ContractProviderEvidence  `json:"providers"`
+	ContractID          string                     `json:"contract_id"`
+	RequestedConstraint string                     `json:"requested_constraint"`
+	RequiringComponent  Node                       `json:"requiring_component"`
+	Providers           []ContractProviderEvidence `json:"providers"`
 }
 
 // Conflict is a structured resolution failure. CyclePath is populated for
 // REG-014; participants and contract evidence have deterministic ordering.
 type Conflict struct {
-	Code               ConflictCode                `json:"code"`
-	Message            string                      `json:"message"`
-	InvolvedComponents []string                    `json:"involved_components,omitempty"`
-	InvolvedNodes      []Node                      `json:"involved_nodes,omitempty"`
-	CandidateEvidence  []ReleaseIdentity           `json:"candidate_evidence,omitempty"`
-	ContractEvidence   *ContractEvidence           `json:"contract_evidence,omitempty"`
-	CyclePath          []Node                      `json:"cycle_path,omitempty"`
+	Code               ConflictCode      `json:"code"`
+	Message            string            `json:"message"`
+	InvolvedComponents []string          `json:"involved_components,omitempty"`
+	InvolvedNodes      []Node            `json:"involved_nodes,omitempty"`
+	CandidateEvidence  []ReleaseIdentity `json:"candidate_evidence,omitempty"`
+	ContractEvidence   *ContractEvidence `json:"contract_evidence,omitempty"`
+	CyclePath          []Node            `json:"cycle_path,omitempty"`
 }
 
 // Warning is a non-fatal, stable diagnostic.
@@ -586,7 +586,9 @@ func (s *solver) search(state *searchState, environment []EnvironmentContract) (
 				Message: fmt.Sprintf("multiple distinct releases have equal SemVer precedence for %s", next.String()),
 				InvolvedComponents: []string{next.componentID},
 			}
-			for i:=index;i<groupEnd;i++ { conflict.CandidateEvidence=append(conflict.CandidateEvidence, identityOfCandidate(eligible[i])) }
+			for i := index; i < groupEnd; i++ {
+				conflict.CandidateEvidence = append(conflict.CandidateEvidence, identityOfCandidate(eligible[i]))
+			}
 			sortReleaseIdentities(conflict.CandidateEvidence)
 			return state, conflict
 		}
@@ -800,7 +802,7 @@ func dependenciesOf(release catalog.Release) []catalog.Dependency {
 func validateContracts(chosen map[key]candidate, environment []EnvironmentContract) *Conflict {
 	type providerCandidate struct {
 		version   semver.Version
-		evidence  ContractProviderEvidence
+		evidence ContractProviderEvidence
 	}
 	providers := make(map[string][]providerCandidate)
 	for _, k := range sortedChosenKeys(chosen) {
@@ -816,13 +818,15 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 				return &Conflict{Code: ConflictInvalidContractVersion, Message: fmt.Sprintf("%s/%s provides invalid contract version %q", k.componentID, k.variant, declaration.Version), InvolvedComponents: []string{k.componentID}}
 			}
 			id := declaration.ContractID + "\x00" + declaration.Version
-			if seen[id] { continue }
+			if seen[id] {
+				continue
+			}
 			seen[id] = true
 			providers[declaration.ContractID] = append(providers[declaration.ContractID], providerCandidate{
 				version: version,
 				evidence: ContractProviderEvidence{
-					Origin:"component", ComponentID:k.componentID, Variant:k.variant, Version:declaration.Version, ComponentVersion:release.Version,
-					CatalogID:selected.catalogID, ReleaseMetadataURI:release.MetadataURI,
+					Origin: "component", ComponentID: k.componentID, Variant: k.variant, Version: declaration.Version, ComponentVersion: release.Version,
+					CatalogID: selected.catalogID, ReleaseMetadataURI: release.MetadataURI,
 					ReleaseMetadataSHA:release.MetadataSHA,
 				},
 			})
@@ -837,8 +841,8 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 			return &Conflict{Code: ConflictInvalidEnvironmentContract, Message: fmt.Sprintf("environment contract %q has invalid version: %v", declaration.ContractID, err)}
 		}
 		providers[declaration.ContractID] = append(providers[declaration.ContractID], providerCandidate{
-			version:version,
-			evidence:ContractProviderEvidence{Origin:"environment",Version:declaration.Version},
+			version: version,
+			evidence: ContractProviderEvidence{Origin: "environment", Version: declaration.Version},
 		})
 	}
 
@@ -846,7 +850,9 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 		release := chosen[k].release
 		requires := append([]catalog.ContractRequirement(nil), release.Contracts.Requires...)
 		sort.Slice(requires, func(i, j int) bool {
-			if requires[i].ContractID != requires[j].ContractID { return requires[i].ContractID < requires[j].ContractID }
+			if requires[i].ContractID != requires[j].ContractID {
+				return requires[i].ContractID < requires[j].ContractID
+			}
 			return requires[i].VersionConstraint < requires[j].VersionConstraint
 		})
 		for _, requirement := range requires {
@@ -859,43 +865,61 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 			}
 
 			evidence := &ContractEvidence{
-				ContractID:requirement.ContractID,
-				RequestedConstraint:requirement.VersionConstraint,
-				RequiringComponent:Node{ComponentID:k.componentID,Variant:k.variant,Version:release.Version},
-				Providers:make([]ContractProviderEvidence,0,len(providers[requirement.ContractID])),
+				ContractID:          requirement.ContractID,
+				RequestedConstraint: requirement.VersionConstraint,
+				RequiringComponent:  Node{ComponentID: k.componentID, Variant: k.variant, Version: release.Version},
+				Providers:           make([]ContractProviderEvidence, 0, len(providers[requirement.ContractID])),
 			}
-			compatibleCount:=0
-			involved:=[]string{k.componentID}
+			compatibleCount := 0
+			involved := []string{k.componentID}
 			for _, candidate := range providers[requirement.ContractID] {
-				item:=candidate.evidence
-				item.Compatible=constraint.Allows(candidate.version)
-				if item.Compatible { compatibleCount++ }
-				if item.Origin=="component" { involved=append(involved,item.ComponentID) }
-				evidence.Providers=append(evidence.Providers,item)
+				item := candidate.evidence
+				item.Compatible = constraint.Allows(candidate.version)
+				if item.Compatible {
+					compatibleCount++
+				}
+				if item.Origin == "component" {
+					involved = append(involved, item.ComponentID)
+				}
+				evidence.Providers = append(evidence.Providers, item)
 			}
-			sort.Slice(evidence.Providers,func(i,j int)bool{
-				a,b:=evidence.Providers[i],evidence.Providers[j]
-				if a.Origin!=b.Origin{return a.Origin<b.Origin}
-				if a.ComponentID!=b.ComponentID{return a.ComponentID<b.ComponentID}
-				if a.Variant!=b.Variant{return a.Variant<b.Variant}
-				if a.ComponentVersion!=b.ComponentVersion{return a.ComponentVersion<b.ComponentVersion}
-				if a.Version!=b.Version{return a.Version<b.Version}
-				if a.CatalogID!=b.CatalogID{return a.CatalogID<b.CatalogID}
-				if a.ReleaseMetadataURI!=b.ReleaseMetadataURI{return a.ReleaseMetadataURI<b.ReleaseMetadataURI}
-				return a.ReleaseMetadataSHA<b.ReleaseMetadataSHA
+			sort.Slice(evidence.Providers, func(i, j int) bool {
+				a, b := evidence.Providers[i], evidence.Providers[j]
+				if a.Origin != b.Origin {
+					return a.Origin < b.Origin
+				}
+				if a.ComponentID != b.ComponentID {
+					return a.ComponentID < b.ComponentID
+				}
+				if a.Variant != b.Variant {
+					return a.Variant < b.Variant
+				}
+				if a.ComponentVersion != b.ComponentVersion {
+					return a.ComponentVersion < b.ComponentVersion
+				}
+				if a.Version != b.Version {
+					return a.Version < b.Version
+				}
+				if a.CatalogID != b.CatalogID {
+					return a.CatalogID < b.CatalogID
+				}
+				if a.ReleaseMetadataURI != b.ReleaseMetadataURI {
+					return a.ReleaseMetadataURI < b.ReleaseMetadataURI
+				}
+				return a.ReleaseMetadataSHA < b.ReleaseMetadataSHA
 			})
-			if compatibleCount==0 {
+			if compatibleCount == 0 {
 				return &Conflict{
-					Code:ConflictContractProviderMissing,
-					Message:fmt.Sprintf("%s/%s requires contract %q %s but no compatible provider exists",k.componentID,k.variant,requirement.ContractID,requirement.VersionConstraint),
-					InvolvedComponents:uniqueSorted(involved),ContractEvidence:evidence,
+					Code:               ConflictContractProviderMissing,
+					Message:            fmt.Sprintf("%s/%s requires contract %q %s but no compatible provider exists", k.componentID, k.variant, requirement.ContractID, requirement.VersionConstraint),
+					InvolvedComponents: uniqueSorted(involved), ContractEvidence: evidence,
 				}
 			}
-			if compatibleCount>1 {
+			if compatibleCount > 1 {
 				return &Conflict{
-					Code:ConflictContractProviderAmbiguous,
-					Message:fmt.Sprintf("%s/%s requires contract %q %s but %d compatible providers exist",k.componentID,k.variant,requirement.ContractID,requirement.VersionConstraint,compatibleCount),
-					InvolvedComponents:uniqueSorted(involved),ContractEvidence:evidence,
+					Code:               ConflictContractProviderAmbiguous,
+					Message:            fmt.Sprintf("%s/%s requires contract %q %s but %d compatible providers exist", k.componentID, k.variant, requirement.ContractID, requirement.VersionConstraint, compatibleCount),
+					InvolvedComponents: uniqueSorted(involved), ContractEvidence: evidence,
 				}
 			}
 		}
@@ -1032,13 +1056,27 @@ func normalizeRejected(input []RejectedCandidate) []RejectedCandidate {
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
-		if a.ComponentID != b.ComponentID { return a.ComponentID < b.ComponentID }
-		if a.Variant != b.Variant { return a.Variant < b.Variant }
-		if a.Version != b.Version { return a.Version < b.Version }
-		if a.ReasonCode != b.ReasonCode { return a.ReasonCode < b.ReasonCode }
-		if a.CatalogID != b.CatalogID { return a.CatalogID < b.CatalogID }
-		if a.ReleaseMetadataURI != b.ReleaseMetadataURI { return a.ReleaseMetadataURI < b.ReleaseMetadataURI }
-		if a.ReleaseMetadataSHA != b.ReleaseMetadataSHA { return a.ReleaseMetadataSHA < b.ReleaseMetadataSHA }
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		if a.Version != b.Version {
+			return a.Version < b.Version
+		}
+		if a.ReasonCode != b.ReasonCode {
+			return a.ReasonCode < b.ReasonCode
+		}
+		if a.CatalogID != b.CatalogID {
+			return a.CatalogID < b.CatalogID
+		}
+		if a.ReleaseMetadataURI != b.ReleaseMetadataURI {
+			return a.ReleaseMetadataURI < b.ReleaseMetadataURI
+		}
+		if a.ReleaseMetadataSHA != b.ReleaseMetadataSHA {
+			return a.ReleaseMetadataSHA < b.ReleaseMetadataSHA
+		}
 		return a.Detail < b.Detail
 	})
 	return out
@@ -1046,7 +1084,9 @@ func normalizeRejected(input []RejectedCandidate) []RejectedCandidate {
 
 func appliedConstraintsForState(state *searchState) []AppliedConstraint {
 	out := make([]AppliedConstraint, 0)
-	if state == nil { return out }
+	if state == nil {
+		return out
+	}
 	for _, k := range sortedConstraintKeys(state.constraints) {
 		for _, source := range state.constraints[k] {
 			out = append(out, AppliedConstraint{
@@ -1057,12 +1097,24 @@ func appliedConstraintsForState(state *searchState) []AppliedConstraint {
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
-		if a.ComponentID != b.ComponentID { return a.ComponentID < b.ComponentID }
-		if a.Variant != b.Variant { return a.Variant < b.Variant }
-		if a.VersionConstraint != b.VersionConstraint { return a.VersionConstraint < b.VersionConstraint }
-		if a.Source.Type != b.Source.Type { return a.Source.Type < b.Source.Type }
-		if a.Source.ComponentID != b.Source.ComponentID { return a.Source.ComponentID < b.Source.ComponentID }
-		if a.Source.Variant != b.Source.Variant { return a.Source.Variant < b.Source.Variant }
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		if a.VersionConstraint != b.VersionConstraint {
+			return a.VersionConstraint < b.VersionConstraint
+		}
+		if a.Source.Type != b.Source.Type {
+			return a.Source.Type < b.Source.Type
+		}
+		if a.Source.ComponentID != b.Source.ComponentID {
+			return a.Source.ComponentID < b.Source.ComponentID
+		}
+		if a.Source.Variant != b.Source.Variant {
+			return a.Source.Variant < b.Source.Variant
+		}
 		return a.Source.Version < b.Source.Version
 	})
 	return out
@@ -1080,11 +1132,21 @@ func identityOfCandidate(candidate candidate) ReleaseIdentity {
 func sortReleaseIdentities(values []ReleaseIdentity) {
 	sort.Slice(values, func(i, j int) bool {
 		a, b := values[i], values[j]
-		if a.ComponentID != b.ComponentID { return a.ComponentID < b.ComponentID }
-		if a.Variant != b.Variant { return a.Variant < b.Variant }
-		if a.Version != b.Version { return a.Version < b.Version }
-		if a.CatalogID != b.CatalogID { return a.CatalogID < b.CatalogID }
-		if a.ReleaseMetadataURI != b.ReleaseMetadataURI { return a.ReleaseMetadataURI < b.ReleaseMetadataURI }
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		if a.Version != b.Version {
+			return a.Version < b.Version
+		}
+		if a.CatalogID != b.CatalogID {
+			return a.CatalogID < b.CatalogID
+		}
+		if a.ReleaseMetadataURI != b.ReleaseMetadataURI {
+			return a.ReleaseMetadataURI < b.ReleaseMetadataURI
+		}
 		return a.ReleaseMetadataSHA < b.ReleaseMetadataSHA
 	})
 }
@@ -1092,21 +1154,35 @@ func sortReleaseIdentities(values []ReleaseIdentity) {
 // populateConflictNodes adds every involved selected or constrained variant,
 // without inferring a version for a component that was never selected.
 func populateConflictNodes(conflict *Conflict, state *searchState) {
-	if conflict == nil || state == nil { return }
+	if conflict == nil || state == nil {
+		return
+	}
 	wanted := make(map[string]bool, len(conflict.InvolvedComponents))
-	for _, id := range conflict.InvolvedComponents { wanted[id] = true }
+	for _, id := range conflict.InvolvedComponents {
+		wanted[id] = true
+	}
 	seen := make(map[string]bool)
 	add := func(k key) {
-		if !wanted[k.componentID] || !validID(k.componentID,128) || !validID(k.variant,64) { return }
+		if !wanted[k.componentID] || !validID(k.componentID,128) || !validID(k.variant,64) {
+			return
+		}
 		identity := k.componentID + "\x00" + k.variant
-		if seen[identity] { return }
+		if seen[identity] {
+			return
+		}
 		seen[identity] = true
 		node := Node{ComponentID:k.componentID,Variant:k.variant}
-		if selected,ok:=state.chosen[k]; ok { node.Version=selected.release.Version }
+		if selected,ok:=state.chosen[k]; ok {
+			node.Version=selected.release.Version
+		}
 		conflict.InvolvedNodes=append(conflict.InvolvedNodes,node)
 	}
-	for _, k := range sortedConstraintKeys(state.constraints) { add(k) }
-	for _, k := range sortedChosenKeys(state.chosen) { add(k) }
+	for _, k := range sortedConstraintKeys(state.constraints) {
+		add(k)
+	}
+	for _, k := range sortedChosenKeys(state.chosen) {
+		add(k)
+	}
 	sort.Slice(conflict.InvolvedNodes,func(i,j int)bool{
 		a,b:=conflict.InvolvedNodes[i],conflict.InvolvedNodes[j]
 		if a.ComponentID!=b.ComponentID{return a.ComponentID<b.ComponentID}
