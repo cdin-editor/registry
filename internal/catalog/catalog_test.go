@@ -58,6 +58,8 @@ func indexBytes(entries ...Entry) []byte {
 	return append(data, []byte(`]}`)...)
 }
 
+// TestREG019VerifiesDigestBeforeReleaseValidation ensures metadata bytes are
+// integrity-checked before the release payload is parsed or schema-validated.
 func TestLoadVerifiesDigestBeforeReleaseValidation(t *testing.T) {
 	payload := releaseBytes("engine", "", "1.2.3")
 	validator := &acceptingValidator{}
@@ -78,6 +80,8 @@ func TestLoadVerifiesDigestBeforeReleaseValidation(t *testing.T) {
 	}
 }
 
+// TestREG019RejectsDigestMismatchBeforeParsing ensures a bad digest stops the
+// pipeline before release metadata is passed to the schema validator.
 func TestLoadRejectsDigestMismatchBeforeParsing(t *testing.T) {
 	payload := releaseBytes("engine", "default", "1.2.3")
 	validator := &acceptingValidator{}
@@ -150,5 +154,57 @@ func TestLoadUsesEmbeddedRegistrySchemas(t *testing.T) {
 	}
 	if len(got.Releases) != 1 || got.Releases[0].Variant != "default" {
 		t.Fatalf("unexpected catalog result: %#v", got)
+	}
+}
+
+// TestLoadPreservesDependencyAndContractDeclarationsForResolver verifies
+// typed release metadata retains the dependency and contract declarations the
+// resolver consumes (REG-008, REG-015 and REG-016). This avoids raw-JSON parsing
+// or a second, inconsistent metadata decoder in the resolver package.
+func TestLoadPreservesDependencyAndContractDeclarationsForResolver(t *testing.T) {
+	payload := []byte(`{"schema_version":"1.0.0","component_id":"consumer","version":"1.0.0","status":"active","source_units":[{"source_unit_id":"source","repository_uri":"https://example.invalid/repo.git","revision":"0123456789abcdef0123456789abcdef01234567"}],"dependencies":[{"component_id":"engine","version_constraint":">=1.0.0 <2.0.0"}],"contracts":{"provides":[{"contract_id":"org.example.consumer","version":"1.0.0"}],"requires":[{"contract_id":"org.example.api","version_constraint":">=1.0.0 <2.0.0"}]}}`)
+	got, err := Load(context.Background(), indexBytes(Entry{
+		ComponentID: "consumer", Version: "1.0.0", MetadataURI: "mem://consumer", MetadataSHA: digest(payload),
+	}), mapFetcher{"mem://consumer": payload}, &acceptingValidator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Releases) != 1 {
+		t.Fatalf("got %d releases, want 1", len(got.Releases))
+	}
+	release := got.Releases[0]
+	if len(release.Dependencies) != 1 || release.Dependencies[0].ComponentID != "engine" || release.Dependencies[0].VersionConstraint != ">=1.0.0 <2.0.0" {
+		t.Fatalf("dependency declaration was not preserved: %#v", release.Dependencies)
+	}
+	if len(release.Contracts.Provides) != 1 || release.Contracts.Provides[0].ContractID != "org.example.consumer" {
+		t.Fatalf("provided contract was not preserved: %#v", release.Contracts.Provides)
+	}
+	if len(release.Contracts.Requires) != 1 || release.Contracts.Requires[0].ContractID != "org.example.api" {
+		t.Fatalf("required contract was not preserved: %#v", release.Contracts.Requires)
+	}
+}
+
+// TestREG023CatalogIndexIdentityIsPreserved records the exact catalog source URI
+// and SHA-256 of the bytes used for resolution, allowing the Manifest to identify
+// the metadata input that produced the selected graph.
+func TestREG023CatalogIndexIdentityIsPreserved(t *testing.T) {
+	payload := releaseBytes("engine", "", "1.2.3")
+	index := indexBytes(Entry{
+		ComponentID: "engine",
+		Version:     "1.2.3",
+		MetadataURI: "mem://release",
+		MetadataSHA: digest(payload),
+	})
+	got, err := LoadFromSource(context.Background(), index, "https://catalog.example.invalid/index.json", mapFetcher{
+		"mem://release": payload,
+	}, &acceptingValidator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MetadataURI != "https://catalog.example.invalid/index.json" {
+		t.Fatalf("catalog metadata URI = %q", got.MetadataURI)
+	}
+	if got.MetadataSHA != digest(index) {
+		t.Fatalf("catalog metadata digest = %q, want %q", got.MetadataSHA, digest(index))
 	}
 }
