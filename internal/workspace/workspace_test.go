@@ -93,15 +93,15 @@ func successfulResolution(repository, revision string) resolver.Result {
 		},
 		Report: resolver.Report{
 			SchemaVersion: "1.0.0",
-			Result: "success",
+			Result:        "success",
 			Selected: []resolver.SelectedCandidate{{
 				ComponentID: "engine",
 				Variant:     "default",
 				Version:     "1.0.0",
 			}},
 			RejectedCandidates: []resolver.RejectedCandidate{},
-			Conflicts: []resolver.Conflict{},
-			Warnings: []resolver.Warning{},
+			Conflicts:          []resolver.Conflict{},
+			Warnings:           []resolver.Warning{},
 		},
 	}
 }
