@@ -58,6 +58,8 @@ func indexBytes(entries ...Entry) []byte {
 	return append(data, []byte(`]}`)...)
 }
 
+// TestREG019VerifiesDigestBeforeReleaseValidation ensures metadata bytes are
+// integrity-checked before the release payload is parsed or schema-validated.
 func TestLoadVerifiesDigestBeforeReleaseValidation(t *testing.T) {
 	payload := releaseBytes("engine", "", "1.2.3")
 	validator := &acceptingValidator{}
@@ -78,6 +80,8 @@ func TestLoadVerifiesDigestBeforeReleaseValidation(t *testing.T) {
 	}
 }
 
+// TestREG019RejectsDigestMismatchBeforeParsing ensures a bad digest stops the
+// pipeline before release metadata is passed to the schema validator.
 func TestLoadRejectsDigestMismatchBeforeParsing(t *testing.T) {
 	payload := releaseBytes("engine", "default", "1.2.3")
 	validator := &acceptingValidator{}
@@ -153,18 +157,21 @@ func TestLoadUsesEmbeddedRegistrySchemas(t *testing.T) {
 	}
 }
 
-
-// TestLoadPreservesDependencyAndContractDeclarationsForResolver verifies that
-// validated release metadata keeps its typed dependency and contract fields.
-// This is required so the resolver consumes data, not raw metadata or custom
-// parsing logic (REG-008, REG-015 and REG-016).
+// TestLoadPreservesDependencyAndContractDeclarationsForResolver verifies
+// typed release metadata retains the dependency and contract declarations the
+// resolver consumes (REG-008, REG-015 and REG-016). This avoids raw-JSON parsing
+// or a second, inconsistent metadata decoder in the resolver package.
 func TestLoadPreservesDependencyAndContractDeclarationsForResolver(t *testing.T) {
 	payload := []byte(`{"schema_version":"1.0.0","component_id":"consumer","version":"1.0.0","status":"active","source_units":[{"source_unit_id":"source","repository_uri":"https://example.invalid/repo.git","revision":"0123456789abcdef0123456789abcdef01234567"}],"dependencies":[{"component_id":"engine","version_constraint":">=1.0.0 <2.0.0"}],"contracts":{"provides":[{"contract_id":"org.example.consumer","version":"1.0.0"}],"requires":[{"contract_id":"org.example.api","version_constraint":">=1.0.0 <2.0.0"}]}}`)
 	got, err := Load(context.Background(), indexBytes(Entry{
-		ComponentID:"consumer", Version:"1.0.0", MetadataURI:"mem://consumer", MetadataSHA:digest(payload),
-	}), mapFetcher{"mem://consumer":payload}, &acceptingValidator{})
-	if err != nil { t.Fatal(err) }
-	if len(got.Releases) != 1 { t.Fatalf("got %d releases, want 1", len(got.Releases)) }
+		ComponentID: "consumer", Version: "1.0.0", MetadataURI: "mem://consumer", MetadataSHA: digest(payload),
+	}), mapFetcher{"mem://consumer": payload}, &acceptingValidator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Releases) != 1 {
+		t.Fatalf("got %d releases, want 1", len(got.Releases))
+	}
 	release := got.Releases[0]
 	if len(release.Dependencies) != 1 || release.Dependencies[0].ComponentID != "engine" || release.Dependencies[0].VersionConstraint != ">=1.0.0 <2.0.0" {
 		t.Fatalf("dependency declaration was not preserved: %#v", release.Dependencies)
