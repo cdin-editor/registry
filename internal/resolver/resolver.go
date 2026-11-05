@@ -121,7 +121,9 @@ type Report struct {
 
 // CatalogReference preserves the catalog identity used by a resolution.
 type CatalogReference struct {
-	CatalogID string `json:"catalog_id"`
+	CatalogID   string `json:"catalog_id"`
+	MetadataURI string `json:"metadata_uri"`
+	MetadataSHA string `json:"metadata_sha256"`
 }
 
 // ResolvedDependency is a concrete edge after version selection.
@@ -290,7 +292,7 @@ func buildCandidates(catalogs []*catalog.Catalog) (map[key][]candidate, []Catalo
 			return nil, nil, &Conflict{Code: "INVALID_CATALOG", Message: "catalog is nil or has an empty catalog_id"}
 		}
 		if !catalogIDs[cat.ID] {
-			refs = append(refs, CatalogReference{CatalogID: cat.ID})
+			refs = append(refs, CatalogReference{CatalogID: cat.ID, MetadataURI: cat.MetadataURI, MetadataSHA: cat.MetadataSHA})
 			catalogIDs[cat.ID] = true
 		}
 		for _, release := range cat.Releases {
