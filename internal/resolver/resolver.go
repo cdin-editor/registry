@@ -327,9 +327,17 @@ func buildCandidates(catalogs []*catalog.Catalog) (map[key][]candidate, []Catalo
 				identity = release.Version + "\x00" + hex.EncodeToString(sum[:])
 			}
 			k := key{release.ComponentID, release.Variant}
+			incoming := candidate{release: release, version: version, catalogID: cat.ID, identity: identity}
 			duplicate := false
-			for _, existing := range byKey[k] {
+			for index, existing := range byKey[k] {
 				if existing.identity == identity {
+					// One immutable release may be mirrored at multiple metadata
+					// URIs. The selected URI is written into the Manifest, so retain
+					// the lexically smallest provenance instead of first-seen input
+					// order (REG-011/024).
+					if candidateProvenanceLess(incoming, existing) {
+						byKey[k][index] = incoming
+					}
 					duplicate = true
 					break
 				}
@@ -337,7 +345,7 @@ func buildCandidates(catalogs []*catalog.Catalog) (map[key][]candidate, []Catalo
 			if duplicate {
 				continue
 			}
-			byKey[k] = append(byKey[k], candidate{release: release, version: version, catalogID: cat.ID, identity: identity})
+			byKey[k] = append(byKey[k], incoming)
 		}
 	}
 	for k := range byKey {
@@ -354,6 +362,16 @@ func buildCandidates(catalogs []*catalog.Catalog) (map[key][]candidate, []Catalo
 	}
 	sort.Slice(refs, func(i, j int) bool { return refs[i].CatalogID < refs[j].CatalogID })
 	return byKey, refs, nil
+}
+
+// candidateProvenanceLess selects a stable source for identical immutable bytes.
+// MetadataURI is externally visible in the graph and Manifest; catalogID is a
+// deterministic secondary key for equivalent URI values.
+func candidateProvenanceLess(left, right candidate) bool {
+	if left.release.MetadataURI != right.release.MetadataURI {
+		return left.release.MetadataURI < right.release.MetadataURI
+	}
+	return left.catalogID < right.catalogID
 }
 
 // search performs bounded deterministic backtracking. Candidate branches get cloned state so dependencies from an unsuccessful release cannot leak (REG-008/010/011).
