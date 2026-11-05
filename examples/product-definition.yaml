@@ -1,0 +1,13 @@
+schema_version: "1.0.0"
+product:
+  id: com.example.editor
+  name: Example Editor
+components:
+  - component_id: backend
+    version_constraint: ">=1.0.0 <2.0.0"
+  - component_id: frontend
+    variant: tui
+    version_constraint: "1.0.0"
+environment_contracts: []
+policy:
+  allow_prerelease: false

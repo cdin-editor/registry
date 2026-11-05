@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "cdin-components",
+  "entries": [
+    {
+      "component_id": "backend",
+      "variant": "default",
+      "version": "1.0.0",
+      "metadata_uri": "https://example.invalid/components/backend/1.0.0.json",
+      "metadata_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

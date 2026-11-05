@@ -1,0 +1,13 @@
+CDIN Registry — Copyright (C) 2026 CDIN contributors.
+
+This repository contains the independent Go implementation of the CDIN
+Registry delivery-plane system. Its architecture and public data contracts
+are defined by the CDIN Specification.
+
+The JSON Schema documents under schemas/registry/v1 are mirrored from
+cdin-editor/spec. The Spec repository remains the authority for those schemas;
+this repository keeps a versioned copy for local and offline validation.
+
+Go, JSON Schema, YAML and Git are names of their respective projects and
+technologies. This notice does not alter their licenses or claim ownership.
+See LICENSE for the GNU GPL v3-or-later license terms.

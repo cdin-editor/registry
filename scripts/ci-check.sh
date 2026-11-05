@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+make check
+git diff --check
