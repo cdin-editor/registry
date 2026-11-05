@@ -236,7 +236,6 @@ func TestREG019CacheRejectsSymlinkEntry(t *testing.T) {
 	}
 }
 
-
 type failingReadCloser struct {
 	err error
 }
@@ -312,7 +311,7 @@ func TestREG019HTTPFetcherRedirectLimitStopsLoops(t *testing.T) {
 // redirects cannot add userinfo or query-like credentials.
 func TestREG019HTTPFetcherRejectsSensitiveRedirectTargets(t *testing.T) {
 	for _, testCase := range []struct {
-		name     string
+		name    string
 		location string
 	}{
 		{name: "userinfo", location: "https://user:redirect-marker@catalog.example.invalid/release.json"},
