@@ -2,8 +2,7 @@
 
 ## Status and scope
 
-This document records the first executable resolver implementation for Registry
-Data Contracts `1.0.0`. It covers SemVer parsing/precedence, the frozen constraint
+This document records the Resolver implementation for Registry Data Contracts `1.1.0`. The report uses schema `1.1.0`; the Resolved Manifest remains on its independent `1.0.0` schema. It covers SemVer parsing/precedence, the frozen constraint
 grammar, candidate selection, dependency closure, constraint intersection,
 prerelease/withdrawal policy, contract-provider matching, cycle detection and
 deterministic dependency-first ordering.
@@ -26,7 +25,7 @@ roadmap stages.
 
 | Package | Responsibility | Why this boundary exists |
 | --- | --- | --- |
-| `internal/semver` | Parse SemVer 2.0.0, compare precedence and evaluate contract 1.0.0 constraints | One source of truth prevents lexical comparison and accidental support for out-of-contract range syntax. |
+| `internal/semver` | Parse SemVer 2.0.0, compare precedence and evaluate the frozen Registry constraint grammar | One source of truth prevents lexical comparison and accidental support for out-of-contract range syntax. |
 | `internal/catalog` | Preserve typed dependencies and contract declarations after digest/schema verification | Resolver must consume validated data, not parse raw JSON or fetch metadata itself. |
 | `internal/resolver` | Select exact releases and produce a deterministic in-memory graph plus structured report | Version policy must be independent of CLI, network, Git and filesystem operations. |
 
@@ -101,29 +100,37 @@ owned by the composition root, not inferred from product identity.
 The first implementation emits stable conflict codes for malformed identities,
 versions and constraints; empty intersections; no compatible release; equal-
 precedence ambiguity; dependency cycles; missing/ambiguous contract providers;
-and bounded-search exhaustion. The `Report` type mirrors the Resolution Report
-v1 field model and is returned for both success and failure.
+and bounded-search exhaustion. The `Report` type implements the Resolution Report `1.1.0` model and is returned for both success and failure. Conflict and rejection codes are closed Go string types whose serialized values are constrained by the public schema.
 
 A failure returns no Graph. This is deliberate: downstream collector/workspace
 code must not mistake a partial selection for a resolved product. The report
-contains selected candidates only after a complete successful graph has been
-built; failures include conflicts and rejected-candidate reasons where available.
+preserves each root/dependency constraint with its source identity, including
+repeated declarations. Candidate and conflict evidence preserves immutable
+catalog/release provenance where available; provider evidence distinguishes the
+declared contract version from the selected component release version.
+
+Backtracking evidence is branch-scoped. A candidate whose downstream graph
+fails is identified with BRANCH_CONFLICT when a fallback is selected. On a
+terminal failure, the report exposes the deterministic surfaced branch and
+does not aggregate diagnostics or applied constraints from sibling branches.
+Constraint, candidate, provider and involved-node arrays are sorted using the
+keys frozen by the contract. Self-provision is allowed: a selected component
+may satisfy its own requirement when it declares exactly one compatible
+provider. Identical duplicate declarations within that component are coalesced;
+separate environment declarations remain separate providers.
 
 ## Verification map
 
 | Requirement | Evidence |
 | --- | --- |
-| REG-006 | SemVer parser tests, invalid forms, unbounded numeric identifiers, prerelease order and build metadata precedence. |
+| REG-006 | SemVer 2.0.0 parser/precedence tests, invalid forms, unbounded numeric identifiers, prerelease order and build metadata precedence. |
 | REG-007 | Constraint grammar allow/deny vectors and comparator boundary tests. |
 | REG-003/004 | Resolver identity validation and omitted-variant normalization tests. |
-| REG-008/009 | Transitive closure and one selected release per normalized key tests. |
-| REG-010 | Repeated root/dependency constraints, branch compatibility and empty-intersection tests. |
-| REG-011 | Equal-precedence ambiguity, catalog permutation invariance and deterministic output tests. |
+| REG-008/009 | Transitive closure, diamond/shared dependencies, backtracking and one selected release per normalized key tests. |
+| REG-010 | Repeated roots/dependency declarations, constraints from multiple transitive paths, source evidence and empty-intersection tests. |
+| REG-011 | Equal-precedence candidate provenance, candidate/dependency permutation, fallback rejection evidence and bounded search-limit determinism tests. |
 | REG-012/013 | Prerelease and withdrawn candidate policy tests. |
 | REG-014 | Cycle failure with an explicit cycle path. |
-| REG-015/016 | Component and environment provider success, missing provider and ambiguous provider tests. |
+| REG-015/016 | Component/environment providers, self-provider, duplicate declarations, incompatible-provider evidence and ambiguity tests. |
 
-The current tests establish the first executable resolver slice. They do not
-replace the broader conformance matrix, fuzz tests, platform tests, collector
-integration or end-to-end workspace replay required before full Registry
-conformance can be claimed.
+The Phase 2 tests establish the resolver's deterministic evidence and adversarial branch behavior. They do not replace fuzz tests, a platform matrix or end-to-end workspace replay; full Registry conformance must not be claimed from Resolver tests alone.
