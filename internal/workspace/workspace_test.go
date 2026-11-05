@@ -92,8 +92,9 @@ func successfulResolution(repository, revision string) resolver.Result {
 			}},
 		},
 		Report: resolver.Report{
-			SchemaVersion: "1.0.0",
-			Result:        "success",
+			SchemaVersion:      "1.1.0",
+			Result:             "success",
+			AppliedConstraints: []resolver.AppliedConstraint{},
 			Selected: []resolver.SelectedCandidate{{
 				ComponentID: "engine",
 				Variant:     "default",
