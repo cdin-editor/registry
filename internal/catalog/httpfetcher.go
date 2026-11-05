@@ -95,10 +95,11 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 			return nil, fmt.Errorf("catalog: create metadata cache: %w", err)
 		}
-		cacheDir, err = filepath.EvalSymlinks(cacheDir)
+		resolvedCacheDir, err := filepath.EvalSymlinks(cacheDir)
 		if err != nil {
 			return nil, fmt.Errorf("catalog: canonicalize metadata cache: %w", err)
 		}
+		cacheDir = resolvedCacheDir
 	}
 	fetcher := &HTTPFetcher{
 		allowedHosts: allowed,
@@ -163,7 +164,7 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 		if err != nil {
 			return nil, err
 		}
-		if digest(data) != expectedSHA {
+		if httpMetadataDigest(data) != expectedSHA {
 			return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
 		}
 		return data, nil
@@ -176,7 +177,7 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 	if err != nil {
 		return nil, err
 	}
-	if digest(data) != expectedSHA {
+	if httpMetadataDigest(data) != expectedSHA {
 		return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
 	}
 	if err := f.writeCache(cachePath, data); err != nil {
@@ -337,7 +338,7 @@ func (f *HTTPFetcher) readCache(path, expectedSHA string) ([]byte, bool) {
 		return nil, false
 	}
 	data, err := os.ReadFile(path)
-	if err != nil || int64(len(data)) > f.maxBytes || digest(data) != expectedSHA {
+	if err != nil || int64(len(data)) > f.maxBytes || httpMetadataDigest(data) != expectedSHA {
 		_ = os.Remove(path)
 		return nil, false
 	}
@@ -423,7 +424,7 @@ func isSHA256(value string) bool {
 	return true
 }
 
-func digest(data []byte) string {
+func httpMetadataDigest(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
