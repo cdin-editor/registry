@@ -42,17 +42,18 @@ func testHTTPFetcher(t *testing.T, handler roundTripFunc, maxBytes int64, cacheD
 }
 
 func httpResponse(status int, body string, contentLength int64) *http.Response {
+	headers := make(http.Header)
+	if contentLength >= 0 {
+		headers.Set("Content-Length", strconv.FormatInt(contentLength, 10))
+	}
 	return &http.Response{
 		StatusCode:    status,
-		Header:        http.Header{"Content-Length": []string{stringInt(contentLength)}},
+		Header:        headers,
 		Body:          io.NopCloser(strings.NewReader(body)),
 		ContentLength: contentLength,
 	}
 }
 
-func stringInt(value int64) string {
-	return strconv.FormatInt(value, 10)
-}
 
 func expectedDigest(value string) string {
 	sum := sha256.Sum256([]byte(value))
