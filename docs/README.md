@@ -9,6 +9,10 @@
 
 - [Data contracts](contracts/data-contracts.md) — the Spec-owned Registry v1 boundary.
 
+## Implementation
+
+- [Catalog ingestion](implementation/catalog-ingestion.md) — digest verification, validation order, duplicate handling and implementation evidence.
+
 ## Development
 
 - [Build and test](development/build-and-test.md) — Pipeline tasks and verification.
