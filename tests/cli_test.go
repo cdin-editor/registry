@@ -72,7 +72,6 @@ func TestCanceledContextReturnsExitCodeOne(t *testing.T) {
 	}
 }
 
-
 // TestResolveRequiresExplicitProductCatalogAndNetworkPolicy verifies the
 // dry-run CLI does not infer Product Definition, Catalog inputs or trusted
 // metadata hosts from ambient environment state (REG-026).
