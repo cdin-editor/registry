@@ -53,33 +53,48 @@ func New() (*Validator, error) {
 	return validator, nil
 }
 
+// Validate checks strict JSON/YAML syntax and the Spec-owned schema for one
+// public Registry document (REG-005). Use Normalize when the validated JSON
+// data model must also be consumed by the resolver or another core package.
 func (v *Validator) Validate(kind Kind, input []byte, filename string) error {
+	_, err := v.Normalize(kind, input, filename)
+	return err
+}
+
+// Normalize performs the same safe decoding and schema validation as Validate,
+// then emits the validated JSON data model. Product Definition YAML is parsed
+// once and normalized to JSON so CLI adapters do not reimplement YAML semantics
+// or bypass duplicate-key/tag rejection (REG-001/005).
+func (v *Validator) Normalize(kind Kind, input []byte, filename string) ([]byte, error) {
 	if v == nil {
-		return fmt.Errorf("validator is not initialized")
+		return nil, fmt.Errorf("validator is not initialized")
 	}
 	schema, ok := v.compiled[kind]
 	if !ok {
-		return fmt.Errorf("unsupported document kind %q", kind)
+		return nil, fmt.Errorf("unsupported document kind %q", kind)
 	}
-
 	var document any
 	var err error
 	switch strings.ToLower(filepath.Ext(filename)) {
 	case ".yaml", ".yml":
 		if kind != ProductDefinition {
-			return fmt.Errorf("YAML input is supported only for Product Definitions")
+			return nil, fmt.Errorf("YAML input is supported only for Product Definitions")
 		}
 		document, err = decodeYAML(input)
 	default:
 		document, err = decodeJSON(input)
 	}
 	if err != nil {
-		return fmt.Errorf("decode %s: %w", filename, err)
+		return nil, fmt.Errorf("decode %s: %w", filename, err)
 	}
 	if err := schema.Validate(document); err != nil {
-		return fmt.Errorf("schema validation failed: %w", err)
+		return nil, fmt.Errorf("schema validation failed: %w", err)
 	}
-	return nil
+	normalized, err := json.Marshal(document)
+	if err != nil {
+		return nil, fmt.Errorf("normalize %s to JSON: %w", filename, err)
+	}
+	return normalized, nil
 }
 
 func decodeJSON(input []byte) (any, error) {
