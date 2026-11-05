@@ -28,7 +28,8 @@ This repository is at its foundation stage.
 | Product Definition YAML validation | Implemented; duplicate keys, custom tags and unsafe YAML forms are rejected |
 | Pipeline task graph and reusable CI/release workflows | Implemented |
 | PSX repository-structure checks | Implemented |
-| GIX branch-flow configuration | Implemented |
+| GIX branch-flow parsing and topology checks | Implemented |
+| PR/Issue form governance tests | Implemented |
 | Catalog ingestion and metadata integrity | Planned |
 | Version, dependency and contract resolution | Planned |
 | Git source collection | Planned |
@@ -83,7 +84,7 @@ Use `-` to read JSON from standard input. YAML is accepted only for Product Defi
 - `internal/validation/` — strict JSON/YAML decoding and JSON Schema validation.
 - `internal/schemas/` — embedded Registry schemas mirrored from the Spec.
 - `schemas/registry/v1/` — versioned schema copies and immutable source lock.
-- `tests/` and package-local tests — CLI, validation and regression tests.
+- `tests/` and package-local tests — CLI, validation, templates and governance checks.
 - `pipeline.toml` — provider-neutral task graph.
 - `docs/` — architecture, contracts, development, status and verification.
 - `scripts/` — boundary, format, schema-sync and release helpers.
@@ -96,9 +97,9 @@ Registry uses the same engineering ecosystem as the other CDIN repositories:
 
 - [Pipeline](https://github.com/m-mdy-m/pipeline) owns the task runner and reusable GitHub CI, documentation, security and release workflows. Its task graph is defined in `pipeline.toml`.
 - [PSX](https://github.com/m-mdy-m/psx) validates repository structure and required governance files using `psx.yml`.
-- [GIX](https://github.com/m-mdy-m/gix) manages the branch flow declared in `.gix/config`.
+- [GIX](https://github.com/m-mdy-m/gix) manages the `main → develop → topic branches` flow declared in `.gix/config`.
 
-See [Development tooling](docs/development/tooling.md) and [Branching](docs/development/branching.md).
+Go governance tests validate the content of the PR and Issue templates; a dedicated Pipeline task runs GIX's own config parser as well as PSX's repository checks. See [Development tooling](docs/development/tooling.md) and [Branching](docs/development/branching.md).
 
 ## Architecture and contracts
 
