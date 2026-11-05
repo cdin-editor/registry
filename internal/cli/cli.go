@@ -128,14 +128,13 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-
 // executionOptions is deliberately CLI-only. The core Resolver and Collector
 // receive typed data and injected boundaries; they never inspect process args.
 type executionOptions struct {
-	productPath string
-	catalogs []string
+	productPath  string
+	catalogs     []string
 	allowedHosts []string
-	outputPath string
+	outputPath   string
 }
 
 // parseExecutionOptions accepts repeated --catalog and --allow-host flags.
@@ -270,28 +269,28 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		return exitInvalid
 	}
 	prepared, err := workspace.Prepare(ctx, result, workspace.Options{
-		Destination: options.outputPath,
-		RegistryVersion: buildinfo.Version,
-		Git: collector.CommandGit{},
+		Destination:      options.outputPath,
+		RegistryVersion:  buildinfo.Version,
+		Git:              collector.CommandGit{},
 		RepositoryPolicy: catalogRepositoryPolicy{hosts: options.allowedHosts},
-		Validator: validator,
+		Validator:        validator,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "registry: prepare workspace: %v\n", err)
 		return exitInvalid
 	}
 	receipt := struct {
-		WorkspacePath string `json:"workspace_path"`
-		ManifestPath string `json:"manifest_path"`
-		ReportPath string `json:"report_path"`
+		WorkspacePath  string `json:"workspace_path"`
+		ManifestPath   string `json:"manifest_path"`
+		ReportPath     string `json:"report_path"`
 		ManifestSHA256 string `json:"manifest_sha256"`
-		ReportSHA256 string `json:"report_sha256"`
+		ReportSHA256   string `json:"report_sha256"`
 	}{
-		WorkspacePath: prepared.WorkspacePath,
-		ManifestPath: prepared.ManifestPath,
-		ReportPath: prepared.ReportPath,
+		WorkspacePath:  prepared.WorkspacePath,
+		ManifestPath:   prepared.ManifestPath,
+		ReportPath:     prepared.ReportPath,
 		ManifestSHA256: prepared.ManifestSHA256,
-		ReportSHA256: prepared.ReportSHA256,
+		ReportSHA256:   prepared.ReportSHA256,
 	}
 	encoded, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
