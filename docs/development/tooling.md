@@ -21,11 +21,15 @@ Useful tasks:
 
 ```sh
 pipeline run test --json
+pipeline run governance --json
+pipeline run gix-config --json
 pipeline run structure --json
 pipeline run schema-sync --json
 pipeline run release-check --json
 pipeline run race --json
 ```
+
+The quality graph verifies Go modules, formatting, static analysis, unit/CLI/governance tests, build, package boundaries, the pinned Spec schema mirror, PSX structure and GIX's own configuration parser. `check` also runs the race detector.
 
 Do not add a second copy of Pipeline's task runner or release orchestration to this repository. A project-specific build command belongs in a small script; generic task planning, stage reporting and CI provider behavior belong in Pipeline.
 
@@ -39,32 +43,30 @@ The task graph pins PSX `v0.3.2` and runs it with Go:
 go run github.com/m-mdy-m/psx/cmd/psx@v0.3.2 check
 ```
 
-PSX checks project structure; it does not validate Go behavior, JSON Schema semantics, resolver correctness or security properties. Those checks remain explicit Pipeline tasks and Go tests.
+The PSX rules make README, license, Go module/lockfile, tests, Makefile, docs, contribution/security policy, PR template, issue templates, CI and release workflows mandatory. Generated tool/build directories are excluded. PSX checks structure; it does not validate Go behavior, JSON Schema semantics, issue-form field correctness, resolver correctness or security properties. Dedicated Go tests and Pipeline tasks cover those separate contracts.
 
 ## GIX — branch workflow
 
-[m-mdy-m/gix](https://github.com/m-mdy-m/gix) manages the Git branch flow. Its checked-in configuration is `.gix/config`.
+[m-mdy-m/gix](https://github.com/m-mdy-m/gix) manages the Git branch flow. Its reviewed configuration is `.gix/config`; Registry uses `main` and `develop`, with feature/bugfix branches from `develop` and hotfix/release branches merging into both base branches.
 
-Registry currently uses a main-based flow because the repository has no long-lived `develop` branch:
-
-- `feature/*` and `bugfix/*` start from `main` and finish into `main`.
-- `hotfix/*` and `release/*` start from and merge into `main`.
-- GIX never runs automatically in CI; the developer invokes it deliberately.
-
-Install GIX `v1.2.0` using its [official instructions](https://github.com/m-mdy-m/gix#installation), then inspect the configuration without changing the repository:
+Install GIX `v1.2.0` using its [official instructions](https://github.com/m-mdy-m/gix#installation), then inspect the flow:
 
 ```sh
 gix doctor
 gix status
 gix list --tree
+gix config list
 ```
 
-Start and finish a feature:
+The `gix-config` Pipeline task runs the same non-mutating `gix config list` command using the pinned GIX release. The Go governance tests independently assert the exact branch names, parents, prefixes and merge targets required by this repository. This avoids relying on a hand-written YAML check alone.
+
+Start feature work from `develop`:
 
 ```sh
+git switch develop
 gix feature start catalog-loader
 # Make changes and commit normally.
 gix feature finish catalog-loader
 ```
 
-Do not run `gix flow init` in this repository: the committed `.gix/config` already defines the flow, and `flow init` would initialize its default branch topology.
+Open a PR targeting `develop` before finishing/merging the topic branch. Do not run `gix flow init`: the committed configuration already defines the flow.
