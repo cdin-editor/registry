@@ -104,6 +104,9 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 	if graph == nil {
 		return Document{}, fmt.Errorf("manifest: a complete resolved graph is required")
 	}
+	if len(graph.Roots) == 0 || len(graph.Components) == 0 {
+		return Document{}, fmt.Errorf("manifest: graph must contain at least one root and one selected component")
+	}
 	if _, err := semver.Parse(registryVersion); err != nil {
 		return Document{}, fmt.Errorf("manifest: invalid Registry version %q: %w", registryVersion, err)
 	}
@@ -177,6 +180,9 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		}
 		if contracts.Requires == nil {
 			contracts.Requires = []catalog.ContractRequirement{}
+		}
+		if len(resolved.SourceUnits) == 0 {
+			return Document{}, fmt.Errorf("manifest: selected component %s/%s has no source units", resolved.ComponentID, resolved.Variant)
 		}
 		component := Component{
 			ComponentID:        resolved.ComponentID,
@@ -309,10 +315,10 @@ func MarshalCanonical(value any) ([]byte, error) {
 // MarshalReport sorts set-like report arrays before canonical serialization.
 // CyclePath remains ordered because its sequence describes a graph walk.
 func MarshalReport(report resolver.Report) ([]byte, error) {
-	report.Selected = append([]resolver.SelectedCandidate(nil), report.Selected...)
-	report.RejectedCandidates = append([]resolver.RejectedCandidate(nil), report.RejectedCandidates...)
-	report.Conflicts = append([]resolver.Conflict(nil), report.Conflicts...)
-	report.Warnings = append([]resolver.Warning(nil), report.Warnings...)
+	report.Selected = append([]resolver.SelectedCandidate{}, report.Selected...)
+	report.RejectedCandidates = append([]resolver.RejectedCandidate{}, report.RejectedCandidates...)
+	report.Conflicts = append([]resolver.Conflict{}, report.Conflicts...)
+	report.Warnings = append([]resolver.Warning{}, report.Warnings...)
 	sort.Slice(report.Selected, func(i, j int) bool {
 		a, b := report.Selected[i], report.Selected[j]
 		if a.ComponentID != b.ComponentID {
