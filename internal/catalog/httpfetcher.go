@@ -90,10 +90,20 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 	if redirects <= 0 {
 		redirects = defaultMaximumRedirect
 	}
+	cacheDir := options.CacheDir
+	if cacheDir != "" {
+		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+			return nil, fmt.Errorf("catalog: create metadata cache: %w", err)
+		}
+		cacheDir, err = filepath.EvalSymlinks(cacheDir)
+		if err != nil {
+			return nil, fmt.Errorf("catalog: canonicalize metadata cache: %w", err)
+		}
+	}
 	fetcher := &HTTPFetcher{
 		allowedHosts: allowed,
 		maxBytes:     maxBytes,
-		cacheDir:     options.CacheDir,
+		cacheDir:     cacheDir,
 		lookupIPAddr: net.DefaultResolver.LookupIPAddr,
 	}
 	transport := &http.Transport{
@@ -122,14 +132,11 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 			return nil
 		},
 	}
-	if options.CacheDir != "" {
-		if err := os.MkdirAll(options.CacheDir, 0o700); err != nil {
-			return nil, fmt.Errorf("catalog: create metadata cache: %w", err)
-		}
-		if err := rejectSymlinkAncestors(options.CacheDir); err != nil {
+	if fetcher.cacheDir != "" {
+		if err := rejectSymlinkAncestors(fetcher.cacheDir); err != nil {
 			return nil, fmt.Errorf("catalog: unsafe metadata cache path: %w", err)
 		}
-		if err := os.Chmod(options.CacheDir, 0o700); err != nil {
+		if err := os.Chmod(fetcher.cacheDir, 0o700); err != nil {
 			return nil, fmt.Errorf("catalog: secure metadata cache directory: %w", err)
 		}
 	}
