@@ -58,7 +58,7 @@ func successfulResolution(repository, revision string) resolver.Result {
 	return resolver.Result{
 		Graph: &resolver.Graph{
 			SchemaVersion: "1.0.0",
-			Catalogs:      []resolver.CatalogReference{{
+			Catalogs: []resolver.CatalogReference{{
 				CatalogID:   "stable",
 				MetadataURI: "https://catalog.example.invalid/index.json",
 				MetadataSHA: strings.Repeat("a", 64),
@@ -92,16 +92,16 @@ func successfulResolution(repository, revision string) resolver.Result {
 			}},
 		},
 		Report: resolver.Report{
-			SchemaVersion:      "1.0.0",
-			Result:             "success",
-			Selected:           []resolver.SelectedCandidate{{
+			SchemaVersion: "1.0.0",
+			Result: "success",
+			Selected: []resolver.SelectedCandidate{{
 				ComponentID: "engine",
 				Variant:     "default",
 				Version:     "1.0.0",
 			}},
 			RejectedCandidates: []resolver.RejectedCandidate{},
-			Conflicts:           []resolver.Conflict{},
-			Warnings:            []resolver.Warning{},
+			Conflicts: []resolver.Conflict{},
+			Warnings: []resolver.Warning{},
 		},
 	}
 }
