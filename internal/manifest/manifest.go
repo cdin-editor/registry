@@ -170,6 +170,13 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 	}
 
 	for _, resolved := range graph.Components {
+		contracts := resolved.Contracts
+		if contracts.Provides == nil {
+			contracts.Provides = []catalog.ContractProvider{}
+		}
+		if contracts.Requires == nil {
+			contracts.Requires = []catalog.ContractRequirement{}
+		}
 		component := Component{
 			ComponentID: resolved.ComponentID,
 			Variant: resolved.Variant,
@@ -178,7 +185,7 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 			ReleaseMetadataSHA: strings.ToLower(resolved.ReleaseMetadataSHA),
 			SourceUnits: make([]SourceUnit, 0, len(resolved.SourceUnits)),
 			Dependencies: make([]Dependency, 0, len(resolved.Dependencies)),
-			Contracts: resolved.Contracts,
+			Contracts: contracts,
 		}
 		if component.ReleaseMetadataURI == "" || !validSHA256(component.ReleaseMetadataSHA) {
 			return Document{}, fmt.Errorf("manifest: release %s/%s@%s has no verified metadata identity", resolved.ComponentID, resolved.Variant, resolved.Version)
