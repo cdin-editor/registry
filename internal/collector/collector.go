@@ -97,17 +97,17 @@ func (p HTTPSAllowList) ValidateRepository(uri string) error {
 // Options configures source retrieval. Git and Policy are mandatory injected
 // boundaries; an empty/implicit repository policy is intentionally not allowed.
 type Options struct {
-	Git    GitRunner
-	Policy RepositoryPolicy
+	Git     GitRunner
+	Policy  RepositoryPolicy
 	TempDir string
 }
 
 // Source records a successfully materialized source unit and its exact commit.
 type Source struct {
-	ComponentID string
-	Variant     string
-	SourceUnitID string
-	Revision    string
+	ComponentID   string
+	Variant       string
+	SourceUnitID  string
+	Revision      string
 	WorkspacePath string
 }
 
@@ -189,10 +189,10 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 				return nil, fmt.Errorf("collector: %s/%s: %w", component.ComponentID, unit.ID, err)
 			}
 			sources = append(sources, Source{
-				ComponentID: component.ComponentID,
-				Variant: component.Variant,
-				SourceUnitID: unit.ID,
-				Revision: materialized,
+				ComponentID:   component.ComponentID,
+				Variant:       component.Variant,
+				SourceUnitID:  unit.ID,
+				Revision:      materialized,
 				WorkspacePath: key,
 			})
 		}
@@ -202,8 +202,8 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 
 type repositoryURI struct {
 	Scheme string
-	Host string
-	User *string
+	Host   string
+	User   *string
 }
 
 // parseRepositoryURI uses net/url without accepting SCP-like Git syntax. The
