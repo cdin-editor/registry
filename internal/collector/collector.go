@@ -53,7 +53,7 @@ func (g CommandGit) Run(ctx context.Context, dir string, env []string, args ...s
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = mergeEnvironment(os.Environ(), env)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return output, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
@@ -69,8 +69,9 @@ type RepositoryPolicy interface {
 }
 
 // HTTPSAllowList permits HTTPS repositories only when their hostname appears
-// in the explicit allow-list. This fail-closed default prevents a metadata URI
-// from making Registry fetch arbitrary local files or private-network services.
+// in the explicit allow-list. It prevents arbitrary hosts from being fetched;
+// deployment network egress must also block private/link-local IP ranges and DNS
+// rebinding because a hostname allow-list is not an egress firewall.
 type HTTPSAllowList []string
 
 // ValidateRepository enforces HTTPS, rejects embedded credentials and requires
@@ -141,6 +142,9 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 	if err != nil {
 		return nil, fmt.Errorf("collector: resolve destination: %w", err)
 	}
+	if err := ensureNoSymlinkAncestors(root); err != nil {
+		return nil, fmt.Errorf("collector: unsafe destination root: %w", err)
+	}
 	hooksDir, err := os.MkdirTemp(options.TempDir, "registry-disabled-hooks-*")
 	if err != nil {
 		return nil, fmt.Errorf("collector: create disabled hook directory: %w", err)
@@ -184,6 +188,9 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return nil, fmt.Errorf("collector: create source parent: %w", err)
 			}
+			if err := ensureNoSymlinkAncestors(filepath.Dir(target)); err != nil {
+				return nil, fmt.Errorf("collector: unsafe source parent: %w", err)
+			}
 			materialized, err := collectOne(ctx, options, hooksDir, unit.RepositoryURI, unit.Revision, unit.Subdirectory, target)
 			if err != nil {
 				return nil, fmt.Errorf("collector: %s/%s: %w", component.ComponentID, unit.ID, err)
@@ -217,6 +224,12 @@ func parseRepositoryURI(value string) (repositoryURI, error) {
 	if parsed.Host == "" || parsed.Hostname() == "" || parsed.Opaque != "" {
 		return repositoryURI{}, fmt.Errorf("collector: repository URI must be an absolute hierarchical URI")
 	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return repositoryURI{}, fmt.Errorf("collector: repository URI must not contain query or fragment components")
+	}
+	if port := parsed.Port(); port != "" && port != "443" {
+		return repositoryURI{}, fmt.Errorf("collector: HTTPS repository URI must use the default port")
+	}
 	var user *string
 	if parsed.User != nil {
 		secret := parsed.User.String()
@@ -239,7 +252,11 @@ func collectOne(ctx context.Context, options Options, hooksDir, repository, revi
 		withConfig := []string{"-c", "core.hooksPath=" + hooksDir, "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
 		return options.Git.Run(ctx, repoDir, env, append(withConfig, args...)...)
 	}
-	if _, err := run("init", "--quiet"); err != nil {
+	initArgs := []string{"init", "--quiet"}
+	if len(revision) == 64 {
+		initArgs = append(initArgs, "--object-format=sha256")
+	}
+	if _, err := run(initArgs...); err != nil {
 		return "", fmt.Errorf("initialize temporary repository: %w", err)
 	}
 	if _, err := run("remote", "add", "origin", repository); err != nil {
@@ -285,16 +302,26 @@ func sourceDirectory(repository, subdirectory string) (string, error) {
 	if strings.Contains(subdirectory, "\\") || !fs.ValidPath(subdirectory) || path.Clean(subdirectory) != subdirectory || strings.HasPrefix(subdirectory, "../") {
 		return "", fmt.Errorf("collector: unsafe source subdirectory %q", subdirectory)
 	}
-	candidate := filepath.Join(repository, filepath.FromSlash(subdirectory))
-	if err := ensureContained(repository, candidate); err != nil {
-		return "", err
-	}
-	info, err := os.Lstat(candidate)
-	if err != nil {
-		return "", fmt.Errorf("collector: source subdirectory %q does not exist: %w", subdirectory, err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return "", fmt.Errorf("collector: source subdirectory must be a real directory")
+	candidate := repository
+	parts := strings.Split(subdirectory, "/")
+	for index, part := range parts {
+		candidate = filepath.Join(candidate, part)
+		if err := ensureContained(repository, candidate); err != nil {
+			return "", err
+		}
+		info, err := os.Lstat(candidate)
+		if err != nil {
+			return "", fmt.Errorf("collector: source subdirectory %q does not exist: %w", subdirectory, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("collector: source subdirectory traverses symlink %q", part)
+		}
+		if index < len(parts)-1 && !info.IsDir() {
+			return "", fmt.Errorf("collector: source subdirectory component %q is not a directory", part)
+		}
+		if index == len(parts)-1 && !info.IsDir() {
+			return "", fmt.Errorf("collector: source subdirectory must be a real directory")
+		}
 	}
 	return candidate, nil
 }
@@ -350,19 +377,69 @@ func copyTree(ctx context.Context, source, destination string) error {
 		if err != nil {
 			return err
 		}
-		defer in.Close()
 		mode := info.Mode().Perm() & 0o755
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 		if err != nil {
+			_ = in.Close()
 			return err
 		}
 		_, copyErr := io.Copy(out, in)
-		closeErr := out.Close()
+		inputCloseErr := in.Close()
+		outputCloseErr := out.Close()
 		if copyErr != nil {
 			return copyErr
 		}
-		return closeErr
+		if inputCloseErr != nil {
+			return inputCloseErr
+		}
+		return outputCloseErr
 	})
+}
+
+// ensureNoSymlinkAncestors checks every component from the filesystem root to
+// the target. This also catches a symlink in an intermediate subdirectory,
+// which a final-component Lstat alone would follow (REG-020).
+func ensureNoSymlinkAncestors(value string) error {
+	absolute, err := filepath.Abs(value)
+	if err != nil {
+		return err
+	}
+	current := filepath.Clean(absolute)
+	for {
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("collector: path contains symlink ancestor %q", current)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil
+		}
+		current = parent
+	}
+}
+
+// mergeEnvironment applies Git-specific overrides without duplicate environment
+// keys. Duplicate keys have platform-dependent precedence and could otherwise
+// re-enable prompts or global/system configuration (REG-026).
+func mergeEnvironment(base, overrides []string) []string {
+	replaced := make(map[string]bool, len(overrides))
+	for _, value := range overrides {
+		if index := strings.IndexByte(value, '='); index > 0 {
+			replaced[value[:index]] = true
+		}
+	}
+	result := make([]string, 0, len(base)+len(overrides))
+	for _, value := range base {
+		index := strings.IndexByte(value, '=')
+		if index > 0 && replaced[value[:index]] {
+			continue
+		}
+		result = append(result, value)
+	}
+	return append(result, overrides...)
 }
 
 // ensureContained compares absolute, cleaned paths and requires target to be a
