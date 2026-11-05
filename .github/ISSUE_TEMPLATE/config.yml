@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/cdin-editor/registry/security/advisories/new
+    about: Report vulnerabilities privately. Do not publish exploit details in an issue.
+  - name: Public Registry architecture and contract discussion
+    url: https://github.com/cdin-editor/spec/issues
+    about: Public schema, resolver semantics and cross-project architecture belong in the Spec repository.

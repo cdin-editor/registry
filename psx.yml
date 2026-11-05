@@ -1,33 +1,44 @@
 version: 1
 
 project:
-  type: generic
-  kind: library
+  type: go
+  kind: cli
 
 rules:
   readme: error
   license: error
+  package_manager: error
+  lockfile: error
+  gitignore: error
+  gitattributes: info
+  changelog: error
   src_folder: false
   tests_folder: error
   scripts_folder: info
   makefile: error
-  ci_config: error
-  workflow_ci: error
-  workflow_release: info
   docs_folder: info
-  contributing: info
-  security: info
+  contributing: error
+  security: error
+  pull_request_template: error
+  issue_templates: error
+  ci_config: error
+  release_workflow: error
+  workflow_ci: error
+  workflow_release: error
   editorconfig: info
-  gitattributes: info
-  changelog: info
+  code_owners: info
 
 ignore:
   - .git/
   - .deps/
+  - .venv/
+  - .tooling/
   - build/
   - dist/
   - coverage/
+  - vendor/
   - .pipeline/
+  - .pipeline-artifacts/
   - .psx/
 
 fix:

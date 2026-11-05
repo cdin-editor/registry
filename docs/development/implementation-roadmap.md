@@ -1,13 +1,15 @@
 # Implementation roadmap
 
-This roadmap describes staged implementation work. A package or interface is not considered complete until its behavior and failure paths are tested.
+A package or interface is not complete until its behavior and failure paths are covered by tests and traceable to the accepted Spec.
 
 ## Phase 1 — Foundation
 
 - [x] Standalone Go module and CLI entry point.
-- [x] Embedded Registry v1 schemas synchronized from Spec.
-- [x] JSON and Product Definition YAML validation.
-- [x] Build/test commands, CI and repository documentation.
+- [x] Embedded Registry v1 schemas synchronized from an immutable Spec commit.
+- [x] Strict JSON and Product Definition YAML validation.
+- [x] Unit and CLI integration tests for parser/validation failure paths.
+- [x] Pipeline task graph and reusable CI/docs/security/release workflows.
+- [x] PSX structure checks, GIX branch-flow config, PR and issue templates.
 
 ## Phase 2 — Catalog
 

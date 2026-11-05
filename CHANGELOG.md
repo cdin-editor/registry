@@ -8,14 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Bootstrap a standalone Go CLI using the CDIN repository engineering layout.
-- Embed the five Registry v1 JSON Schemas mirrored from the accepted Spec contract.
-- Add JSON Schema validation for Registry documents and YAML 1.2 authoring support for Product Definitions.
-- Add schema inspection commands, example documents, unit tests, CI and contributor/security documentation.
+- Add the provider-neutral Pipeline task graph and pin reusable CI, documentation, security and release workflows to a reviewed Pipeline commit.
+- Add PSX repository-structure validation and a GIX branch-flow configuration.
+- Add pull request and issue templates for bugs, feature requests and Spec/contract changes.
+- Pin the Registry schema mirror to an immutable CDIN Spec commit and add a drift-check/synchronization script.
+- Add cross-platform release target compilation through Pipeline's release runner.
+
+### Changed
+
+- Make Pipeline the source of truth for local task execution and CI/release orchestration; keep GitHub workflows as thin provider adapters.
+- Strengthen JSON/YAML validation by rejecting duplicate JSON keys, unsupported YAML forms, recursive aliases and trailing documents/values.
+- Update contributor, development and repository documentation to describe the shared engineering tools and the implemented verification boundary.
 
 ### Not yet implemented
 
 - Catalog ingestion and metadata digest verification.
 - Deterministic version, dependency and contract resolution.
-- Immutable Git source collection and prepared workspace publication.
+- Immutable Git source collection and transactional workspace publication.
 - Resolved Manifest and Resolution Report production.

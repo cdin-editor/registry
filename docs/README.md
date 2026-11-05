@@ -3,7 +3,7 @@
 ## Architecture
 
 - [Overview](architecture/overview.md) — Registry role, ownership and data flow.
-- [Module boundaries](architecture/module-boundaries.md) — allowed dependencies and implementation packages.
+- [Module boundaries](architecture/module-boundaries.md) — implementation package dependencies.
 
 ## Contracts
 
@@ -11,11 +11,13 @@
 
 ## Development
 
-- [Build and test](development/build-and-test.md) — local commands and toolchain.
+- [Build and test](development/build-and-test.md) — Pipeline tasks and verification.
+- [Tooling](development/tooling.md) — Pipeline, PSX and GIX responsibilities.
+- [Branching](development/branching.md) — GIX branch flow.
 - [Implementation roadmap](development/implementation-roadmap.md) — staged delivery plan.
 
 ## Testing and status
 
-- [Conformance](testing/conformance.md) — how implementation behavior maps to the Spec.
+- [Conformance](testing/conformance.md) — evidence against the Spec.
 - [Status](status.md) — what is implemented and what is not.
 - [Traceability](traceability.md) — implementation requirements and evidence.

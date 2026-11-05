@@ -1,0 +1,12 @@
+schema_version = 1
+contract_version = "1.0.0"
+repository = "cdin-editor/spec"
+revision = "14734091dfe80118e4c3c7180782ba24144524e0"
+schema_directory = "schemas/registry/v1"
+files = [
+  "product-definition.schema.json",
+  "catalog-index.schema.json",
+  "component-release.schema.json",
+  "resolved-manifest.schema.json",
+  "resolution-report.schema.json",
+]

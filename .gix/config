@@ -1,0 +1,43 @@
+# gix flow config — see https://github.com/m-mdy-m/gix
+gix:
+  version: "1"
+remote: origin
+branch:
+  main:
+    name: main
+    type: base
+    delete_on_finish: false
+  feature:
+    type: topic
+    prefix: feature/
+    parent: main
+    upstream_strategy: merge
+    downstream_strategy: merge
+    delete_on_finish: true
+  bugfix:
+    type: topic
+    prefix: bugfix/
+    parent: main
+    upstream_strategy: merge
+    downstream_strategy: merge
+    delete_on_finish: true
+  hotfix:
+    type: topic
+    prefix: hotfix/
+    parent: main
+    merge_into:
+      - main
+    upstream_strategy: merge
+    downstream_strategy: merge
+    tag: true
+    delete_on_finish: true
+  release:
+    type: topic
+    prefix: release/
+    parent: main
+    merge_into:
+      - main
+    upstream_strategy: merge
+    downstream_strategy: merge
+    tag: true
+    delete_on_finish: true
