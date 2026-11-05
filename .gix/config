@@ -7,17 +7,23 @@ branch:
     name: main
     type: base
     delete_on_finish: false
+  develop:
+    name: develop
+    type: base
+    parent: main
+    autosync: true
+    delete_on_finish: false
   feature:
     type: topic
     prefix: feature/
-    parent: main
+    parent: develop
     upstream_strategy: merge
     downstream_strategy: merge
     delete_on_finish: true
   bugfix:
     type: topic
     prefix: bugfix/
-    parent: main
+    parent: develop
     upstream_strategy: merge
     downstream_strategy: merge
     delete_on_finish: true
@@ -27,6 +33,7 @@ branch:
     parent: main
     merge_into:
       - main
+      - develop
     upstream_strategy: merge
     downstream_strategy: merge
     tag: true
@@ -34,9 +41,10 @@ branch:
   release:
     type: topic
     prefix: release/
-    parent: main
+    parent: develop
     merge_into:
       - main
+      - develop
     upstream_strategy: merge
     downstream_strategy: merge
     tag: true
