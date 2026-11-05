@@ -13,6 +13,7 @@
 ## Completeness checks
 
 Manifest `Build` requires:
+
 - A non-nil graph with at least one root and selected component.
 - Immutable Catalog Index URI and SHA-256 for every Catalog.
 - Immutable release metadata URI and SHA-256 for each selected release.
@@ -25,6 +26,7 @@ A missing source or missing provenance fails closed: the function returns no Doc
 ## Canonical JSON
 
 `MarshalCanonical` emits RFC 8785-style canonical JSON:
+
 - Object keys are ordered by UTF-16 code units.
 - Strings use the minimal required JSON escapes and are not HTML escaped.
 - Numbers are converted to IEEE-754 binary64 and emitted using shortest round-trip decimal notation with ECMAScript fixed/exponent thresholds.
