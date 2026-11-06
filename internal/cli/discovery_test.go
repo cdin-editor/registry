@@ -23,14 +23,14 @@ func discoveryReleasePayload(t *testing.T, version, status, revision string) []b
 	t.Helper()
 	payload, err := json.Marshal(catalog.Release{
 		SchemaVersion: "1.0.0",
-		ComponentID: "engine",
-		Variant: "default",
-		Version: version,
-		Status: status,
+		ComponentID:   "engine",
+		Variant:       "default",
+		Version:       version,
+		Status:        status,
 		SourceUnits: []catalog.SourceUnit{{
-			ID: "source",
+			ID:            "source",
 			RepositoryURI: replayFixtureRepositoryURI,
-			Revision: revision,
+			Revision:      revision,
 		}},
 		Dependencies: []catalog.Dependency{},
 		Contracts: catalog.Contracts{
@@ -45,12 +45,12 @@ func discoveryReleasePayload(t *testing.T, version, status, revision string) []b
 }
 
 type discoveryFixture struct {
-	manifestPath string
+	manifestPath  string
 	manifestBytes []byte
-	productPath string
-	catalogPath string
-	fetcher cliMetadataFixture
-	reportPath string
+	productPath   string
+	catalogPath   string
+	fetcher       cliMetadataFixture
+	reportPath    string
 }
 
 func writeDiscoveryFixture(
@@ -78,15 +78,15 @@ components:
 environment_contracts: []
 policy:
   allow_prerelease: false
-`;
+`
 	if err := os.WriteFile(productPath, []byte(product), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	entries := []catalog.Entry{{
 		ComponentID: "engine",
-		Variant: "default",
-		Version: "1.0.0",
+		Variant:     "default",
+		Version:     "1.0.0",
 		MetadataURI: discoveryReleaseURI,
 		MetadataSHA: manifest.Digest(oldReleasePayload),
 	}}
@@ -94,8 +94,8 @@ policy:
 	if newReleasePayload != nil {
 		entries = append(entries, catalog.Entry{
 			ComponentID: "engine",
-			Variant: "default",
-			Version: "2.0.0",
+			Variant:     "default",
+			Version:     "2.0.0",
 			MetadataURI: discoveryNewReleaseURI,
 			MetadataSHA: manifest.Digest(newReleasePayload),
 		})
@@ -103,8 +103,8 @@ policy:
 	}
 	indexBytes, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.0.0",
-		CatalogID: "current",
-		Entries: entries,
+		CatalogID:     "current",
+		Entries:       entries,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -114,12 +114,12 @@ policy:
 		t.Fatal(err)
 	}
 	return discoveryFixture{
-		manifestPath: manifestPath,
+		manifestPath:  manifestPath,
 		manifestBytes: append([]byte(nil), manifestBytes...),
-		productPath: productPath,
-		catalogPath: catalogPath,
-		fetcher: fetcher,
-		reportPath: filepath.Join(root, "update-report.json"),
+		productPath:   productPath,
+		catalogPath:   catalogPath,
+		fetcher:       fetcher,
+		reportPath:    filepath.Join(root, "update-report.json"),
 	}
 }
 
