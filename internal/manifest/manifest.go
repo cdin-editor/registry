@@ -693,40 +693,78 @@ func Digest(canonical []byte) string {
 // validateJSONStrings rejects invalid UTF-8 before encoding/json can replace it
 // with U+FFFD. JCS requires Unicode scalar strings and must preserve the
 // original code points without normalization or lossy replacement.
+// jsonValueVisit identifies reference-backed JSON values during the UTF-8
+// preflight. Slices include their visible bounds so distinct views over the same
+// backing array are not mistaken for the same graph node.
+type jsonValueVisit struct {
+	typeOfValue reflect.Type
+	pointer     uintptr
+	length      int
+	capacity    int
+}
+
 func validateJSONStrings(value reflect.Value) error {
+	return validateJSONStringsVisited(value, make(map[jsonValueVisit]struct{}))
+}
+
+func validateJSONStringsVisited(value reflect.Value, visited map[jsonValueVisit]struct{}) error {
 	if !value.IsValid() {
 		return nil
 	}
 	switch value.Kind() {
-	case reflect.Interface, reflect.Pointer:
+	case reflect.Interface:
 		if value.IsNil() {
 			return nil
 		}
-		return validateJSONStrings(value.Elem())
+		return validateJSONStringsVisited(value.Elem(), visited)
+	case reflect.Pointer, reflect.Map, reflect.Slice:
+		if value.IsNil() {
+			return nil
+		}
+		if value.Kind() == reflect.Slice && value.Len() == 0 {
+			return nil
+		}
+		identity := jsonValueVisit{typeOfValue: value.Type(), pointer: uintptr(value.UnsafePointer())}
+		if value.Kind() == reflect.Slice {
+			identity.length = value.Len()
+			identity.capacity = value.Cap()
+		}
+		if identity.pointer != 0 {
+			if _, exists := visited[identity]; exists {
+				// The JSON encoder will return its standard cycle error after
+				// preflight; returning here avoids unbounded recursive descent.
+				return nil
+			}
+			visited[identity] = struct{}{}
+		}
+		switch value.Kind() {
+		case reflect.Pointer:
+			return validateJSONStringsVisited(value.Elem(), visited)
+		case reflect.Map:
+			iter := value.MapRange()
+			for iter.Next() {
+				key := iter.Key()
+				if key.Kind() == reflect.String && !utf8.ValidString(key.String()) {
+					return fmt.Errorf("manifest: JSON object key contains invalid UTF-8")
+				}
+				if err := validateJSONStringsVisited(iter.Value(), visited); err != nil {
+					return err
+				}
+			}
+		case reflect.Slice:
+			for i := 0; i < value.Len(); i++ {
+				if err := validateJSONStringsVisited(value.Index(i), visited); err != nil {
+					return err
+				}
+			}
+		}
 	case reflect.String:
 		if !utf8.ValidString(value.String()) {
 			return fmt.Errorf("manifest: JSON string contains invalid UTF-8")
 		}
-	case reflect.Map:
-		if value.IsNil() {
-			return nil
-		}
-		iter := value.MapRange()
-		for iter.Next() {
-			key := iter.Key()
-			if key.Kind() == reflect.String && !utf8.ValidString(key.String()) {
-				return fmt.Errorf("manifest: JSON object key contains invalid UTF-8")
-			}
-			if err := validateJSONStrings(iter.Value()); err != nil {
-				return err
-			}
-		}
-	case reflect.Slice, reflect.Array:
-		if value.Kind() == reflect.Slice && value.IsNil() {
-			return nil
-		}
+	case reflect.Array:
 		for i := 0; i < value.Len(); i++ {
-			if err := validateJSONStrings(value.Index(i)); err != nil {
+			if err := validateJSONStringsVisited(value.Index(i), visited); err != nil {
 				return err
 			}
 		}
@@ -737,7 +775,7 @@ func validateJSONStrings(value reflect.Value) error {
 			if field.PkgPath != "" || field.Tag.Get("json") == "-" {
 				continue
 			}
-			if err := validateJSONStrings(value.Field(i)); err != nil {
+			if err := validateJSONStringsVisited(value.Field(i), visited); err != nil {
 				return err
 			}
 		}

@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Bound the canonical JSON UTF-8 preflight for cyclic maps, slices and pointers; cyclic values now reach the encoder's normal error path instead of recursive validation.
+
 - Apply protected Windows workspace/lock DACLs for Owner Rights, LocalSystem and Administrators; verify ACE identities, rights and inheritance on native Windows.
 
 - Pin complete Manifest/Report canonical bytes and detached digests across repeated runs and equivalent input permutations; expand RFC 8785 Unicode/IEEE-754 vectors and reject invalid UTF-8 before serialization.
@@ -45,6 +47,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Not yet implemented
 
 - Metadata/Git cache GC and eviction enforcement, including retained-Manifest pins and active-replay leases.
-- Manifest verification/replay and update discovery.
-- Atomic no-replace publication against a racing empty destination on every supported OS, native platform evidence and crash-durability guarantees.
+- CLI Manifest verification/replay commands and update discovery.
+- Parent-directory fsync and uniform crash/power-loss durability guarantees across supported filesystems and operating systems.
 - Cache corruption/retention, update-versus-replay and performance/fuzz matrices.

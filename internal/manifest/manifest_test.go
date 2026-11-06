@@ -799,3 +799,28 @@ func TestREG024VerifyManifestChecksDependencyOrderAndSetOrdering(t *testing.T) {
 		t.Fatal("dependent-before-dependency order unexpectedly passed verification")
 	}
 }
+
+// TestREG024CanonicalRejectsCyclicValues ensures the UTF-8 preflight does not
+// recurse indefinitely on values that json.Marshal must reject as cyclic.
+func TestREG024CanonicalRejectsCyclicValues(t *testing.T) {
+	cyclicMap := map[string]any{}
+	cyclicMap["self"] = cyclicMap
+	if _, err := MarshalCanonical(cyclicMap); err == nil {
+		t.Fatal("cyclic map unexpectedly passed canonical serialization")
+	}
+
+	cyclicSlice := make([]any, 1)
+	cyclicSlice[0] = cyclicSlice
+	if _, err := MarshalCanonical(cyclicSlice); err == nil {
+		t.Fatal("cyclic slice unexpectedly passed canonical serialization")
+	}
+
+	type cyclicNode struct {
+		Next *cyclicNode `json:"next"`
+	}
+	node := &cyclicNode{}
+	node.Next = node
+	if _, err := MarshalCanonical(node); err == nil {
+		t.Fatal("cyclic pointer unexpectedly passed canonical serialization")
+	}
+}
