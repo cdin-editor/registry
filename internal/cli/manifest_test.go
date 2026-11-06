@@ -476,3 +476,36 @@ func TestManifestCLIInputReadFailureHasStableCode(t *testing.T) {
 		t.Fatalf("input read failure exit=%d stderr=%s", code, stderr.String())
 	}
 }
+
+
+func TestManifestCLIReplayStrictMetadataFailureHasStableCode(t *testing.T) {
+	repository, revision := createCLIReplayRepository(t)
+	payload, digest, metadata := buildCLIReplayManifest(t, revision, true)
+	input := writeCLIManifest(t, payload)
+	changedMetadata := cliMetadataFixture{}
+	for uri, data := range metadata {
+		changedMetadata[uri] = append([]byte(nil), data...)
+	}
+	for uri := range changedMetadata {
+		if strings.Contains(uri, "/catalog/") {
+			changedMetadata[uri] = []byte(`{"schema_version":"1.0.0","catalog_id":"stable","entries":[]}`)
+		}
+	}
+	destination := filepath.Join(t.TempDir(), "strict-metadata-rejected")
+	var stdout, stderr bytes.Buffer
+	code := runCLIManifestReplay(context.Background(), []string{
+		"replay", "--input", input, "--sha256", digest,
+		"--output", destination,
+		"--allow-host", "source.example.invalid",
+		"--allow-host", "metadata.example.invalid",
+		"--verify-remote-metadata",
+	}, func(options catalog.HTTPFetcherOptions) (catalog.Fetcher, error) {
+		return changedMetadata, nil
+	}, cliReplayGitRunner{repositoryURI: replayFixtureRepositoryURI, localPath: repository}, &stdout, &stderr)
+	if code != exitInvalid || !strings.Contains(stderr.String(), "error[REPLAY_METADATA_FAILED]") {
+		t.Fatalf("strict metadata failure exit=%d stderr=%s", code, stderr.String())
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("strict metadata failure published a destination: %v", err)
+	}
+}

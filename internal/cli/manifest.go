@@ -289,7 +289,7 @@ func classifyManifestReplayError(err error, verifyRemoteMetadata bool) (string, 
 		return "REPLAY_SOURCE_FAILED", "one or more pinned Git commits could not be retrieved or verified; check --allow-host and commit availability"
 	case strings.Contains(message, "rebuilt Manifest differs"):
 		return "REPLAY_OUTPUT_MISMATCH", "replayed sources did not reproduce the exact input Manifest; no destination was published"
-	case verifyRemoteMetadata && (strings.Contains(message, "metadata") || strings.Contains(message, "Catalog") || strings.Contains(message, "release identity") || strings.Contains(message, "source-unit provenance") || strings.Contains(message, "dependency") || strings.Contains(message, "contract declarations")):
+	case verifyRemoteMetadata && (strings.Contains(message, "metadata") || strings.Contains(message, "Catalog") || strings.Contains(message, "release identity") || strings.Contains(message, "source-unit") || strings.Contains(message, "dependency") || strings.Contains(message, "contract declarations")):
 		return "REPLAY_METADATA_FAILED", "recorded Catalog or Release Metadata could not be revalidated; check host policy and immutable metadata availability"
 	default:
 		return "REPLAY_FAILED", "replay failed before successful publication; check the Manifest, Git host policy, destination parent and permissions"
