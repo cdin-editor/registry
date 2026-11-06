@@ -130,3 +130,28 @@ execute collected component code. HTTPS host allow-lists are not a deployment
 firewall; deployments remain responsible for Git network egress controls.
 SHA-256 detects byte changes relative to a trusted receipt but is not a
 signature, attestation or publisher-authenticity proof.
+
+
+## Metadata cache retention and collection
+
+The metadata cache keeps the exact URI+expected-digest identity. Entries may
+be removed only by explicit garbage collection; retained Manifests and active
+strict replays protect their referenced identities.
+
+```sh
+registry cache pin --manifest ./prepared/registry-manifest.json --cache-dir ./registry-cache
+registry cache unpin --manifest-sha256 <manifest-sha256> --cache-dir ./registry-cache
+registry cache gc --cache-dir ./registry-cache
+```
+
+`pin` accepts only a Manifest that passes canonical-byte, public-schema and
+provenance verification. Its receipt reports the SHA-256 of the exact Manifest
+bytes; use that value with `unpin`. `gc` uses a 256 MiB target budget and a
+90-day age bound. It evicts the oldest unprotected entries first and may remain
+above budget when pins or leases alone exceed the target. The output is a
+machine-readable JSON receipt with removal counts and bytes.
+
+GC fails closed when the pin/lease snapshot is missing, malformed or unsafe.
+The maintenance lock is exclusive. A maintenance lock or lease left by an
+abnormally terminated process is not automatically reclaimed: investigate the
+owner and remove only a confirmed-stale control file as an operator action.

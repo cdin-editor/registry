@@ -78,6 +78,18 @@ Manifest. Both commands emit JSON receipts to stdout; stable error codes,
 exit codes, cancellation and cleanup behavior are documented in
 [Manifest CLI operations](docs/implementation/cli.md).
 
+Retain a Manifest's metadata in the cache and collect unreferenced entries
+explicitly:
+
+```sh
+./build/registry cache pin --manifest ./prepared/registry-manifest.json --cache-dir ./registry-cache
+./build/registry cache gc --cache-dir ./registry-cache
+```
+
+Use `cache unpin --manifest-sha256 <digest>` to release a pin. Cache lifecycle
+commands and fail-closed GC behavior are documented in
+[Manifest CLI operations](docs/implementation/cli.md).
+
 ## Development workflow
 
 The repository uses [Pipeline](https://github.com/m-mdy-m/pipeline) for build and CI tasks, [PSX](https://github.com/m-mdy-m/psx) for repository checks, and [GIX](https://github.com/m-mdy-m/gix) for branch flow.

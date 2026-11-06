@@ -76,6 +76,15 @@ func Replay(ctx context.Context, canonicalManifest []byte, expectedSHA256 string
 		if options.MetadataFetcher == nil {
 			return Prepared{}, fmt.Errorf("workspace: remote metadata verification requires a MetadataFetcher")
 		}
+		if leaser, ok := options.MetadataFetcher.(interface {
+			BeginReplayLease(context.Context, []byte) (func(), error)
+		}); ok {
+			release, err := leaser.BeginReplayLease(ctx, canonicalManifest)
+			if err != nil {
+				return Prepared{}, fmt.Errorf("workspace: acquire replay metadata lease: %w", err)
+			}
+			defer release()
+		}
 		if err := verifyReplayMetadata(ctx, document, options.MetadataFetcher, validator); err != nil {
 			return Prepared{}, err
 		}
