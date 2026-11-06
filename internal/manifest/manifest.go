@@ -357,8 +357,6 @@ func ParseCanonicalStringOnly(input []byte) error {
 	return nil
 }
 
-
- 
 // Verify checks a persisted Resolved Manifest without fetching metadata,
 // selecting releases, collecting sources or writing to a workspace. The
 // detached digest is optional because it is stored outside the Manifest bytes;
