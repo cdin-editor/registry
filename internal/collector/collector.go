@@ -39,6 +39,13 @@ type GitRunner interface {
 	Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error)
 }
 
+// GitCredentialProvider is an explicit, non-interactive credential boundary.
+// It may return GIT_ASKPASS plus REGISTRY_GIT_CREDENTIAL_* variables only.
+// The provider must not return tokens in Git arguments, URLs or diagnostics.
+type GitCredentialProvider interface {
+	GitEnvironment(ctx context.Context, repositoryURI string) ([]string, error)
+}
+
 // CommandGit invokes the configured Git executable with context cancellation.
 // Command arguments are kept separate so repository URIs and revisions cannot
 // become shell syntax (REG-018/026).
@@ -49,14 +56,24 @@ type CommandGit struct {
 // Run executes Git with a deliberately small environment. Ambient credential
 // helpers, askpass programs, SSH agents, proxy settings and Git config variables
 // are not inherited. Private-repository authentication is not supported.
-func (g CommandGit) Run(ctx context.Context, dir string, _ []string, args ...string) ([]byte, error) {
+func (g CommandGit) Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("collector: Git context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	binary := g.Binary
 	if binary == "" {
 		binary = "git"
 	}
+	processEnv, err := gitProcessEnvironment(os.Environ(), env)
+	if err != nil {
+		return nil, fmt.Errorf("collector: invalid explicit credential environment")
+	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
-	cmd.Env = isolatedGitEnvironment(os.Environ())
+	cmd.Env = processEnv
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() != nil {
@@ -108,11 +125,13 @@ func (p HTTPSAllowList) ValidateRepository(uri string) error {
 }
 
 // Options configures source retrieval. Git and Policy are mandatory injected
-// boundaries; an empty/implicit repository policy is intentionally not allowed.
+// boundaries; credentials are optional and are never discovered from ambient
+// environment, URLs, home-directory config or credential helpers.
 type Options struct {
-	Git     GitRunner
-	Policy  RepositoryPolicy
-	TempDir string
+	Git         GitRunner
+	Policy      RepositoryPolicy
+	Credentials GitCredentialProvider
+	TempDir     string
 }
 
 // Source records a successfully materialized source unit and its exact commit.
@@ -171,6 +190,17 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 
 	sources := make([]Source, 0)
 	seen := make(map[string]bool)
+	createdTargets := make([]string, 0)
+	collectionComplete := false
+	defer func() {
+		if collectionComplete {
+			return
+		}
+		for _, target := range createdTargets {
+			_ = os.RemoveAll(target)
+			removeEmptyParents(root, target)
+		}
+	}()
 	for _, component := range graph.Components {
 		if !validID(component.ComponentID, 128) || !validID(component.Variant, 64) {
 			return nil, fmt.Errorf("collector: invalid component identity %q/%q", component.ComponentID, component.Variant)
@@ -188,6 +218,10 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 			if err := options.Policy.ValidateRepository(unit.RepositoryURI); err != nil {
 				return nil, fmt.Errorf("collector: source %s/%s repository rejected: %w", component.ComponentID, unit.ID, err)
 			}
+			credentialEnv, err := credentialEnvironmentFor(ctx, options.Credentials, unit.RepositoryURI)
+			if err != nil {
+				return nil, err
+			}
 			relative := filepath.Join("components", component.ComponentID, component.Variant, "sources", unit.ID)
 			key := filepath.ToSlash(relative)
 			if seen[key] {
@@ -203,13 +237,14 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 			} else if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("collector: inspect source destination: %w", err)
 			}
+			createdTargets = append(createdTargets, target)
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return nil, fmt.Errorf("collector: create source parent: %w", err)
 			}
 			if err := ensureNoSymlinkAncestors(filepath.Dir(target)); err != nil {
 				return nil, fmt.Errorf("collector: unsafe source parent: %w", err)
 			}
-			materialized, err := collectOne(ctx, options, hooksDir, unit.RepositoryURI, unit.Revision, unit.Subdirectory, target)
+			materialized, err := collectOne(ctx, options, hooksDir, credentialEnv, unit.RepositoryURI, unit.Revision, unit.Subdirectory, target)
 			if err != nil {
 				return nil, fmt.Errorf("collector: %s/%s: %w", component.ComponentID, unit.ID, err)
 			}
@@ -222,6 +257,7 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 			})
 		}
 	}
+	collectionComplete = true
 	return sources, nil
 }
 
@@ -259,7 +295,13 @@ func parseRepositoryURI(value string) (repositoryURI, error) {
 // collectOne performs a no-checkout fetch of the exact object, verifies it is
 // a commit with the requested full object ID, then checks it out detached.
 // Hook paths and prompting are disabled for every Git invocation (REG-018/026).
-func collectOne(ctx context.Context, options Options, hooksDir, repository, revision, subdirectory, target string) (string, error) {
+func collectOne(ctx context.Context, options Options, hooksDir string, credentialEnv []string, repository, revision, subdirectory, target string) (string, error) {
+	targetComplete := false
+	defer func() {
+		if !targetComplete {
+			_ = os.RemoveAll(target)
+		}
+	}()
 	repoDir, err := os.MkdirTemp(options.TempDir, "registry-git-source-*")
 	if err != nil {
 		return "", fmt.Errorf("create temporary repository: %w", err)
@@ -267,7 +309,7 @@ func collectOne(ctx context.Context, options Options, hooksDir, repository, revi
 	defer os.RemoveAll(repoDir)
 	run := func(args ...string) ([]byte, error) {
 		withConfig := []string{"-c", "core.hooksPath=" + hooksDir, "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
-		return options.Git.Run(ctx, repoDir, nil, append(withConfig, args...)...)
+		return options.Git.Run(ctx, repoDir, credentialEnv, append(withConfig, args...)...)
 	}
 	initArgs := []string{"init", "--quiet"}
 	if len(revision) == 64 {
@@ -307,6 +349,10 @@ func collectOne(ctx context.Context, options Options, hooksDir, repository, revi
 	if err := copyTree(ctx, sourceRoot, target); err != nil {
 		return "", fmt.Errorf("copy checked-out source: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	targetComplete = true
 	return strings.ToLower(revision), nil
 }
 
@@ -403,7 +449,7 @@ func copyTree(ctx context.Context, source, destination string) error {
 			_ = in.Close()
 			return err
 		}
-		_, copyErr := io.Copy(out, in)
+		_, copyErr := copyWithContext(ctx, out, in)
 		inputCloseErr := in.Close()
 		outputCloseErr := out.Close()
 		if copyErr != nil {
@@ -414,6 +460,63 @@ func copyTree(ctx context.Context, source, destination string) error {
 		}
 		return outputCloseErr
 	})
+}
+
+// copyWithContext bounds cancellation latency while copying large regular
+// files. Checking only between directory entries can leave one large file copy
+// running long after the caller cancels (REG-018/026).
+func copyWithContext(ctx context.Context, destination io.Writer, source io.Reader) (int64, error) {
+	if ctx == nil {
+		return 0, fmt.Errorf("collector: copy context is required")
+	}
+	buffer := make([]byte, 32*1024)
+	var total int64
+	emptyReads := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		count, readErr := source.Read(buffer)
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		if count > 0 {
+			written, writeErr := destination.Write(buffer[:count])
+			total += int64(written)
+			if writeErr != nil {
+				return total, writeErr
+			}
+			if written != count {
+				return total, io.ErrShortWrite
+			}
+			emptyReads = 0
+		} else if readErr == nil {
+			emptyReads++
+			if emptyReads >= 100 {
+				return total, io.ErrNoProgress
+			}
+		}
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return total, nil
+			}
+			return total, readErr
+		}
+	}
+}
+
+// removeEmptyParents removes only newly-created empty source layout directories.
+// It stops at the Collector-owned destination root and never removes non-empty
+// directories that may contain unrelated caller data.
+func removeEmptyParents(root, target string) {
+	root = filepath.Clean(root)
+	current := filepath.Dir(target)
+	for current != root && current != filepath.Dir(current) {
+		if err := os.Remove(current); err != nil {
+			return
+		}
+		current = filepath.Dir(current)
+	}
 }
 
 // ensureNoSymlinkAncestors checks every component from the filesystem root to
@@ -441,11 +544,127 @@ func ensureNoSymlinkAncestors(value string) error {
 	}
 }
 
+// credentialEnvironmentFor asks the optional provider only after repository URI
+// policy has accepted the target. Provider failures are deliberately redacted.
+func credentialEnvironmentFor(ctx context.Context, provider GitCredentialProvider, repositoryURI string) ([]string, error) {
+	if provider == nil {
+		return nil, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	provided, err := provider.GitEnvironment(ctx, repositoryURI)
+	if err != nil {
+		return nil, fmt.Errorf("collector: explicit Git credential provider failed")
+	}
+	validated, err := validateCredentialEnvironment(provided)
+	if err != nil {
+		return nil, fmt.Errorf("collector: explicit Git credential provider returned unsupported settings")
+	}
+	return validated, nil
+}
+
+// validateCredentialEnvironment permits only an explicit askpass executable,
+// forced non-interactive askpass mode, and provider-private credential values.
+// Arbitrary Git configuration, proxy, PATH, SSH and terminal controls are never
+// accepted through this boundary.
+func validateCredentialEnvironment(input []string) ([]string, error) {
+	values := make(map[string]string, len(input))
+	hasAskPass := false
+	hasAskPassRequire := false
+	for _, item := range input {
+		index := strings.IndexByte(item, '=')
+		if index <= 0 {
+			return nil, errors.New("invalid credential environment")
+		}
+		key := strings.ToUpper(item[:index])
+		value := item[index+1:]
+		if len(key) > 128 || len(value) > 16*1024 || strings.ContainsAny(key+value, "\x00\r\n") {
+			return nil, errors.New("invalid credential environment")
+		}
+		if _, exists := values[key]; exists {
+			return nil, errors.New("duplicate credential environment key")
+		}
+		switch {
+		case key == "GIT_ASKPASS":
+			if value == "" || !filepath.IsAbs(value) {
+				return nil, errors.New("askpass must be an absolute executable path")
+			}
+			hasAskPass = true
+		case key == "GIT_ASKPASS_REQUIRE":
+			if value != "force" {
+				return nil, errors.New("askpass must be forced")
+			}
+			hasAskPassRequire = true
+		case strings.HasPrefix(key, "REGISTRY_GIT_CREDENTIAL_"):
+			suffix := strings.TrimPrefix(key, "REGISTRY_GIT_CREDENTIAL_")
+			if suffix == "" {
+				return nil, errors.New("credential environment key has no name")
+			}
+			for _, char := range suffix {
+				if !(char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_') {
+					return nil, errors.New("invalid credential environment key")
+				}
+			}
+		default:
+			return nil, errors.New("unsupported credential environment key")
+		}
+		values[key] = value
+	}
+	if hasAskPass != hasAskPassRequire {
+		return nil, errors.New("askpass and forced askpass mode must be supplied together")
+	}
+	if len(values) > 0 && !hasAskPass {
+		return nil, errors.New("credential values require a forced askpass helper")
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]string, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, key+"="+values[key])
+	}
+	return result, nil
+}
+
+// gitProcessEnvironment combines a minimal OS environment with only the
+// validated credentials supplied for this exact repository operation.
+func gitProcessEnvironment(base, injected []string) ([]string, error) {
+	values := make(map[string]string)
+	for _, item := range isolatedGitEnvironment(base) {
+		index := strings.IndexByte(item, '=')
+		if index > 0 {
+			values[item[:index]] = item[index+1:]
+		}
+	}
+	validated, err := validateCredentialEnvironment(injected)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range validated {
+		index := strings.IndexByte(item, '=')
+		values[item[:index]] = item[index+1:]
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]string, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, key+"="+values[key])
+	}
+	return result, nil
+}
+
 // isolatedGitEnvironment retains only operating-system variables needed to find
 // and start Git. In particular it excludes HOME/USERPROFILE, all ambient GIT_*
 // configuration, askpass helpers, SSH agent state, credential helpers and proxy
 // variables. The explicit controls below force non-interactive, config-isolated
-// public retrieval (REG-026). Private-source credentials are not supported.
+// public retrieval (REG-026). An optional injected askpass provider can add only
+// the narrowly allow-listed credential environment described above.
 func isolatedGitEnvironment(base []string) []string {
 	allowed := map[string]bool{
 		"PATH": true, "PATHEXT": true, "SYSTEMROOT": true, "WINDIR": true,
