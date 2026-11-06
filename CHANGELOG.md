@@ -5,9 +5,8 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [0.1.0-dev] - 2026-11-07
 
-> Versioned development snapshot. This version matches
-> `internal/buildinfo/version.go`. It is not a published stable release:
-> no `v0.1.0-dev` or `v1.0.0` release tag is claimed by this entry.
+> Development prerelease. This version matches
+> `internal/buildinfo/version.go`. It is not a stable `1.0.0` release.
 
 ### Added
 
