@@ -273,7 +273,7 @@ type repositoryURI struct {
 func parseRepositoryURI(value string) (repositoryURI, error) {
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return repositoryURI{}, fmt.Errorf("collector: invalid repository URI: %w", err)
+		return repositoryURI{}, fmt.Errorf("collector: invalid repository URI")
 	}
 	if parsed.Host == "" || parsed.Hostname() == "" || parsed.Opaque != "" {
 		return repositoryURI{}, fmt.Errorf("collector: repository URI must be an absolute hierarchical URI")
@@ -339,8 +339,10 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 		return "", fmt.Errorf("declared object is not a commit: %w", err)
 	}
 	actual := strings.ToLower(strings.TrimSpace(string(object)))
-	if actual != strings.ToLower(revision) {
-		return "", fmt.Errorf("commit identity mismatch: requested %s, resolved %s", revision, actual)
+	if !isFullObjectID(actual) || actual != strings.ToLower(revision) {
+		// The runner's stdout is an untrusted boundary too. Do not echo it in
+		// identity diagnostics, even when a custom runner returns arbitrary text.
+		return "", fmt.Errorf("collector: declared commit identity mismatch")
 	}
 	if _, err := run("checkout", "--quiet", "--detach", "--no-recurse-submodules", revision); err != nil {
 		return "", fmt.Errorf("checkout immutable commit: %w", err)
