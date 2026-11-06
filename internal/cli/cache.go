@@ -144,15 +144,15 @@ func runCache(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 			return exitInvalid
 		}
 		return writeCacheReceipt(stdout, stderr, cacheReceipt{
-			Operation: "gc",
-			RemovedEntries: metadataResult.RemovedEntries,
-			RemovedBytes: metadataResult.RemovedBytes,
-			RemainingBytes: metadataResult.RemainingBytes,
-			ProtectedEntries: metadataResult.ProtectedEntries,
+			Operation:         "gc",
+			RemovedEntries:    metadataResult.RemovedEntries,
+			RemovedBytes:      metadataResult.RemovedBytes,
+			RemainingBytes:    metadataResult.RemainingBytes,
+			ProtectedEntries:  metadataResult.ProtectedEntries,
 			RemovedGitObjects: gitResult.RemovedObjects,
-			RemovedGitBytes: gitResult.RemovedBytes,
+			RemovedGitBytes:   gitResult.RemovedBytes,
 			RemainingGitBytes: gitResult.RemainingBytes,
-			ProtectedGit: gitResult.ProtectedObjects,
+			ProtectedGit:      gitResult.ProtectedObjects,
 		})
 	}
 	return exitUsage
