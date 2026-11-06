@@ -48,6 +48,12 @@ func (f *replayFixtureFetcher) Fetch(ctx context.Context, uri string) ([]byte, e
 	return append([]byte(nil), payload...), nil
 }
 
+func replayResolution(repositoryPath, repositoryURI, revision string) resolver.Result {
+	resolution := successfulResolution(repositoryPath, revision)
+	resolution.Graph.Components[0].SourceUnits[0].RepositoryURI = repositoryURI
+	return resolution
+}
+
 func replayOptions(destination, repositoryURI, repositoryPath string) Options {
 	options := workspaceOptions(destination)
 	options.Git = replayGitRunner{repositoryURI: repositoryURI, localPath: repositoryPath}
@@ -82,7 +88,7 @@ func buildReplayManifest(t *testing.T, resolution resolver.Result) ([]byte, stri
 func TestReplayRecreatesCanonicalManifestAndExactSourceTree(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	repositoryURI := "https://example.invalid/engine.git"
-	resolution := successfulResolution(repositoryURI, revision)
+	resolution := replayResolution(repository, repositoryURI, revision)
 	encoded, digest := buildReplayManifest(t, resolution)
 
 	firstDestination := filepath.Join(t.TempDir(), "first")
@@ -135,7 +141,7 @@ func TestReplayRecreatesCanonicalManifestAndExactSourceTree(t *testing.T) {
 func TestReplayDoesNotConsultChangedCatalogWhenMetadataChecksAreOffline(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	repositoryURI := "https://example.invalid/engine.git"
-	resolution := successfulResolution(repositoryURI, revision)
+	resolution := replayResolution(repository, repositoryURI, revision)
 	encoded, digest := buildReplayManifest(t, resolution)
 
 	changedCatalog := []byte(`{"schema_version":"1.0.0","catalog_id":"stable","entries":[]}`)
@@ -165,7 +171,7 @@ func TestReplayDoesNotConsultChangedCatalogWhenMetadataChecksAreOffline(t *testi
 func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	repositoryURI := "https://example.invalid/engine.git"
-	resolution := successfulResolution(repositoryURI, revision)
+	resolution := replayResolution(repository, repositoryURI, revision)
 
 	releaseURI := "https://metadata.example.invalid/releases/engine-1.0.0.json"
 	releaseBytes, err := json.Marshal(catalog.Release{
@@ -185,7 +191,7 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	indexBytes, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.0.0",
 		CatalogID:     "stable",
-		Entries:       []catalog.Entry{{
+		Entries: []catalog.Entry{{
 			ComponentID: "engine", Variant: "default", Version: "1.0.0",
 			MetadataURI: releaseURI, MetadataSHA: releaseDigest,
 		}},
