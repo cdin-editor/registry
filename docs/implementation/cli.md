@@ -135,7 +135,6 @@ firewall; deployments remain responsible for Git network egress controls.
 SHA-256 detects byte changes relative to a trusted receipt but is not a
 signature, attestation or publisher-authenticity proof.
 
-
 ## Git-object cache retention and collection
 
 When a cache directory is supplied to `prepare` or `manifest replay`, full
@@ -157,6 +156,7 @@ cache above budget. Each cache's complete reference snapshot and inventory
 must be readable and safe before its GC pass can delete anything. The metadata and Git-object passes are independently
 serialized rather than one cross-cache transaction; when one pass fails after
 the other has completed, repeating `cache gc` is safe and idempotent.
+
 ## Metadata cache retention and collection
 
 The metadata cache keeps the exact URI+expected-digest identity. Entries may

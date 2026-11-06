@@ -55,7 +55,6 @@ budget. As with the metadata cache, malformed or unsafe reference/inventory
 state fails closed. A stale per-object lock or lease after abnormal process
 termination is not automatically reclaimed; it requires operator inspection.
 
-
 ## Security qualification
 
 The HTTPS host allow-list validates the URI but cannot by itself enforce a deployment's DNS/IP egress policy. Git's underlying network behavior must be constrained by an egress firewall or sandbox. The production deployment must block private/link-local destinations and DNS rebinding. Since private-repository credentials are unsupported, no token or ambient credential helper is supplied to Git.

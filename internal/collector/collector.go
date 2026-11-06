@@ -438,7 +438,7 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 		}
 		initArgs = append(initArgs, ".")
 		command = append(command, initArgs...)
-		if _, err := options.Git.Run(ctx, staging, credentialEnv, command...); err != nil {
+		if _, err := options.Git.Run(ctx, staging, nil, command...); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}

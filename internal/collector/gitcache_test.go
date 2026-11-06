@@ -34,14 +34,14 @@ func TestGitObjectCacheWithObjectPopulatesThenReusesVerifiedRepository(t *testin
 		return os.WriteFile(filepath.Join(path, "fixture.object"), []byte(oid), 0o600)
 	}
 	use := func(path string) error { return verify(path) }
-	hit, err := cache.WithObject(context.Background(), oid, verify, populate, use)
+	hit, err := cache.withObject(context.Background(), oid, verify, populate, use)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if hit {
 		t.Fatal("first cache lookup unexpectedly hit")
 	}
-	hit, err = cache.WithObject(context.Background(), oid, verify, populate, use)
+	hit, err = cache.withObject(context.Background(), oid, verify, populate, use)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,14 +75,14 @@ func TestGitObjectCacheCorruptHitIsDiscardedAndRefetched(t *testing.T) {
 		return os.WriteFile(filepath.Join(path, "fixture.object"), []byte("verified"), 0o600)
 	}
 	use := func(path string) error { return verify(path) }
-	if _, err := cache.WithObject(context.Background(), oid, verify, populate, use); err != nil {
+	if _, err := cache.withObject(context.Background(), oid, verify, populate, use); err != nil {
 		t.Fatal(err)
 	}
 	path := cache.objectPath(oid)
 	if err := os.WriteFile(filepath.Join(path, "fixture.object"), []byte("corrupted"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	hit, err := cache.WithObject(context.Background(), oid, verify, populate, use)
+	hit, err := cache.withObject(context.Background(), oid, verify, populate, use)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestGitObjectCacheWaitsForObjectLockAndCleansCanceledLease(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer cancel()
-	_, err = cache.WithObject(ctx, oid,
+	_, err = cache.withObject(ctx, oid,
 		func(string) error { return nil },
 		func(string) error { return nil },
 		func(string) error { return nil },
@@ -264,7 +264,7 @@ func TestGitObjectCacheConcurrentAccessPopulatesOnce(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			<-start
-			hit, err := cache.WithObject(context.Background(), oid, verify, populate, use)
+			hit, err := cache.withObject(context.Background(), oid, verify, populate, use)
 			hits <- hit
 			errs <- err
 		}()

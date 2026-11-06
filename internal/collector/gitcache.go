@@ -116,7 +116,7 @@ func newGitObjectCacheWithPolicy(directory string, budget int64, maxAge time.Dur
 // WithObject provides a verified bare object database for one full commit ID.
 // The cache lock and lease remain held through use, preventing GC and concurrent
 // checkouts from mutating or removing the shared bare repository.
-func (c *GitObjectCache) WithObject(
+func (c *GitObjectCache) withObject(
 	ctx context.Context,
 	oid string,
 	verify func(string) error,
