@@ -11,8 +11,9 @@
 
 - `GitRunner` injects process execution; `CommandGit` passes an argument vector directly to `exec.CommandContext`, never a shell string.
 - `RepositoryPolicy` is mandatory. The production `HTTPSAllowList` allows HTTPS only, rejects embedded credentials, and requires exact host matching. Tests inject a deliberately local-only policy for temporary Git fixtures.
-- Public, unauthenticated Git retrieval is the only supported production mode. `CommandGit` inherits only the operating-system variables needed to start Git, forces non-interactive/config-isolated operation, and does not inherit ambient askpass helpers, SSH-agent state, credential helpers or proxy variables.
-- Private-repository authentication is not currently supported. Future authentication must use an explicit injected credential-provider boundary; credentials must never be placed in repository URIs, Git command arguments, diagnostics or logs.
+- Public, unauthenticated Git retrieval is the default. An optional `GitCredentialProvider` is invoked only after `RepositoryPolicy` accepts a repository URI. It may inject an absolute `GIT_ASKPASS`, `GIT_ASKPASS_REQUIRE=force`, and narrowly named `REGISTRY_GIT_CREDENTIAL_*` values for that operation only.
+- `CommandGit` inherits only operating-system variables needed to start Git. It excludes ambient HOME, all ambient `GIT_*` settings, askpass helpers, SSH-agent state, credential helpers and proxy variables. Provider-supplied environment is separately validated; arbitrary Git config, proxy, PATH, SSH and terminal settings are rejected.
+- Credentials must never be placed in repository URIs or Git arguments. Provider errors and Git stderr are not copied into diagnostics. The injected askpass executable is trusted code supplied by the caller; Registry does not create or store credentials.
 - Failed Git commands expose a safe exit classification rather than raw arguments or remote stderr, which may contain secret-bearing URLs.
 - The collector does not own version resolution, auth UI, credential storage or catalog ingestion.
 
@@ -26,7 +27,8 @@
 6. Fetch the declared revision without tags, verify it resolves to a commit whose full object ID equals the declared revision, then checkout detached and verify HEAD again.
 7. Validate the declared source subdirectory one path component at a time. Reject parent traversal, absolute forms, symlink components and missing/non-directory paths.
 8. Copy regular files/directories only. Exclude the temporary `.git` directory and reject symlinks and special files. Do not run hooks, filters, scripts, submodules or LFS downloads.
-9. Clean temporary repository and hook directory on every exit path.
+9. Copy in bounded chunks while checking context cancellation between reads/writes. A cancelled or failed copy removes the partial source target.
+10. Clean temporary repository, hook directory and any source targets created by a failed `Collect` operation on every exit path.
 
 The collector writes only into a caller-supplied staging root; Workspace owns final publication.
 
@@ -36,4 +38,4 @@ The HTTPS host allow-list validates the URI but cannot by itself enforce a deplo
 
 ## Tests
 
-Temporary Git repositories prove exact commit retrieval, multiple source units from one repository, subdirectory collection, no `.git` copy, hook disabling, branch/tag rejection, traversal rejection and symlink rejection.
+Temporary Git repositories prove exact commit retrieval, multiple source units from one repository, branch/tag/abbreviated-ID rejection, missing and malformed repository failures, subdirectory collection, no `.git` copy, hook/filter/submodule isolation, traversal/symlink/special-file rejection, source-tree rollback, and reuse of one repository across logical components/variants without path collisions. Process tests prove an actual child is terminated by context cancellation; Collector tests prove cancellation during fetch and source copy cleans temporary directories and partial targets. Environment tests prove only an explicit, validated askpass credential provider can inject credential values and Git failures do not echo stderr or arguments.
