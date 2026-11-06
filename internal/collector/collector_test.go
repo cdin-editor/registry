@@ -533,7 +533,6 @@ func TestREG026SubmodulesAreNotFetchedOrMaterialized(t *testing.T) {
 	}
 }
 
-
 type secretErrorGit struct {
 	marker string
 }
