@@ -49,7 +49,6 @@ These checks establish deterministic serialization and canonical-byte handling; 
 
 Tests validate the constructed Manifest against the embedded Spec-owned schema, reject missing/extra source records, test UTF-16 key ordering, escaping and JCS numeric vectors, verify report array shape/order and prevent Manifest generation from a failed resolution.
 
-
 ## Manifest verification
 
 `Verify` validates a persisted Manifest as a complete public document, not
