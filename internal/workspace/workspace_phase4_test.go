@@ -256,6 +256,9 @@ func TestREG022OwnedLockIsRemovedOnFailure(t *testing.T) {
 func TestREG022ConcurrentDestinationCreationIsNotOverwritten(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
 	hooks := prepareHooks{
 		rename: func(oldPath, newPath string) error {
 			if err := os.Mkdir(newPath, 0o755); err != nil {
@@ -268,7 +271,7 @@ func TestREG022ConcurrentDestinationCreationIsNotOverwritten(t *testing.T) {
 			return renameDirectoryNoReplace(oldPath, newPath)
 		},
 	}
-	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 	if err == nil {
 		t.Fatal("publication replaced a concurrently-created destination")
 	}
@@ -282,6 +285,10 @@ func TestREG022ConcurrentDestinationCreationIsNotOverwritten(t *testing.T) {
 	}
 	if _, statErr := os.Lstat(filepath.Join(filepath.Dir(destination), ".prepared.registry.lock")); !os.IsNotExist(statErr) {
 		t.Fatalf("owned lock leaked after destination race: %v", statErr)
+	}
+	entries, tempErr := os.ReadDir(collectorTemp)
+	if tempErr != nil || len(entries) != 0 {
+		t.Fatalf("Collector leaked temporary clones/hooks after destination race: %v (%v)", entries, tempErr)
 	}
 }
 
