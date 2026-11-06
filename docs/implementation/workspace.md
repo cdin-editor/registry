@@ -50,7 +50,8 @@ destination data must survive; Registry must return an error and clean its own
 stage and lock. The destination recheck is not a substitute for the OS-specific
 atomic no-replace rename primitive against an empty-directory race; callers
 should reserve output paths for Registry until that platform guarantee is
-implemented and verified.
+implemented and verified. A competing non-empty destination is covered by
+`TestREG022ConcurrentDestinationCreationIsNotOverwritten`.
 
 ## Limits and durability
 
@@ -64,4 +65,21 @@ macOS and Windows CI evidence before a cross-platform guarantee is claimed.
 
 ## Tests
 
-Integration tests use real temporary Git repositories and the production Collector, embedded schemas and Manifest/Report serializers. They verify the canonical source path, output documents, no Git internals, SHA-256 return values, failure cleanup, pre-existing destination preservation and rejection of unsuccessful resolution. The Phase 4 matrix additionally injects staging, persistence, cancellation, lock and competing-destination failures.
+Integration tests use real temporary Git repositories and the production Collector, embedded schemas and Manifest/Report serializers. They verify the canonical source path, output documents, no Git internals, SHA-256 return values, failure cleanup, pre-existing destination preservation and rejection of unsuccessful resolution.
+
+The Phase 4 matrix additionally injects:
+- failure after the first of multiple source units and after all sources are staged;
+- Manifest and Report write and fsync failures;
+- cancellation after collection, after Manifest validation, before Report write, after Report write and before publication;
+- pre-rename failure, lock contention, stale-lock fail-closed handling and owned-lock cleanup;
+- an unrelated non-empty destination appearing inside the final rename boundary.
+
+`TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths`
+covers the complete Workspace path layout for multiple source units that share
+one repository and commit across component/variant identities.
+
+The native matrix runs `go test ./internal/workspace/...` through the pinned
+Pipeline task on Ubuntu, macOS and Windows. It establishes observed behavior
+only for the runner images and toolchain on which the workflow passes; it does
+not by itself establish parent-directory crash durability or atomic no-replace
+semantics against an empty destination race.
