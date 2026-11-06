@@ -26,19 +26,19 @@ const (
 	UpdateReasonHistoricalIdentityChanged = "HISTORICAL_RELEASE_IDENTITY_CHANGED"
 	UpdateReasonComponentRemoved          = "COMPONENT_REMOVED_FROM_RESOLUTION"
 	UpdateReasonResolutionFailed          = "CURRENT_RESOLUTION_FAILED"
-	UpdateReasonNewlySelected               = "NEWLY_SELECTED"
+	UpdateReasonNewlySelected             = "NEWLY_SELECTED"
 
-	UpdateCandidateSelected                 = "SELECTED"
-	UpdateCandidateMirrored                 = "MIRRORED_IMMUTABLE_RELEASE"
-	UpdateCandidateNotSelected              = "NOT_SELECTED"
+	UpdateCandidateSelected    = "SELECTED"
+	UpdateCandidateMirrored    = "MIRRORED_IMMUTABLE_RELEASE"
+	UpdateCandidateNotSelected = "NOT_SELECTED"
 )
 
 // UpdateReleaseIdentity is an immutable release identity, not a mutable alias
 // such as a branch or tag. MetadataSHA256 is always the digest verified before
 // the Release Metadata document was decoded.
 type UpdateReleaseIdentity struct {
-	Version       string `json:"version"`
-	MetadataURI   string `json:"metadata_uri"`
+	Version        string `json:"version"`
+	MetadataURI    string `json:"metadata_uri"`
 	MetadataSHA256 string `json:"metadata_sha256"`
 }
 
@@ -47,25 +47,25 @@ type UpdateReleaseIdentity struct {
 // say about the exact old URI+digest identity; SelectionReasonCode describes
 // the current selection independently. The original Manifest is never altered.
 type UpdateDecision struct {
-	ComponentID             string                 `json:"component_id"`
-	Variant                 string                 `json:"variant"`
-	Historical               UpdateReleaseIdentity  `json:"historical"`
-	HistoricalReleaseState   string                 `json:"historical_release_state"`
-	Current                  *UpdateReleaseIdentity `json:"current,omitempty"`
-	SelectionReasonCode      string                 `json:"selection_reason_code"`
+	ComponentID            string                 `json:"component_id"`
+	Variant                string                 `json:"variant"`
+	Historical             UpdateReleaseIdentity  `json:"historical"`
+	HistoricalReleaseState string                 `json:"historical_release_state"`
+	Current                *UpdateReleaseIdentity `json:"current,omitempty"`
+	SelectionReasonCode    string                 `json:"selection_reason_code"`
 }
 
 // UpdateCandidateDecision records why each candidate in the newly loaded
 // Catalog set was or was not eligible/selected for this resolution.
 type UpdateCandidateDecision struct {
-	ComponentID      string `json:"component_id"`
-	Variant          string `json:"variant"`
-	Version          string `json:"version"`
-	CatalogID        string `json:"catalog_id"`
-	MetadataURI      string `json:"metadata_uri"`
-	MetadataSHA256   string `json:"metadata_sha256"`
-	Status           string `json:"status"`
-	ReasonCode       string `json:"reason_code"`
+	ComponentID    string `json:"component_id"`
+	Variant        string `json:"variant"`
+	Version        string `json:"version"`
+	CatalogID      string `json:"catalog_id"`
+	MetadataURI    string `json:"metadata_uri"`
+	MetadataSHA256 string `json:"metadata_sha256"`
+	Status         string `json:"status"`
+	ReasonCode     string `json:"reason_code"`
 }
 
 // UpdateDiscoveryReport is a separate audit artifact. It binds every decision
@@ -74,16 +74,16 @@ type UpdateCandidateDecision struct {
 // report. It contains no timestamp or random identifier, so equal inputs yield
 // byte-identical reports. It is never embedded into or written over a Manifest.
 type UpdateDiscoveryReport struct {
-	SchemaVersion             string                    `json:"schema_version"`
-	Operation                 string                    `json:"operation"`
-	Result                    string                    `json:"result"`
-	HistoricalManifestSHA256  string                    `json:"historical_manifest_sha256"`
-	HistoricalRegistryVersion string                    `json:"historical_registry_version"`
-	ProductDefinitionSHA256   string                    `json:"product_definition_sha256"`
+	SchemaVersion             string                      `json:"schema_version"`
+	Operation                 string                      `json:"operation"`
+	Result                    string                      `json:"result"`
+	HistoricalManifestSHA256  string                      `json:"historical_manifest_sha256"`
+	HistoricalRegistryVersion string                      `json:"historical_registry_version"`
+	ProductDefinitionSHA256   string                      `json:"product_definition_sha256"`
 	CurrentCatalogs           []resolver.CatalogReference `json:"current_catalogs"`
-	CurrentResolution         resolver.Report           `json:"current_resolution"`
-	Decisions                 []UpdateDecision          `json:"decisions"`
-	CandidateDecisions        []UpdateCandidateDecision `json:"candidate_decisions"`
+	CurrentResolution         resolver.Report             `json:"current_resolution"`
+	Decisions                 []UpdateDecision            `json:"decisions"`
+	CandidateDecisions        []UpdateCandidateDecision   `json:"candidate_decisions"`
 }
 
 // BuildUpdateDiscoveryReport compares a verified historical Manifest with a
@@ -169,13 +169,13 @@ func BuildUpdateDiscoveryReport(
 			continue
 		}
 		decisions = append(decisions, UpdateDecision{
-			ComponentID: selected.ComponentID,
-			Variant: selected.Variant,
-			Historical: UpdateReleaseIdentity{},
+			ComponentID:            selected.ComponentID,
+			Variant:                selected.Variant,
+			Historical:             UpdateReleaseIdentity{},
 			HistoricalReleaseState: "not_present",
 			Current: &UpdateReleaseIdentity{
-				Version: selected.Version,
-				MetadataURI: selected.ReleaseMetadataURI,
+				Version:        selected.Version,
+				MetadataURI:    selected.ReleaseMetadataURI,
 				MetadataSHA256: selected.ReleaseMetadataSHA,
 			},
 			SelectionReasonCode: UpdateReasonNewlySelected,
@@ -198,16 +198,16 @@ func BuildUpdateDiscoveryReport(
 		reportResult = UpdateResultChangesDetected
 	}
 	return UpdateDiscoveryReport{
-		SchemaVersion: updateReportSchemaVersion,
-		Operation: "manifest.update-discovery",
-		Result: reportResult,
-		HistoricalManifestSHA256: historicalSHA,
+		SchemaVersion:             updateReportSchemaVersion,
+		Operation:                 "manifest.update-discovery",
+		Result:                    reportResult,
+		HistoricalManifestSHA256:  historicalSHA,
 		HistoricalRegistryVersion: historical.RegistryVersion,
-		ProductDefinitionSHA256: Digest(productDefinitionBytes),
-		CurrentCatalogs: catalogRefs,
-		CurrentResolution: current.Report,
-		Decisions: decisions,
-		CandidateDecisions: candidateDecisions,
+		ProductDefinitionSHA256:   Digest(productDefinitionBytes),
+		CurrentCatalogs:           catalogRefs,
+		CurrentResolution:         current.Report,
+		Decisions:                 decisions,
+		CandidateDecisions:        candidateDecisions,
 	}, nil
 }
 
@@ -329,23 +329,31 @@ func buildUpdateCandidateDecisions(catalogs []*catalog.Catalog, current resolver
 				reason = rejectedCode
 			}
 			out = append(out, UpdateCandidateDecision{
-				ComponentID: release.ComponentID,
-				Variant: normalizeUpdateVariant(release.Variant),
-				Version: release.Version,
-				CatalogID: cat.ID,
-				MetadataURI: release.MetadataURI,
+				ComponentID:    release.ComponentID,
+				Variant:        normalizeUpdateVariant(release.Variant),
+				Version:        release.Version,
+				CatalogID:      cat.ID,
+				MetadataURI:    release.MetadataURI,
 				MetadataSHA256: strings.ToLower(release.MetadataSHA),
-				Status: release.Status,
-				ReasonCode: reason,
+				Status:         release.Status,
+				ReasonCode:     reason,
 			})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
-		if a.ComponentID != b.ComponentID { return a.ComponentID < b.ComponentID }
-		if a.Variant != b.Variant { return a.Variant < b.Variant }
-		if a.Version != b.Version { return a.Version < b.Version }
-		if a.CatalogID != b.CatalogID { return a.CatalogID < b.CatalogID }
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		if a.Version != b.Version {
+			return a.Version < b.Version
+		}
+		if a.CatalogID != b.CatalogID {
+			return a.CatalogID < b.CatalogID
+		}
 		return a.MetadataURI < b.MetadataURI
 	})
 	return out
