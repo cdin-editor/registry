@@ -248,6 +248,18 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}
+	// Recheck the staging path after the final injection/coordination hook.
+	// The OS-specific no-replace rename below protects destination ownership;
+	// this check also rejects a stage path replaced with a symlink beforehand.
+	if err := ensureNoSymlinkAncestors(stage); err != nil {
+		return Prepared{}, fmt.Errorf("workspace: staging directory changed before publication: %w", err)
+	}
+	if info, err := os.Lstat(stage); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		if err == nil {
+			err = fmt.Errorf("staging path is not a real directory")
+		}
+		return Prepared{}, fmt.Errorf("workspace: staging directory is not publishable: %w", err)
+	}
 	if _, err := os.Lstat(destination); err == nil {
 		return Prepared{}, fmt.Errorf("workspace: destination appeared during prepare; refusing to overwrite: %s", destination)
 	} else if !errors.Is(err, os.ErrNotExist) {
