@@ -152,6 +152,10 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		_ = os.Remove(lockPath)
 		return Prepared{}, fmt.Errorf("workspace: close destination lock: %w", closeErr)
 	}
+	if err := applyWorkspacePrivateACL(lockPath, false); err != nil {
+		_ = os.Remove(lockPath)
+		return Prepared{}, fmt.Errorf("workspace: secure destination lock ACL: %w", err)
+	}
 	defer os.Remove(lockPath)
 
 	if err := ctx.Err(); err != nil {
@@ -162,6 +166,9 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		return Prepared{}, fmt.Errorf("workspace: create same-filesystem staging directory: %w", err)
 	}
 	defer os.RemoveAll(stage)
+	if err := applyWorkspacePrivateACL(stage, true); err != nil {
+		return Prepared{}, fmt.Errorf("workspace: secure staging directory ACL: %w", err)
+	}
 
 	sources, err := collector.Collect(ctx, resolution.Graph, stage, collector.Options{
 		Git:         options.Git,
