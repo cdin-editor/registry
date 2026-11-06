@@ -124,6 +124,9 @@ func runManifestDiscover(
 	if err != nil {
 		return writeManifestError(stderr, "DISCOVERY_REPORT_FAILED", "could not serialize the update-discovery report")
 	}
+	if err := validator.Validate(validation.UpdateDiscoveryReport, reportBytes, "update-discovery-report.json"); err != nil {
+		return writeManifestError(stderr, "DISCOVERY_REPORT_FAILED", "the update-discovery report does not satisfy the embedded Spec contract")
+	}
 	if options.reportPath != "" {
 		if err := writeDiscoveryReportFile(options.reportPath, reportBytes); err != nil {
 			return writeManifestError(stderr, "DISCOVERY_REPORT_FILE_FAILED", "could not create the requested report file without replacing an existing path")
