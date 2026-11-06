@@ -346,6 +346,11 @@ func TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths(t *tes
 	second := resolution.Graph.Components[0]
 	second.ComponentID = "engine-alt"
 	second.Variant = "tui"
+	second.SourceUnits = append(second.SourceUnits, catalog.SourceUnit{
+		ID:            "source-two",
+		RepositoryURI: fileRepositoryURI(repository),
+		Revision:      revision,
+	})
 	resolution.Graph.Components = append(resolution.Graph.Components, second)
 	resolution.Graph.Roots = append(resolution.Graph.Roots, resolver.Requirement{
 		ComponentID:       "engine-alt",
@@ -371,9 +376,10 @@ func TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths(t *tes
 	wantPaths := []string{
 		filepath.Join(destination, "components", "engine", "default", "sources", "source", "engine.c"),
 		filepath.Join(destination, "components", "engine-alt", "tui", "sources", "source", "engine.c"),
+		filepath.Join(destination, "components", "engine-alt", "tui", "sources", "source-two", "engine.c"),
 	}
-	if len(prepared.Sources) != 2 {
-		t.Fatalf("materialized source count = %d, want 2", len(prepared.Sources))
+	if len(prepared.Sources) != 3 {
+		t.Fatalf("materialized source count = %d, want 3", len(prepared.Sources))
 	}
 	for _, path := range wantPaths {
 		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
