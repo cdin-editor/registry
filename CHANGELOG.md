@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Pin complete Manifest/Report canonical bytes and detached digests across repeated runs and equivalent input permutations; expand RFC 8785 Unicode/IEEE-754 vectors and reject invalid UTF-8 before serialization.
+
 - Publish prepared Workspaces through OS-native atomic no-replace directory rename on Linux, macOS and Windows; fail closed on unsupported operating systems.
 - Add empty-destination race, destination-symlink, staging-symlink swap and simultaneous-publisher tests. Assert temporary Git clone and disabled-hook cleanup across injected Workspace failures.
 
