@@ -34,6 +34,48 @@ An exact hostname allow-list and IP checks reduce SSRF exposure, but they do not
 
 Network bytes are checked against the expected digest before cache write. Cache writes use a private temporary file, restrictive permissions, fsync and atomic rename. Cache failure is non-fatal after successful digest verification: cache is an optimization, not an authority. `catalog.Load` computes the digest again before schema validation, so the transport cannot bypass the Catalog trust boundary.
 
+## Metadata cache retention and eviction policy
+
+This policy defines the Phase 7 lifecycle work without changing cache identity
+or the digest trust boundary:
+
+- **Identity is immutable:** retain the current key,
+  `SHA-256(exact metadata URI bytes || NUL || lowercase expected SHA-256)`.
+  Do not normalize, rewrite or alias the URI. Entries fetched without an
+  expected digest remain ineligible for persistent cache reads and writes.
+- **Admission bound:** one metadata entry is at most 8 MiB (the existing
+  default fetch bound). The persistent cache has a 256 MiB target budget.
+- **Age bound:** an unpinned entry becomes eligible for eviction after 90 days
+  without a successful digest-verified cache hit or write. The access timestamp
+  is eviction metadata only; it is never an integrity input.
+- **Eviction order:** when the age bound is exceeded or the cache is above its
+  target budget, evict the least-recently verified unpinned entries first.
+  Break equal timestamps by ascending cache filename so the choice is stable.
+  A GC pass may leave the cache above budget when protected entries alone
+  exceed the budget; it must never break a pin to force a hard quota.
+- **Manifest retention:** every metadata identity referenced by a retained
+  Manifest is pinned for at least as long as that Manifest is retained.
+  Explicit replay operations hold a lease for every identity they may access
+  until they finish. Pins and active leases are separate from ordinary LRU
+  recency.
+- **Fail-closed collection:** GC must take the cache's exclusive maintenance
+  lock and operate on a complete, validated snapshot of retained-Manifest pins
+  and active replay leases. If either reference source is unavailable,
+  malformed or incomplete, GC removes nothing. A cleanup pass must not race an
+  active fetch/write/replay.
+- **Integrity remains authoritative:** every cache hit is checked as a regular
+  non-symlink file, checked against the configured size limit and re-hashed
+  against the expected digest before use. Corrupt entries are discarded and
+  fetched again. Network bytes are digest-verified before storage, and
+  Catalog.Load independently verifies them again before parsing.
+
+The limits above are Registry implementation policy, not public contract
+fields. The current transport already enforces URI+digest identity and
+verify-before-use; age/budget eviction, manifest pins, replay leases and
+serialized garbage collection are **defined here but remain Phase 7
+implementation work**. Until that work lands, entries are retained rather
+than opportunistically deleted.
+
 ## Tests
 
 - URL policy and host allow-list rejection.
