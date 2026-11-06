@@ -488,7 +488,7 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 		targetComplete = true
 		return nil
 	}
-	if _, err := options.GitCache.WithObject(ctx, revision, verify, populate, use); err != nil {
+	if _, err := options.GitCache.withObject(ctx, revision, verify, populate, use); err != nil {
 		return "", err
 	}
 	return strings.ToLower(revision), nil
