@@ -1,8 +1,9 @@
 # Manifest CLI operations
 
-The CLI exposes the read-only verification API and transactional replay engine.
-Both commands consume a persisted `registry-manifest.json`; neither runs the
-Resolver or chooses a release from current Catalog state.
+The CLI exposes read-only Manifest verification, update discovery and
+transactional replay. Verification and replay use a persisted
+`registry-manifest.json`; update discovery additionally resolves current
+Product Definition and Catalog state through the generic Resolver.
 
 ## Commands
 
@@ -32,6 +33,44 @@ A successful command writes one JSON object and a trailing newline to stdout:
 
 Verification is local and read-only. It does not contact Catalogs, fetch Git
 objects, write files or assert publisher authenticity.
+
+### Discover updates
+
+```sh
+registry manifest discover \
+  --input <historical-manifest|-> \
+  --product <product-definition.yaml|json> \
+  --catalog <catalog-index-url-or-file>... \
+  --allow-host <host[,host]>... \
+  [--sha256 <lowercase-hex>] \
+  [--cache-dir <directory>] \
+  [--report <new-file>]
+```
+
+Discovery first verifies the historical Manifest's canonical bytes, public
+schema, provenance and optional detached SHA-256. Only after that succeeds does
+it read and validate the current Product Definition and load the supplied
+Catalog Indexes and their referenced Release Metadata. All Catalog and metadata
+hosts must be explicitly listed in `--allow-host`.
+
+The generic Resolver evaluates the current requirements using the normal
+version, dependency, prerelease, withdrawal and contract-provider rules. The
+result is a separate Update Discovery Report bound to the exact historical
+Manifest SHA-256, exact Product Definition input SHA-256, current Catalog
+identities and full current Resolution Report. It records stable per-component
+selection reasons and per-candidate decisions, including withdrawal and
+metadata-identity changes.
+
+Discovery is read-only with respect to prepared artifacts. It never collects
+Git sources, creates or publishes a Workspace, rewrites the historical
+Manifest, or changes a retained cache pin. A Catalog withdrawal is reported as
+current evidence; historical bytes remain an immutable record. The report is
+canonical JSON written to stdout. `--report` also creates a new file using
+exclusive creation and refuses to overwrite an existing file or symlink.
+
+A failed current resolution still emits and optionally saves the complete
+reason-coded report, then returns `DISCOVERY_RESOLUTION_FAILED`. Input, Catalog,
+report-validation, file-write and output failures use stable error codes.
 
 ### Replay
 
@@ -82,7 +121,7 @@ Workspace; the caller can inspect the explicit `--output` directory.
 
 ## Output and exit codes
 
-For both commands, success writes only the JSON receipt to stdout. Diagnostics
+For each command, success writes only its JSON receipt/report to stdout. Diagnostics
 are written to stderr. Operational/input failures return exit code `1`;
 usage errors return `2`; success returns `0`. Existing `validate`,
 `resolve` and `prepare` exit-code behavior is unchanged.
@@ -100,6 +139,15 @@ registry: error[CODE]: actionable diagnostic
 | `MANIFEST_DIGEST_INVALID` | 1 | Supplied detached digest is not lowercase SHA-256 |
 | `MANIFEST_DIGEST_MISMATCH` | 1 | Input bytes do not match the supplied digest |
 | `MANIFEST_INVALID` | 1 | Canonical bytes, public schema or provenance validation failed |
+| `DISCOVERY_PRODUCT_INPUT_READ_FAILED` | 1 | Current Product Definition could not be read |
+| `DISCOVERY_PRODUCT_INVALID` | 1 | Current Product Definition failed validation |
+| `DISCOVERY_CATALOG_CONFIG_FAILED` | 1 | Catalog transport configuration failed |
+| `DISCOVERY_CATALOG_INPUT_FAILED` | 1 | A current Catalog Index could not be read |
+| `DISCOVERY_CATALOG_LOAD_FAILED` | 1 | Catalog digest, schema, identity or loading validation failed |
+| `DISCOVERY_REPORT_FAILED` | 1 | Update Discovery Report could not be built, serialized or schema-validated |
+| `DISCOVERY_REPORT_FILE_FAILED` | 1 | Requested report file could not be created without replacement |
+| `DISCOVERY_OUTPUT_WRITE_FAILED` | 1 | Update Discovery Report could not be written to stdout |
+| `DISCOVERY_RESOLUTION_FAILED` | 1 | Current requirements did not resolve; inspect the emitted report |
 | `REPLAY_METADATA_CONFIG_FAILED` | 1 | Strict metadata transport could not be configured |
 | `REPLAY_GIT_CACHE_CONFIG_FAILED` | 1 | Content-addressed Git-object cache could not be configured |
 | `REPLAY_METADATA_FAILED` | 1 | Recorded remote metadata failed digest/schema/identity checks |
@@ -129,7 +177,8 @@ whose atomic publication already completed.
 
 ## Security boundaries
 
-Manifest verification does not fetch or execute source code. Replay does not
+Manifest verification does not fetch or execute source code. Update discovery
+fetches Catalog metadata only and does not retrieve Git source. Replay does not
 execute collected component code. HTTPS host allow-lists are not a deployment
 firewall; deployments remain responsible for Git network egress controls.
 SHA-256 detects byte changes relative to a trusted receipt but is not a
