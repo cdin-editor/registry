@@ -26,6 +26,7 @@ func TestEmbeddedSchemasMatchCanonicalCopies(t *testing.T) {
 		"component-release.schema.json",
 		"resolved-manifest.schema.json",
 		"resolution-report.schema.json",
+		"update-discovery-report.schema.json",
 	}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
@@ -162,13 +163,139 @@ func TestYAMLIsNotAcceptedForOtherKinds(t *testing.T) {
 
 func TestKindsAreStableAndSorted(t *testing.T) {
 	kinds := Kinds()
-	if len(kinds) != 5 {
-		t.Fatalf("Kinds() length = %d, want 5", len(kinds))
+	if len(kinds) != 6 {
+		t.Fatalf("Kinds() length = %d, want 6", len(kinds))
 	}
 	for i := 1; i < len(kinds); i++ {
 		if kinds[i-1] > kinds[i] {
 			t.Fatalf("Kinds() is not sorted: %v", kinds)
 		}
+	}
+}
+
+func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
+	validator := newTestValidator(t)
+	resolution, err := os.ReadFile("../../examples/resolution-report.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report := map[string]any{
+		"schema_version":              "1.0.0",
+		"operation":                   "manifest.update-discovery",
+		"result":                      "changes_detected",
+		"historical_manifest_sha256":  strings.Repeat("a", 64),
+		"historical_registry_version": "1.2.3",
+		"product_definition_sha256":   strings.Repeat("b", 64),
+		"current_catalogs": []any{
+			map[string]any{
+				"catalog_id":     "stable",
+				"metadata_uri":   "https://catalog.example.invalid/index.json",
+				"metadata_sha256": strings.Repeat("c", 64),
+			},
+		},
+		"current_resolution": json.RawMessage(resolution),
+		"decisions": []any{
+			map[string]any{
+				"component_id": "engine",
+				"variant": "default",
+				"historical": map[string]any{
+					"version": "1.0.0",
+					"metadata_uri": "https://metadata.example.invalid/engine-1.0.0.json",
+					"metadata_sha256": strings.Repeat("d", 64),
+				},
+				"historical_release_state": "active",
+				"current": map[string]any{
+					"version": "2.0.0",
+					"metadata_uri": "https://metadata.example.invalid/engine-2.0.0.json",
+					"metadata_sha256": strings.Repeat("e", 64),
+				},
+				"selection_reason_code": "UPDATE_AVAILABLE",
+			},
+		},
+		"candidate_decisions": []any{
+			map[string]any{
+				"component_id": "engine",
+				"variant": "default",
+				"version": "2.0.0",
+				"catalog_id": "stable",
+				"metadata_uri": "https://metadata.example.invalid/engine-2.0.0.json",
+				"metadata_sha256": strings.Repeat("e", 64),
+				"status": "active",
+				"reason_code": "SELECTED",
+			},
+		},
+	}
+	payload, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(UpdateDiscoveryReport, payload, "update-discovery-report.json"); err != nil {
+		t.Fatalf("Validate(UpdateDiscoveryReport) error = %v", err)
+	}
+
+	// A known Resolution Report property is deliberately corrupted to prove the
+	// Update Discovery schema resolves and applies the referenced v1.1 schema.
+	var invalid map[string]any
+	if err := json.Unmarshal(payload, &invalid); err != nil {
+		t.Fatal(err)
+	}
+	resolutionReport := invalid["current_resolution"].(map[string]any)
+	resolutionReport["result"] = "not-a-resolution-result"
+	invalidPayload, err := json.Marshal(invalid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(UpdateDiscoveryReport, invalidPayload, "update-discovery-report.json"); err == nil {
+		t.Fatal("Update Discovery Report accepted an invalid nested Resolution Report")
+	}
+}
+
+func TestValidateUpdateDiscoveryReportAllowsNewlySelectedComponent(t *testing.T) {
+	validator := newTestValidator(t)
+	resolution, err := os.ReadFile("../../examples/resolution-report.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var currentResolution any
+	if err := json.Unmarshal(resolution, &currentResolution); err != nil {
+		t.Fatal(err)
+	}
+	report := map[string]any{
+		"schema_version": "1.0.0",
+		"operation": "manifest.update-discovery",
+		"result": "changes_detected",
+		"historical_manifest_sha256": strings.Repeat("a", 64),
+		"historical_registry_version": "1.2.3",
+		"product_definition_sha256": strings.Repeat("b", 64),
+		"current_catalogs": []any{},
+		"current_resolution": currentResolution,
+		"decisions": []any{
+			map[string]any{
+				"component_id": "new-engine",
+				"variant": "default",
+				"historical": map[string]any{
+					"version": "",
+					"metadata_uri": "",
+					"metadata_sha256": "",
+				},
+				"historical_release_state": "not_present",
+				"current": map[string]any{
+					"version": "1.0.0",
+					"metadata_uri": "https://metadata.example.invalid/new-engine-1.0.0.json",
+					"metadata_sha256": strings.Repeat("c", 64),
+				},
+				"selection_reason_code": "NEWLY_SELECTED",
+			},
+		},
+		"candidate_decisions": []any{},
+	}
+	payload, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(UpdateDiscoveryReport, payload, "update-discovery-report.json"); err != nil {
+		t.Fatalf("Validate(newly selected Update Discovery Report) error = %v", err)
 	}
 }
 
