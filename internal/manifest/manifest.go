@@ -441,6 +441,8 @@ func Digest(canonical []byte) string {
 type jsonValueVisit struct {
 	typeOfValue reflect.Type
 	pointer     uintptr
+	length      int
+	capacity    int
 }
 
 func validateJSONStrings(value reflect.Value) error {
@@ -465,6 +467,10 @@ func validateJSONStringsVisited(value reflect.Value, visited map[jsonValueVisit]
 			return nil
 		}
 		identity := jsonValueVisit{typeOfValue: value.Type(), pointer: uintptr(value.UnsafePointer())}
+		if value.Kind() == reflect.Slice {
+			identity.length = value.Len()
+			identity.capacity = value.Cap()
+		}
 		if identity.pointer != 0 {
 			if _, exists := visited[identity]; exists {
 				// Let json.Marshal produce its standard cycle error after this
