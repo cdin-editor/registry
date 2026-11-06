@@ -134,12 +134,12 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 	}
 
 	report := resolver.Report{
-		SchemaVersion: "1.1.0",
-		Result: "success",
-		Selected: make([]resolver.SelectedCandidate, 0, len(document.Components)),
+		SchemaVersion:      "1.1.0",
+		Result:             "success",
+		Selected:           make([]resolver.SelectedCandidate, 0, len(document.Components)),
 		AppliedConstraints: []resolver.AppliedConstraint{},
 		RejectedCandidates: []resolver.RejectedCandidate{},
-		Conflicts: []resolver.Conflict{},
+		Conflicts:          []resolver.Conflict{},
 		Warnings: []resolver.Warning{{
 			Code:    "MANIFEST_REPLAY_PINNED",
 			Message: "Replayed the exact selected versions and source commits from the verified Manifest; version selection was not rerun.",
@@ -167,8 +167,8 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 				ComponentID: dependency.ComponentID, Variant: dependency.Variant, Version: dependency.Version,
 			})
 			report.AppliedConstraints = append(report.AppliedConstraints, resolver.AppliedConstraint{
-				ComponentID: dependency.ComponentID,
-				Variant: dependency.Variant,
+				ComponentID:       dependency.ComponentID,
+				Variant:           dependency.Variant,
 				VersionConstraint: "=" + dependency.Version,
 				Source: resolver.ConstraintSource{
 					Type:        resolver.ConstraintSourceDependency,
