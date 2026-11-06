@@ -68,6 +68,7 @@ macOS and Windows CI evidence before a cross-platform guarantee is claimed.
 Integration tests use real temporary Git repositories and the production Collector, embedded schemas and Manifest/Report serializers. They verify the canonical source path, output documents, no Git internals, SHA-256 return values, failure cleanup, pre-existing destination preservation and rejection of unsuccessful resolution.
 
 The Phase 4 matrix additionally injects:
+
 - failure after the first of multiple source units and after all sources are staged;
 - Manifest and Report write and fsync failures;
 - cancellation after collection, after Manifest validation, before Report write, after Report write and before publication;
