@@ -118,6 +118,9 @@ func TestRenameDirectoryNoReplaceConcurrentWritersHaveOneWinner(t *testing.T) {
 func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
 	hooks := prepareHooks{
 		rename: func(oldPath, newPath string) error {
 			// Model an unrelated process creating an empty destination after
@@ -128,7 +131,7 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 			return renameDirectoryNoReplace(oldPath, newPath)
 		},
 	}
-	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 	if err == nil || !os.IsExist(err) {
 		t.Fatalf("Prepare error = %v, want atomic destination-exists failure", err)
 	}
@@ -136,7 +139,7 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 	if readErr != nil || len(entries) != 0 {
 		t.Fatalf("competing empty destination was changed: entries=%v err=%v", entries, readErr)
 	}
-	assertPrepareFailureLeavesNoArtifacts(t, destination)
+	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 }
 
 func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
