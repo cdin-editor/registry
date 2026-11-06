@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Add `manifest verify` and `manifest replay` CLI commands with stable machine-readable error codes, explicit host policy, offline/strict metadata modes and signal-driven cancellation/cleanup.
+
 - Bound the canonical JSON UTF-8 preflight for cyclic maps, slices and pointers; cyclic values now reach the encoder's normal error path instead of recursive validation.
 
 - Apply protected Windows workspace/lock DACLs for Owner Rights, LocalSystem and Administrators; verify ACE identities, rights and inheritance on native Windows.
@@ -47,6 +49,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Not yet implemented
 
 - Metadata/Git cache GC and eviction enforcement, including retained-Manifest pins and active-replay leases.
-- CLI Manifest verification/replay commands and update discovery.
+- Update discovery and related update/cache lifecycle operations.
 - Parent-directory fsync and uniform crash/power-loss durability guarantees across supported filesystems and operating systems.
 - Cache corruption/retention, update-versus-replay and performance/fuzz matrices.

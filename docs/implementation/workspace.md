@@ -104,3 +104,15 @@ persistence guarantees.
 On Windows, the destination lock and private staging directory receive protected DACLs before collection or document writes begin. The DACL grants full control only to the object owner (Owner Rights), LocalSystem and the local Administrators group. The staging directory's ACEs are inheritable by child files and directories, so collected sources and the published Manifest/Report retain the workspace boundary after the final same-volume rename. The lock file uses non-inheritable ACEs.
 
 If the native ACL cannot be applied, preparation fails closed and removes the Registry-owned lock/staging artifacts. This policy is intentionally tested with Windows security descriptors and ACEs; POSIX mode-bit assertions are not treated as Windows ACL evidence.
+
+
+## Persisted Manifest replay
+
+`workspace.Replay` is also exposed by `registry manifest replay`. The CLI
+reads a saved Manifest from a file or stdin, verifies it before metadata/Git
+access, requires an explicit allow-list for every recorded source host, and
+publishes only to a new destination. It does not load a Product Definition or
+invoke Resolver. Offline mode does not contact Catalog metadata; strict mode
+re-fetches the exact recorded Catalog Index and selected Release Metadata
+before source collection. Cancellation, source failures, metadata mismatch
+and destination collisions all use the normal stage/lock cleanup path.

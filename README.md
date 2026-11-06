@@ -53,6 +53,31 @@ Prepare and publish the selected component workspace:
 
 Every Catalog metadata host and source repository host must be explicitly allow-listed. Deployments must also enforce their own Git network egress policy. Registry never runs the collected component code.
 
+Verify a persisted Manifest (the digest is an optional detached receipt):
+
+```sh
+./build/registry manifest verify \
+  --input ./prepared/registry-manifest.json \
+  --sha256 <manifest-sha256>
+```
+
+Replay the exact recorded Git commits into a new Workspace without resolving
+current Catalog versions:
+
+```sh
+./build/registry manifest replay \
+  --input ./prepared/registry-manifest.json \
+  --output ./replayed \
+  --allow-host github.com
+```
+
+Replay does not contact Catalog metadata by default. Add
+`--verify-remote-metadata` and allow-list the Catalog metadata hosts to
+revalidate the exact Catalog Index and Release Metadata bytes recorded in the
+Manifest. Both commands emit JSON receipts to stdout; stable error codes,
+exit codes, cancellation and cleanup behavior are documented in
+[Manifest CLI operations](docs/implementation/cli.md).
+
 ## Development workflow
 
 The repository uses [Pipeline](https://github.com/m-mdy-m/pipeline) for build and CI tasks, [PSX](https://github.com/m-mdy-m/psx) for repository checks, and [GIX](https://github.com/m-mdy-m/gix) for branch flow.
