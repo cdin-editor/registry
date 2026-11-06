@@ -64,7 +64,7 @@ func buildReplayManifest(t *testing.T, resolution resolver.Result) ([]byte, stri
 	t.Helper()
 	collected := []collector.Source{{
 		ComponentID: "engine", Variant: "default", SourceUnitID: "source",
-		Revision: resolution.Graph.Components[0].SourceUnits[0].Revision,
+		Revision:      resolution.Graph.Components[0].SourceUnits[0].Revision,
 		WorkspacePath: "components/engine/default/sources/source",
 	}}
 	document, err := manifest.Build(resolution.Graph, collected, "1.2.3")
@@ -150,7 +150,7 @@ func TestReplayDoesNotConsultChangedCatalogWhenMetadataChecksAreOffline(t *testi
 	}}
 	destination := filepath.Join(t.TempDir(), "offline-replay")
 	replayed, err := Replay(context.Background(), encoded, digest, ReplayOptions{
-		Workspace: replayOptions(destination, repositoryURI, repository),
+		Workspace:       replayOptions(destination, repositoryURI, repository),
 		MetadataFetcher: fetcher,
 	})
 	if err != nil {
@@ -176,13 +176,13 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	releaseURI := "https://metadata.example.invalid/releases/engine-1.0.0.json"
 	releaseBytes, err := json.Marshal(catalog.Release{
 		SchemaVersion: "1.0.0",
-		ComponentID: "engine",
-		Variant: "default",
-		Version: "1.0.0",
-		Status: "active",
-		SourceUnits: resolution.Graph.Components[0].SourceUnits,
-		Dependencies: []catalog.Dependency{},
-		Contracts: resolution.Graph.Components[0].Contracts,
+		ComponentID:   "engine",
+		Variant:       "default",
+		Version:       "1.0.0",
+		Status:        "active",
+		SourceUnits:   resolution.Graph.Components[0].SourceUnits,
+		Dependencies:  []catalog.Dependency{},
+		Contracts:     resolution.Graph.Components[0].Contracts,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -211,8 +211,8 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	}}
 	destination := filepath.Join(t.TempDir(), "verified-replay")
 	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
-		Workspace: replayOptions(destination, repositoryURI, repository),
-		MetadataFetcher: fetcher,
+		Workspace:            replayOptions(destination, repositoryURI, repository),
+		MetadataFetcher:      fetcher,
 		VerifyRemoteMetadata: true,
 	}); err != nil {
 		t.Fatal(err)
@@ -236,8 +236,8 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	fetcher.calls = 0
 	rejectedDestination := filepath.Join(t.TempDir(), "changed-catalog")
 	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
-		Workspace: replayOptions(rejectedDestination, repositoryURI, repository),
-		MetadataFetcher: fetcher,
+		Workspace:            replayOptions(rejectedDestination, repositoryURI, repository),
+		MetadataFetcher:      fetcher,
 		VerifyRemoteMetadata: true,
 	}); err == nil {
 		t.Fatal("changed Catalog Index unexpectedly passed strict replay metadata verification")
