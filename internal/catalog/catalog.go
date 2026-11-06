@@ -171,8 +171,8 @@ type releaseMetadataSizeError struct {
 }
 
 // LoadOptions controls bounded Catalog metadata retrieval. Zero selects the
-// safe serial default during qualification. Values above the hard maximum are
-// rejected rather than silently clamped.
+// qualified four-worker default; callers may choose one to three workers.
+// Values above the hard maximum are rejected rather than silently clamped.
 type LoadOptions struct {
 	MaxConcurrentMetadataFetches int
 }
@@ -199,6 +199,10 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 // LoadWithOptions validates and loads a Catalog with an explicit bounded worker
 // count. A value of zero selects the qualified default (four workers). Values
 // above the hard maximum are rejected rather than silently clamped.
+// LoadWithOptions applies the fixed metadata-fetch ceiling while preserving
+// Catalog Index order and all-or-nothing publication (REG-004/005/019).
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#4-catalog-index-and-component-release-metadata
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/catalog-transport.md.
 func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Validator, options LoadOptions) (*Catalog, error) {
 	concurrency := options.MaxConcurrentMetadataFetches
 	if concurrency == 0 {

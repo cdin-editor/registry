@@ -296,8 +296,12 @@ func (c *GitObjectCache) BeginReplayLease(ctx context.Context, manifestBytes []b
 	return c.beginLease(ctx, keys)
 }
 
-// GarbageCollect evicts only unpinned, unleased bare repositories. It validates
-// the entire protection snapshot and cache inventory before deleting anything.
+// GarbageCollect evicts only unpinned, unleased bare repositories (REG-018/026).
+// It validates the protection snapshot and object inventory before deletion;
+// malformed or incomplete state fails closed.
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#6-source-collection-and-workspace
+// Trust boundary: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#8-security-and-trust-boundary
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/collector.md.
 func (c *GitObjectCache) GarbageCollect(ctx context.Context) (GitObjectCacheGCResult, error) {
 	if c == nil {
 		return GitObjectCacheGCResult{}, fmt.Errorf("collector: Git-object cache is not initialized")
