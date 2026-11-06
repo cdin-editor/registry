@@ -189,25 +189,25 @@ func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
 		"product_definition_sha256":   strings.Repeat("b", 64),
 		"current_catalogs": []any{
 			map[string]any{
-				"catalog_id":     "stable",
-				"metadata_uri":   "https://catalog.example.invalid/index.json",
+				"catalog_id":      "stable",
+				"metadata_uri":    "https://catalog.example.invalid/index.json",
 				"metadata_sha256": strings.Repeat("c", 64),
 			},
 		},
 		"current_resolution": json.RawMessage(resolution),
 		"decisions": []any{
 			map[string]any{
-				"component_id": "engine",
-				"variant": "default",
+				"component_id":    "engine",
+				"variant":      "default",
 				"historical": map[string]any{
-					"version": "1.0.0",
-					"metadata_uri": "https://metadata.example.invalid/engine-1.0.0.json",
+					"version":         "1.0.0",
+					"metadata_uri":    "https://metadata.example.invalid/engine-1.0.0.json",
 					"metadata_sha256": strings.Repeat("d", 64),
 				},
 				"historical_release_state": "active",
 				"current": map[string]any{
-					"version": "2.0.0",
-					"metadata_uri": "https://metadata.example.invalid/engine-2.0.0.json",
+					"version":         "2.0.0",
+					"metadata_uri":    "https://metadata.example.invalid/engine-2.0.0.json",
 					"metadata_sha256": strings.Repeat("e", 64),
 				},
 				"selection_reason_code": "UPDATE_AVAILABLE",
@@ -215,14 +215,14 @@ func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
 		},
 		"candidate_decisions": []any{
 			map[string]any{
-				"component_id": "engine",
-				"variant": "default",
-				"version": "2.0.0",
-				"catalog_id": "stable",
-				"metadata_uri": "https://metadata.example.invalid/engine-2.0.0.json",
+				"component_id":    "engine",
+				"variant":      "default",
+				"version":         "2.0.0",
+				"catalog_id":      "stable",
+				"metadata_uri":    "https://metadata.example.invalid/engine-2.0.0.json",
 				"metadata_sha256": strings.Repeat("e", 64),
-				"status": "active",
-				"reason_code": "SELECTED",
+				"status":          "active",
+				"reason_code":     "SELECTED",
 			},
 		},
 	}
@@ -262,18 +262,18 @@ func TestValidateUpdateDiscoveryReportAllowsNewlySelectedComponent(t *testing.T)
 		t.Fatal(err)
 	}
 	report := map[string]any{
-		"schema_version": "1.0.0",
-		"operation": "manifest.update-discovery",
-		"result": "changes_detected",
-		"historical_manifest_sha256": strings.Repeat("a", 64),
+		"schema_version":              "1.0.0",
+		"operation":                   "manifest.update-discovery",
+		"result":                      "changes_detected",
+		"historical_manifest_sha256":  strings.Repeat("a", 64),
 		"historical_registry_version": "1.2.3",
-		"product_definition_sha256": strings.Repeat("b", 64),
-		"current_catalogs": []any{},
-		"current_resolution": currentResolution,
+		"product_definition_sha256":   strings.Repeat("b", 64),
+		"current_catalogs":            []any{},
+		"current_resolution":          currentResolution,
 		"decisions": []any{
 			map[string]any{
 				"component_id": "new-engine",
-				"variant": "default",
+				"variant":      "default",
 				"historical": map[string]any{
 					"version": "",
 					"metadata_uri": "",
@@ -281,8 +281,8 @@ func TestValidateUpdateDiscoveryReportAllowsNewlySelectedComponent(t *testing.T)
 				},
 				"historical_release_state": "not_present",
 				"current": map[string]any{
-					"version": "1.0.0",
-					"metadata_uri": "https://metadata.example.invalid/new-engine-1.0.0.json",
+					"version":         "1.0.0",
+					"metadata_uri":    "https://metadata.example.invalid/new-engine-1.0.0.json",
 					"metadata_sha256": strings.Repeat("c", 64),
 				},
 				"selection_reason_code": "NEWLY_SELECTED",
