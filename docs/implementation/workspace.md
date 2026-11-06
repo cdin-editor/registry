@@ -105,7 +105,6 @@ On Windows, the destination lock and private staging directory receive protected
 
 If the native ACL cannot be applied, preparation fails closed and removes the Registry-owned lock/staging artifacts. This policy is intentionally tested with Windows security descriptors and ACEs; POSIX mode-bit assertions are not treated as Windows ACL evidence.
 
-
 ## Persisted Manifest replay
 
 `workspace.Replay` is also exposed by `registry manifest replay`. The CLI

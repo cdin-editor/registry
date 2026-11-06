@@ -25,12 +25,12 @@ type manifestCommandOptions struct {
 }
 
 type manifestVerifyReceipt struct {
-	Valid          bool   `json:"valid"`
-	SchemaVersion  string `json:"schema_version"`
+	Valid           bool   `json:"valid"`
+	SchemaVersion   string `json:"schema_version"`
 	RegistryVersion string `json:"registry_version"`
-	ManifestSHA256 string `json:"manifest_sha256"`
-	Components     int    `json:"components"`
-	SourceUnits    int    `json:"source_units"`
+	ManifestSHA256  string `json:"manifest_sha256"`
+	Components      int    `json:"components"`
+	SourceUnits     int    `json:"source_units"`
 }
 
 type manifestReplayReceipt struct {

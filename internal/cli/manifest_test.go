@@ -434,7 +434,6 @@ func TestManifestCLIUsageErrorsHaveStableExitCodeAndCode(t *testing.T) {
 	}
 }
 
-
 type cliCountingGitRunner struct {
 	delegate collector.GitRunner
 	calls    int

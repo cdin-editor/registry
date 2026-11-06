@@ -106,7 +106,6 @@ the original version constraints/report evidence are not embedded in the
 Resolved Manifest and were not re-evaluated. Replay does not execute collected
 component code or promise publisher authenticity, signatures or attestations.
 
-
 ## CLI integration
 
 The `registry manifest verify` command delegates to `manifest.Verify` and is
