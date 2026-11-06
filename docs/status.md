@@ -25,27 +25,27 @@ the previous develop run.
 
 ## Capability status
 
-| Capability | Verified implementation |
+|Capability|Verified implementation|
 |---|---|
-| Standalone module, CLI, package boundaries | Implemented; Pipeline governance and consumer-independence checks |
-| Public document schemas | Six Spec-owned schemas embedded and synchronized from the pinned Spec revision, including Update Discovery Report |
-| JSON/YAML input | Strict decoding; duplicate keys, trailing values, unsafe YAML forms and unsupported YAML document kinds rejected |
-| Catalog ingestion | Digest-before-parse, identity checks, deduplication, all-or-nothing loading and offline fixture coverage |
-| HTTPS metadata transport | Exact-host allow-list, redirect revalidation, DNS/public-address validation at dial time, bounded bodies/timeouts and safe error classes |
-| Metadata cache | URI+expected-digest identity, verify-before-use, Manifest pins, replay/fetch leases and fail-closed age/budget GC |
-| SemVer and constraints | SemVer 2.0.0 parsing/precedence and Registry contract constraint grammar |
-| Resolver | Deterministic transitive closure, backtracking, contract-provider matching, typed conflict evidence and fail-closed resource limits |
-| Git Collector | Full commit object identity, detached checkout, minimal environment, explicit credential provider, cancellation and source-tree validation |
-| Git-object cache | Full-ID content addressing, commit hash and reachable object-graph verification, corruption refetch, Manifest pins, replay leases and fail-closed GC |
-| Workspace | Private staging, failure-injection rollback, native atomic no-replace publication and platform-specific private permissions |
-| Manifest/Report | Typed models, schema validation, deterministic JCS-style bytes and detached SHA-256 |
-| Manifest verify/replay | Persisted Manifest verification and exact-commit replay without rerunning Resolver; byte-parity tested |
-| Update discovery | Separate schema-validated audit report; historical Manifest/Workspace remain immutable |
-| Catalog metadata concurrency | `Load` uses a fixed four-worker default (hard maximum four); callers may choose one to three workers; output/error processing remains Catalog Index ordered |
-| Fuzzing / race | Seeded fuzz smoke campaigns and `go test -race ./...` in the required Pipeline gate |
-| Performance / resource budgets | Benchmark smoke plus enforced Catalog, Resolver, source and cache budgets |
-| Native platform support | All Registry Go packages and Workspace integration run natively on Ubuntu, macOS and Windows |
-| Phase 9 end-to-end | Test drives Product Definition YAML through real schema validation, Catalog loading, Resolver, Prepare, Manifest Verify and byte-identical Replay using a temporary local Git repository |
+|Standalone module, CLI, package boundaries|Implemented; Pipeline governance and consumer-independence checks|
+|Public document schemas|Six Spec-owned schemas embedded and synchronized from the pinned Spec revision, including Update Discovery Report|
+|JSON/YAML input|Strict decoding; duplicate keys, trailing values, unsafe YAML forms and unsupported YAML document kinds rejected|
+|Catalog ingestion|Digest-before-parse, identity checks, deduplication, all-or-nothing loading and offline fixture coverage|
+|HTTPS metadata transport|Exact-host allow-list, redirect revalidation, DNS/public-address validation at dial time, bounded bodies/timeouts and safe error classes|
+|Metadata cache|URI+expected-digest identity, verify-before-use, Manifest pins, replay/fetch leases and fail-closed age/budget GC|
+|SemVer and constraints|SemVer 2.0.0 parsing/precedence and Registry contract constraint grammar|
+|Resolver|Deterministic transitive closure, backtracking, contract-provider matching, typed conflict evidence and fail-closed resource limits|
+|Git Collector|Full commit object identity, detached checkout, minimal environment, explicit credential provider, cancellation and source-tree validation|
+|Git-object cache|Full-ID content addressing, commit hash and reachable object-graph verification, corruption refetch, Manifest pins, replay leases and fail-closed GC|
+|Workspace|Private staging, failure-injection rollback, native atomic no-replace publication and platform-specific private permissions|
+|Manifest/Report|Typed models, schema validation, deterministic JCS-style bytes and detached SHA-256|
+|Manifest verify/replay|Persisted Manifest verification and exact-commit replay without rerunning Resolver; byte-parity tested|
+|Update discovery|Separate schema-validated audit report; historical Manifest/Workspace remain immutable|
+|Catalog metadata concurrency|`Load` uses a fixed four-worker default (hard maximum four); callers may choose one to three workers; output/error processing remains Catalog Index ordered|
+|Fuzzing / race|Seeded fuzz smoke campaigns and `go test -race ./...` in the required Pipeline gate|
+|Performance / resource budgets|Benchmark smoke plus enforced Catalog, Resolver, source and cache budgets|
+|Native platform support|All Registry Go packages and Workspace integration run natively on Ubuntu, macOS and Windows|
+|Phase 9 end-to-end|Test drives Product Definition YAML through real schema validation, Catalog loading, Resolver, Prepare, Manifest Verify and byte-identical Replay using a temporary local Git repository|
 
 ## Security and portability qualifications
 
