@@ -376,7 +376,6 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	return strings.ToLower(revision), nil
 }
 
-
 func collectOneWithGitCache(ctx context.Context, options Options, hooksDir string, repository, revision, subdirectory, target string) (string, error) {
 	revision = strings.ToLower(revision)
 	targetComplete := false
