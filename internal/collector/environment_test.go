@@ -238,3 +238,46 @@ func TestCopyWithContextStopsBetweenChunks(t *testing.T) {
 		t.Fatalf("copy wrote bytes after cancellation: %q", output.String())
 	}
 }
+
+
+func TestCommandGitCancellationKillsDescendantProcesses(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix process-group descendant fixture")
+	}
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skipf("shell unavailable: %v", err)
+	}
+	root := t.TempDir()
+	marker := filepath.Join(root, "orphan-child-ran")
+	script := filepath.Join(root, "git-wrapper")
+	body := "#!" + shell + "\n(sleep 1; printf child-survived > '" + marker + "') &\nwait\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	directory := t.TempDir()
+	finished := make(chan error, 1)
+	go func() {
+		_, runErr := (CommandGit{Binary: script}).Run(ctx, directory, nil, "fetch")
+		finished <- runErr
+	}()
+	select {
+	case runErr := <-finished:
+		t.Fatalf("Git wrapper exited before cancellation: %v", runErr)
+	case <-time.After(100 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case runErr := <-finished:
+		if !errors.Is(runErr, context.Canceled) {
+			t.Fatalf("CommandGit error = %v, want context.Canceled", runErr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("CommandGit did not terminate the Git process group after cancellation")
+	}
+	time.Sleep(1100 * time.Millisecond)
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("orphaned helper process survived cancellation: %v", err)
+	}
+}
