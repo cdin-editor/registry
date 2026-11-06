@@ -48,3 +48,8 @@ These checks establish deterministic serialization and canonical-byte handling; 
 ## Evidence
 
 Tests validate the constructed Manifest against the embedded Spec-owned schema, reject missing/extra source records, test UTF-16 key ordering, escaping and JCS numeric vectors, verify report array shape/order and prevent Manifest generation from a failed resolution.
+
+
+## JSON value graph safety
+
+The UTF-8 preflight tracks visited pointer, map and slice identities. Cyclic Go values are not traversed indefinitely; the subsequent JSON encoder returns its normal cycle error. This preserves the serializer's failure behavior while ensuring invalid UTF-8 is detected before the encoder can replace it.
