@@ -131,7 +131,6 @@ firewall; deployments remain responsible for Git network egress controls.
 SHA-256 detects byte changes relative to a trusted receipt but is not a
 signature, attestation or publisher-authenticity proof.
 
-
 ## Metadata cache retention and collection
 
 The metadata cache keeps the exact URI+expected-digest identity. Entries may

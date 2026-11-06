@@ -103,10 +103,11 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 	cacheDir := options.CacheDir
 	var metadataCache *MetadataCache
 	if cacheDir != "" {
-		metadataCache, err = NewMetadataCache(cacheDir)
+		createdCache, err := NewMetadataCache(cacheDir)
 		if err != nil {
 			return nil, err
 		}
+		metadataCache = createdCache
 		cacheDir = metadataCache.root
 	}
 	fetcher := &HTTPFetcher{
