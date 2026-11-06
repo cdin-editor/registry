@@ -266,7 +266,7 @@ def main() -> None:
     sub.add_parser("benchmark-smoke")
     sub.add_parser("boundaries")
     schema = sub.add_parser("schema-sync")
-    schema.add_argument("mode", choices=("--check", "--update"), nargs="?", default="--check")
+    schema.add_argument("mode", choices=("check", "update"), nargs="?", default="check")
     sub.add_parser("release-build")
     args = parser.parse_args()
     if args.command == "format":
@@ -278,7 +278,7 @@ def main() -> None:
     elif args.command == "boundaries":
         check_boundaries()
     elif args.command == "schema-sync":
-        sync_schemas(args.mode)
+        sync_schemas("--update" if args.mode == "update" else "--check")
     elif args.command == "release-build":
         release_build()
 
