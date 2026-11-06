@@ -14,22 +14,6 @@ import (
 	"github.com/cdin-editor/registry/internal/resolver"
 )
 
-type failNthFetchGit struct {
-	delegate collector.GitRunner
-	failAt   int
-	fetches  int
-}
-
-func (g *failNthFetchGit) Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
-	if len(args) > 0 && args[0] == "fetch" {
-		g.fetches++
-		if g.fetches == g.failAt {
-			return nil, errors.New("injected second-source fetch failure")
-		}
-	}
-	return g.delegate.Run(ctx, dir, env, args...)
-}
-
 func resolutionWithTwoSourceUnits(repository, revision string) resolver.Result {
 	result := successfulResolution(repository, revision)
 	component := &result.Graph.Components[0]
@@ -37,6 +21,7 @@ func resolutionWithTwoSourceUnits(repository, revision string) resolver.Result {
 		ID:            "source-two",
 		RepositoryURI: fileRepositoryURI(repository),
 		Revision:      revision,
+		Subdirectory:  "missing-source-subdirectory",
 	})
 	return result
 }
@@ -63,10 +48,7 @@ func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string) {
 func TestREG022FailureAfterFirstSourceUnitWasStaged(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
-	options := workspaceOptions(destination)
-	options.Git = &failNthFetchGit{delegate: collector.CommandGit{}, failAt: 2}
-
-	_, err := Prepare(context.Background(), resolutionWithTwoSourceUnits(repository, revision), options)
+	_, err := Prepare(context.Background(), resolutionWithTwoSourceUnits(repository, revision), workspaceOptions(destination))
 	if err == nil || !strings.Contains(err.Error(), "collect selected sources") {
 		t.Fatalf("Prepare error = %v, want second-source collection failure", err)
 	}
@@ -315,8 +297,13 @@ func TestREG022WorkspacePermissionsAndSymlinkedParent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.WorkspacePath != filepath.Join(realParent, "prepared") {
-		t.Fatalf("workspace path = %q, want canonical parent path %q", prepared.WorkspacePath, filepath.Join(realParent, "prepared"))
+	canonicalParent, err := filepath.EvalSymlinks(realParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantWorkspacePath := filepath.Join(canonicalParent, "prepared")
+	if prepared.WorkspacePath != wantWorkspacePath {
+		t.Fatalf("workspace path = %q, want canonical parent path %q", prepared.WorkspacePath, wantWorkspacePath)
 	}
 	for _, filename := range []string{manifestFilename, reportFilename} {
 		info, err := os.Stat(filepath.Join(prepared.WorkspacePath, filename))
@@ -335,7 +322,6 @@ func TestREG022WorkspacePermissionsAndSymlinkedParent(t *testing.T) {
 		t.Errorf("published workspace permissions = %o, want 700", rootInfo.Mode().Perm())
 	}
 }
-
 
 // TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths verifies
 // the full Workspace keeps separate logical paths when two selected variants
