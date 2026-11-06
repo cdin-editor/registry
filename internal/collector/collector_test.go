@@ -565,3 +565,42 @@ func TestREG026CollectorRedactsInjectedGitRunnerErrors(t *testing.T) {
 		}
 	}
 }
+
+
+type markerOutputGit struct {
+	marker string
+}
+
+func (g markerOutputGit) Run(_ context.Context, _ string, _ []string, args ...string) ([]byte, error) {
+	for _, arg := range args {
+		if arg == "rev-parse" {
+			return []byte(g.marker + "\n"), nil
+		}
+	}
+	return nil, nil
+}
+
+// TestREG026CollectorRedactsUntrustedGitStdout verifies that a successful
+// injected runner cannot put arbitrary stdout into commit-identity diagnostics.
+func TestREG026CollectorRedactsUntrustedGitStdout(t *testing.T) {
+	const marker = "collector-stdout-secret-18c4"
+	repository := "https://source.example.invalid/repository.git"
+	tempRoot := t.TempDir()
+	destination := filepath.Join(t.TempDir(), "prepared")
+	graph := graphForSources(strings.Repeat("a", 40), repository, catalog.SourceUnit{ID: "source"})
+	_, err := Collect(context.Background(), graph, destination, Options{
+		Git: markerOutputGit{marker: marker}, Policy: allowTestRepository{}, TempDir: tempRoot,
+	})
+	if err == nil || !strings.Contains(err.Error(), "declared commit identity mismatch") {
+		t.Fatalf("expected safe commit-identity failure, got %v", err)
+	}
+	if strings.Contains(err.Error(), marker) {
+		t.Fatalf("Collector diagnostic leaked untrusted Git stdout: %v", err)
+	}
+	for _, pattern := range []string{"registry-git-source-*", "registry-disabled-hooks-*"} {
+		matches, globErr := filepath.Glob(filepath.Join(tempRoot, pattern))
+		if globErr != nil || len(matches) != 0 {
+			t.Fatalf("temporary artifacts remain for %s: %v (%v)", pattern, matches, globErr)
+		}
+	}
+}
