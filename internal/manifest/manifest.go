@@ -26,6 +26,7 @@ import (
 	"io"
 	"math"
 	"net/url"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -300,6 +301,9 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 // MarshalCanonical emits RFC 8785 canonical JSON. Property names are ordered
 // by UTF-16 code units and numbers use ECMAScript-compatible binary64 formatting.
 func MarshalCanonical(value any) ([]byte, error) {
+	if err := validateJSONStrings(reflect.ValueOf(value)); err != nil {
+		return nil, err
+	}
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return nil, fmt.Errorf("manifest: encode JSON value: %w", err)
@@ -356,6 +360,7 @@ func ParseCanonicalStringOnly(input []byte) error {
 // CyclePath remains ordered because its sequence describes a graph walk.
 func MarshalReport(report resolver.Report) ([]byte, error) {
 	report.Selected = append([]resolver.SelectedCandidate{}, report.Selected...)
+	report.AppliedConstraints = append([]resolver.AppliedConstraint{}, report.AppliedConstraints...)
 	report.RejectedCandidates = append([]resolver.RejectedCandidate{}, report.RejectedCandidates...)
 	report.Conflicts = append([]resolver.Conflict{}, report.Conflicts...)
 	report.Warnings = append([]resolver.Warning{}, report.Warnings...)
@@ -368,6 +373,28 @@ func MarshalReport(report resolver.Report) ([]byte, error) {
 			return a.Variant < b.Variant
 		}
 		return a.Version < b.Version
+	})
+	sort.Slice(report.AppliedConstraints, func(i, j int) bool {
+		a, b := report.AppliedConstraints[i], report.AppliedConstraints[j]
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		if a.Variant != b.Variant {
+			return a.Variant < b.Variant
+		}
+		if a.VersionConstraint != b.VersionConstraint {
+			return a.VersionConstraint < b.VersionConstraint
+		}
+		if a.Source.Type != b.Source.Type {
+			return a.Source.Type < b.Source.Type
+		}
+		if a.Source.ComponentID != b.Source.ComponentID {
+			return a.Source.ComponentID < b.Source.ComponentID
+		}
+		if a.Source.Variant != b.Source.Variant {
+			return a.Source.Variant < b.Source.Variant
+		}
+		return a.Source.Version < b.Source.Version
 	})
 	sort.Slice(report.RejectedCandidates, func(i, j int) bool {
 		a, b := report.RejectedCandidates[i], report.RejectedCandidates[j]
@@ -406,6 +433,61 @@ func MarshalReport(report resolver.Report) ([]byte, error) {
 func Digest(canonical []byte) string {
 	sum := sha256.Sum256(canonical)
 	return hex.EncodeToString(sum[:])
+}
+
+// validateJSONStrings rejects invalid UTF-8 before encoding/json can replace it
+// with U+FFFD. JCS requires Unicode scalar strings and must preserve the
+// original code points without normalization or lossy replacement.
+func validateJSONStrings(value reflect.Value) error {
+	if !value.IsValid() {
+		return nil
+	}
+	switch value.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		if value.IsNil() {
+			return nil
+		}
+		return validateJSONStrings(value.Elem())
+	case reflect.String:
+		if !utf8.ValidString(value.String()) {
+			return fmt.Errorf("manifest: JSON string contains invalid UTF-8")
+		}
+	case reflect.Map:
+		if value.IsNil() {
+			return nil
+		}
+		iter := value.MapRange()
+		for iter.Next() {
+			key := iter.Key()
+			if key.Kind() == reflect.String && !utf8.ValidString(key.String()) {
+				return fmt.Errorf("manifest: JSON object key contains invalid UTF-8")
+			}
+			if err := validateJSONStrings(iter.Value()); err != nil {
+				return err
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		if value.Kind() == reflect.Slice && value.IsNil() {
+			return nil
+		}
+		for i := 0; i < value.Len(); i++ {
+			if err := validateJSONStrings(value.Index(i)); err != nil {
+				return err
+			}
+		}
+	case reflect.Struct:
+		typeOfValue := value.Type()
+		for i := 0; i < value.NumField(); i++ {
+			field := typeOfValue.Field(i)
+			if field.PkgPath != "" || field.Tag.Get("json") == "-" {
+				continue
+			}
+			if err := validateJSONStrings(value.Field(i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func appendCanonical(out *bytes.Buffer, value any) error {
