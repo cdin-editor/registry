@@ -142,15 +142,19 @@ func TestREG017CollectsMultipleDeclaredSourceUnits(t *testing.T) {
 // TestREG018RejectsNonObjectRevision confirms branch/tag names and abbreviations
 // fail before Git is invoked; only full 40/64-character object IDs are accepted.
 func TestREG018RejectsNonObjectRevision(t *testing.T) {
-	destination := filepath.Join(t.TempDir(), "prepared")
-	git := &recordingGit{}
-	graph := graphForSources("v1.0.0", "https://example.invalid/engine.git", catalog.SourceUnit{ID: "source"})
-	_, err := Collect(context.Background(), graph, destination, Options{Git: git, Policy: allowTestRepository{}})
-	if err == nil || !strings.Contains(err.Error(), "non-full Git object ID") {
-		t.Fatalf("expected immutable revision error, got %v", err)
-	}
-	if git.hooksDisabled {
-		t.Fatal("Git must not run for an invalid revision")
+	for _, revision := range []string{"main", "v1.0.0", "01234567", "0123456789abcdef0123456789abcdef0123456g"} {
+		t.Run(revision, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "prepared")
+			git := &recordingGit{}
+			graph := graphForSources(revision, "https://example.invalid/engine.git", catalog.SourceUnit{ID: "source"})
+			_, err := Collect(context.Background(), graph, destination, Options{Git: git, Policy: allowTestRepository{}})
+			if err == nil || !strings.Contains(err.Error(), "non-full Git object ID") {
+				t.Fatalf("expected immutable revision error, got %v", err)
+			}
+			if git.hooksDisabled {
+				t.Fatal("Git must not run for an invalid revision")
+			}
+		})
 	}
 }
 
@@ -200,6 +204,10 @@ func TestREG020RejectsSymlinkSourceTrees(t *testing.T) {
 	_, err = Collect(context.Background(), graph, destination, Options{Git: CommandGit{}, Policy: allowTestRepository{}})
 	if err == nil || !strings.Contains(err.Error(), "contains symlink") {
 		t.Fatalf("expected symlink rejection, got %v", err)
+	}
+	partialTarget := filepath.Join(destination, "components", "engine", "default", "sources", "source")
+	if _, partialErr := os.Lstat(partialTarget); !os.IsNotExist(partialErr) {
+		t.Fatalf("partial source tree remains after symlink rejection: %v", partialErr)
 	}
 	if _, statErr := os.Stat(outside); statErr != nil {
 		t.Fatalf("outside file should remain untouched: %v", statErr)
@@ -471,5 +479,58 @@ func TestREG026AmbientGlobalHooksAndFiltersAreIgnored(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("hostile global hook/filter executed: %v", err)
+	}
+}
+
+
+// TestREG026SubmodulesAreNotFetchedOrMaterialized keeps source collection
+// confined to the declared commit tree even when ambient Git config requests
+// recursive submodule checkout.
+func TestREG026SubmodulesAreNotFetchedOrMaterialized(t *testing.T) {
+	child, _ := initTestRepository(t, map[string]string{"child.txt": "must not be collected"})
+	parent, _ := initTestRepository(t, map[string]string{"parent.txt": "parent only"})
+	command := exec.Command("git", "-c", "protocol.file.allow=always", "-C", parent, "submodule", "add", child, "modules/child")
+	command.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Registry Test",
+		"GIT_AUTHOR_EMAIL=registry-test@example.invalid",
+		"GIT_COMMITTER_NAME=Registry Test",
+		"GIT_COMMITTER_EMAIL=registry-test@example.invalid",
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("create submodule fixture: %v: %s", err, output)
+	}
+	command = exec.Command("git", "-C", parent, "commit", "--quiet", "-m", "add submodule")
+	command.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Registry Test",
+		"GIT_AUTHOR_EMAIL=registry-test@example.invalid",
+		"GIT_COMMITTER_NAME=Registry Test",
+		"GIT_COMMITTER_EMAIL=registry-test@example.invalid",
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("commit submodule fixture: %v: %s", err, output)
+	}
+	command = exec.Command("git", "-C", parent, "rev-parse", "HEAD")
+	output, err := command.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := strings.TrimSpace(string(output))
+	globalConfig := filepath.Join(t.TempDir(), "submodule.gitconfig")
+	if err := os.WriteFile(globalConfig, []byte("[submodule]\n\trecurse = true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "0")
+	destination := filepath.Join(t.TempDir(), "prepared")
+	graph := graphForSources(revision, parent, catalog.SourceUnit{ID: "source"})
+	if _, err := Collect(context.Background(), graph, destination, Options{Git: CommandGit{}, Policy: allowTestRepository{}}); err != nil {
+		t.Fatal(err)
+	}
+	collectedRoot := filepath.Join(destination, "components", "engine", "default", "sources", "source")
+	if _, err := os.Stat(filepath.Join(collectedRoot, "parent.txt")); err != nil {
+		t.Fatalf("parent source is missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(collectedRoot, "modules", "child", "child.txt")); !os.IsNotExist(err) {
+		t.Fatalf("submodule content was fetched/materialized: %v", err)
 	}
 }
