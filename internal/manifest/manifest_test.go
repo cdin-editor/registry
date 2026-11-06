@@ -211,19 +211,18 @@ func TestREG025FailureCannotBuildManifest(t *testing.T) {
 	}
 }
 
-
 // TestREG024RFC8785PropertyOrderingVector uses the Unicode property-name
 // ordering vector published in RFC 8785 section 3.2.3. UTF-16 ordering differs
 // from Unicode scalar-value ordering for the supplementary emoji key.
 func TestREG024RFC8785PropertyOrderingVector(t *testing.T) {
 	input := map[string]any{
-		"\u20ac": "Euro Sign",
-		"\r": "Carriage Return",
-		"\ufb33": "Hebrew Letter Dalet With Dagesh",
-		"1": "One",
+		"\u20ac":     "Euro Sign",
+		"\r":         "Carriage Return",
+		"\ufb33":     "Hebrew Letter Dalet With Dagesh",
+		"1":          "One",
 		"\U0001F600": "Emoji: Grinning Face",
-		"\u0080": "Control",
-		"\u00f6": "Latin Small Letter O With Diaeresis",
+		"\u0080":     "Control",
+		"\u00f6":     "Latin Small Letter O With Diaeresis",
 	}
 	got, err := MarshalCanonical(input)
 	if err != nil {
