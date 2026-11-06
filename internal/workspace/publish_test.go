@@ -141,7 +141,7 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 	if readErr != nil || len(entries) != 0 {
 		t.Fatalf("competing empty destination was changed: entries=%v err=%v", entries, readErr)
 	}
-	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
+	assertPrepareFailureCleansOwnedArtifacts(t, destination, collectorTemp)
 }
 
 func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
