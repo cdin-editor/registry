@@ -57,8 +57,8 @@ func replayOptions(destination, repositoryURI, repositoryPath string) Options {
 func buildReplayManifest(t *testing.T, resolution resolver.Result) ([]byte, string) {
 	t.Helper()
 	collected := []collector.Source{{
-		ComponentID: "engine", Variant: "default", SourceUnitID: "source",
-		Revision: resolution.Graph.Components[0].SourceUnits[0].Revision,
+		ComponentID:   "engine", Variant: "default", SourceUnitID: "source",
+		Revision:      resolution.Graph.Components[0].SourceUnits[0].Revision,
 		WorkspacePath: "components/engine/default/sources/source",
 	}}
 	document, err := manifest.Build(resolution.Graph, collected, "1.2.3")
@@ -170,13 +170,13 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	releaseURI := "https://metadata.example.invalid/releases/engine-1.0.0.json"
 	releaseBytes, err := json.Marshal(catalog.Release{
 		SchemaVersion: "1.0.0",
-		ComponentID: "engine",
-		Variant: "default",
-		Version: "1.0.0",
-		Status: "active",
-		SourceUnits: resolution.Graph.Components[0].SourceUnits,
-		Dependencies: []catalog.Dependency{},
-		Contracts: resolution.Graph.Components[0].Contracts,
+		ComponentID:   "engine",
+		Variant:       "default",
+		Version:       "1.0.0",
+		Status:        "active",
+		SourceUnits:   resolution.Graph.Components[0].SourceUnits,
+		Dependencies:  []catalog.Dependency{},
+		Contracts:     resolution.Graph.Components[0].Contracts,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -184,8 +184,8 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	releaseDigest := manifest.Digest(releaseBytes)
 	indexBytes, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.0.0",
-		CatalogID: "stable",
-		Entries: []catalog.Entry{{
+		CatalogID:     "stable",
+		Entries:       []catalog.Entry{{
 			ComponentID: "engine", Variant: "default", Version: "1.0.0",
 			MetadataURI: releaseURI, MetadataSHA: releaseDigest,
 		}},
@@ -205,8 +205,8 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	}}
 	destination := filepath.Join(t.TempDir(), "verified-replay")
 	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
-		Workspace: replayOptions(destination, repositoryURI, repository),
-		MetadataFetcher: fetcher,
+		Workspace:            replayOptions(destination, repositoryURI, repository),
+		MetadataFetcher:      fetcher,
 		VerifyRemoteMetadata: true,
 	}); err != nil {
 		t.Fatal(err)
@@ -217,8 +217,8 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 
 	changedIndex, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.0.0",
-		CatalogID: "stable",
-		Entries: []catalog.Entry{
+		CatalogID:     "stable",
+		Entries:       []catalog.Entry{
 			{ComponentID: "engine", Variant: "default", Version: "1.0.0", MetadataURI: releaseURI, MetadataSHA: releaseDigest},
 			{ComponentID: "engine", Variant: "default", Version: "2.0.0", MetadataURI: "https://metadata.example.invalid/releases/engine-2.0.0.json", MetadataSHA: strings.Repeat("a", 64)},
 		},
@@ -230,8 +230,8 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	fetcher.calls = 0
 	rejectedDestination := filepath.Join(t.TempDir(), "changed-catalog")
 	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
-		Workspace: replayOptions(rejectedDestination, repositoryURI, repository),
-		MetadataFetcher: fetcher,
+		Workspace:            replayOptions(rejectedDestination, repositoryURI, repository),
+		MetadataFetcher:      fetcher,
 		VerifyRemoteMetadata: true,
 	}); err == nil {
 		t.Fatal("changed Catalog Index unexpectedly passed strict replay metadata verification")

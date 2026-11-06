@@ -70,7 +70,6 @@ Catalogs, fetch Git objects, select releases, collect source or write a
 Workspace. A successful verification is not a signature or publisher
 authenticity check.
 
-
 ## Manifest replay
 
 `workspace.Replay` first verifies the saved canonical Manifest and optional

@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/cdin-editor/registry/internal/catalog"
-	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/resolver"
 	"github.com/cdin-editor/registry/internal/semver"
@@ -115,8 +114,8 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		Catalogs:             make([]resolver.CatalogReference, 0, len(document.Catalogs)),
 		Roots:                make([]resolver.Requirement, 0, len(document.Roots)),
 		EnvironmentContracts: make([]resolver.EnvironmentContract, 0, len(document.EnvironmentContracts)),
-		Components:            make([]resolver.ResolvedComponent, 0, len(document.Components)),
-		ResolutionOrder:       append([]resolver.Node(nil), document.ResolutionOrder...),
+		Components:           make([]resolver.ResolvedComponent, 0, len(document.Components)),
+		ResolutionOrder:      append([]resolver.Node(nil), document.ResolutionOrder...),
 	}
 	for _, item := range document.Catalogs {
 		graph.Catalogs = append(graph.Catalogs, resolver.CatalogReference{
@@ -141,7 +140,7 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		AppliedConstraints: []resolver.AppliedConstraint{},
 		RejectedCandidates: []resolver.RejectedCandidate{},
 		Conflicts:          []resolver.Conflict{},
-		Warnings: []resolver.Warning{{
+		Warnings:           []resolver.Warning{{
 			Code:    "MANIFEST_REPLAY_PINNED",
 			Message: "Replayed the exact selected versions and source commits from the verified Manifest; version selection was not rerun.",
 		}},
@@ -159,7 +158,7 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		}
 		for _, source := range item.SourceUnits {
 			component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
-				ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+				ID:       source.SourceUnitID, RepositoryURI: source.RepositoryURI,
 				Revision: source.Revision, Subdirectory: source.Subdirectory,
 			})
 		}
@@ -168,14 +167,14 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 				ComponentID: dependency.ComponentID, Variant: dependency.Variant, Version: dependency.Version,
 			})
 			report.AppliedConstraints = append(report.AppliedConstraints, resolver.AppliedConstraint{
-				ComponentID: dependency.ComponentID,
-				Variant: dependency.Variant,
+				ComponentID:       dependency.ComponentID,
+				Variant:           dependency.Variant,
 				VersionConstraint: "=" + dependency.Version,
-				Source: resolver.ConstraintSource{
-					Type: resolver.ConstraintSourceDependency,
+				Source:            resolver.ConstraintSource{
+					Type:        resolver.ConstraintSourceDependency,
 					ComponentID: item.ComponentID,
-					Variant: item.Variant,
-					Version: item.Version,
+					Variant:     item.Variant,
+					Version:     item.Version,
 				},
 			})
 		}
@@ -186,10 +185,10 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 	}
 	for _, root := range document.Roots {
 		report.AppliedConstraints = append(report.AppliedConstraints, resolver.AppliedConstraint{
-			ComponentID: root.ComponentID,
-			Variant: root.Variant,
+			ComponentID:       root.ComponentID,
+			Variant:           root.Variant,
 			VersionConstraint: "=" + root.Version,
-			Source: resolver.ConstraintSource{Type: resolver.ConstraintSourceRoot},
+			Source:            resolver.ConstraintSource{Type: resolver.ConstraintSourceRoot},
 		})
 	}
 	return resolver.Result{Graph: graph, Report: report}, nil
