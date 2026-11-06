@@ -1,0 +1,67 @@
+name: Workspace native platforms
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "internal/workspace/**"
+      - "internal/collector/**"
+      - "pipeline.toml"
+      - ".github/workflows/workspace-platforms.yml"
+  pull_request:
+    paths:
+      - "internal/workspace/**"
+      - "internal/collector/**"
+      - "pipeline.toml"
+      - ".github/workflows/workspace-platforms.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workspace-platforms-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workspace:
+    name: Workspace integration (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.3"
+          cache: true
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Check out the pinned Pipeline task engine
+        uses: actions/checkout@v7
+        with:
+          repository: m-mdy-m/pipeline
+          ref: c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+          path: .pipeline
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run Workspace tests through Pipeline
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/.pipeline/src
+        run: |
+          set -euo pipefail
+          python -m pipeline.providers.github task workspace-native \
+            --root "$GITHUB_WORKSPACE" \
+            --config "$GITHUB_WORKSPACE/pipeline.toml" \
+            --json
