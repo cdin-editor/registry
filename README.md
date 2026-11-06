@@ -53,6 +53,23 @@ Prepare and publish the selected component workspace:
 
 Every Catalog metadata host and source repository host must be explicitly allow-listed. Deployments must also enforce their own Git network egress policy. Registry never runs the collected component code.
 
+Discover current updates against a previously prepared Manifest without changing that Manifest or its Workspace:
+
+```sh
+./build/registry manifest discover \
+  --input ./prepared/registry-manifest.json \
+  --product ./product-definition.yaml \
+  --catalog https://registry.example/catalog/index.json \
+  --allow-host registry.example \
+  --report ./update-discovery.json
+```
+
+Update discovery verifies the historical Manifest first, validates the current
+Product Definition and Catalog metadata, then uses the normal Resolver to
+produce a deterministic, schema-validated Update Discovery Report. It does not
+fetch Git sources, rewrite historical files or publish a Workspace. The report
+is written to stdout and optionally to a new file that is never overwritten.
+
 Verify a persisted Manifest (the digest is an optional detached receipt):
 
 ```sh
