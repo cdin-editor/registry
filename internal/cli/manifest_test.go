@@ -477,7 +477,6 @@ func TestManifestCLIInputReadFailureHasStableCode(t *testing.T) {
 	}
 }
 
-
 func TestManifestCLIReplayStrictMetadataFailureHasStableCode(t *testing.T) {
 	repository, revision := createCLIReplayRepository(t)
 	payload, digest, metadata := buildCLIReplayManifest(t, revision, true)
