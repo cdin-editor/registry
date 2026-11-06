@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -164,7 +166,7 @@ func TestREG019HTTPFetcherDigestCacheVerifiesBytesOnRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("cache entry permissions are too broad: %v", info.Mode().Perm())
 	}
 }
@@ -470,5 +472,75 @@ func TestREG019HTTPFetcherDialsTheExactValidatedIP(t *testing.T) {
 	want := []string{"tcp 1.1.1.1:443", "tcp 8.8.8.8:443"}
 	if strings.Join(dialed, "|") != strings.Join(want, "|") {
 		t.Fatalf("dialed addresses = %#v, want %#v", dialed, want)
+	}
+}
+
+func TestREG019HTTPFetcherConcurrentDigestCachePreservesIntegrity(t *testing.T) {
+	const workerCount = 16
+	const metadataURI = "https://catalog.example.invalid/concurrent.json"
+	const payload = "{\"schema_version\":\"1.0.0\",\"value\":\"immutable\"}"
+	cacheDir := t.TempDir()
+	var mu sync.Mutex
+	requests := 0
+	fetcher := testHTTPFetcher(t, func(*http.Request) (*http.Response, error) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		return httpResponse(http.StatusOK, payload, int64(len(payload))), nil
+	}, 1<<20, cacheDir)
+	digest := expectedDigest(payload)
+
+	fetchAll := func() {
+		t.Helper()
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		errs := make(chan error, workerCount)
+		workers.Add(workerCount)
+		for i := 0; i < workerCount; i++ {
+			go func() {
+				defer workers.Done()
+				<-start
+				data, err := fetcher.FetchWithDigest(context.Background(), metadataURI, digest)
+				if err != nil {
+					errs <- err
+					return
+				}
+				if string(data) != payload {
+					errs <- errors.New("concurrent FetchWithDigest returned bytes that differ from the expected payload")
+				}
+			}()
+		}
+		close(start)
+		workers.Wait()
+		close(errs)
+		for err := range errs {
+			t.Error(err)
+		}
+	}
+
+	fetchAll()
+	cachePath := fetcher.cachePath(metadataURI, digest)
+	if err := os.WriteFile(cachePath, []byte("corrupt-cache-entry"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fetchAll()
+
+	// A serial read after the concurrent corruption/refetch race must observe
+	// either the correct cached bytes or repair the cache before returning.
+	data, err := fetcher.FetchWithDigest(context.Background(), metadataURI, digest)
+	if err != nil {
+		t.Fatalf("FetchWithDigest after concurrent cache activity: %v", err)
+	}
+	if string(data) != payload {
+		t.Fatalf("post-race payload = %q, want %q", data, payload)
+	}
+	cached, ok := fetcher.readCache(cachePath, digest)
+	if !ok || string(cached) != payload {
+		t.Fatalf("final cache entry is not the verified payload: ok=%v bytes=%q", ok, cached)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests < 1 || requests > workerCount*2+1 {
+		t.Fatalf("network request count = %d, outside bounded worker waves", requests)
 	}
 }

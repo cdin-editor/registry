@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cdin-editor/registry/internal/privatedir"
 )
 
 const (
@@ -91,6 +93,9 @@ func newMetadataCacheWithPolicy(directory string, budget int64, maxAge time.Dura
 		if err := os.Chmod(path, 0o700); err != nil {
 			return nil, fmt.Errorf("catalog: secure metadata cache control directory: %w", err)
 		}
+	}
+	if err := privatedir.SecureTree(root); err != nil {
+		return nil, fmt.Errorf("catalog: secure metadata cache permissions: %w", err)
 	}
 	if budget <= 0 || maxAge <= 0 {
 		return nil, fmt.Errorf("catalog: metadata cache GC budget and age must be positive")

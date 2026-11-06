@@ -5,7 +5,12 @@ on:
     branches: ["**"]
     paths:
       - "internal/workspace/**"
+      - "internal/catalog/**"
       - "internal/collector/**"
+      - "internal/resolver/**"
+      - "internal/semver/**"
+      - "internal/validation/**"
+      - "internal/privatedir/**"
       - "internal/cli/**"
       - "cmd/registry/**"
       - "pipeline.toml"
@@ -13,7 +18,12 @@ on:
   pull_request:
     paths:
       - "internal/workspace/**"
+      - "internal/catalog/**"
       - "internal/collector/**"
+      - "internal/resolver/**"
+      - "internal/semver/**"
+      - "internal/validation/**"
+      - "internal/privatedir/**"
       - "internal/cli/**"
       - "cmd/registry/**"
       - "pipeline.toml"
@@ -70,8 +80,8 @@ jobs:
             --config "$GITHUB_WORKSPACE/pipeline.toml" \
             --json
 
-      - name: Build and test CLI packages on the native OS
+      - name: Build and test all Registry packages on the native OS
         shell: bash
         run: |
           set -euo pipefail
-          go test ./internal/cli/... ./cmd/registry/...
+          go test ./...

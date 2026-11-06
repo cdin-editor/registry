@@ -45,6 +45,18 @@ command = ["go", "build", "./..."]
 depends_on = ["deps"]
 timeout_seconds = 600
 
+[tasks.fuzz-smoke]
+description = "Run short bounded fuzz campaigns for parser, SemVer, Catalog, Resolver and path trust boundaries"
+command = ["bash", "scripts/fuzz-smoke.sh"]
+depends_on = ["deps"]
+timeout_seconds = 300
+
+[tasks.performance-smoke]
+description = "Measure one iteration of bounded Catalog, Resolver, source-copy and cache-GC benchmarks"
+command = ["bash", "scripts/benchmark-smoke.sh"]
+depends_on = ["deps"]
+timeout_seconds = 300
+
 [tasks.governance]
 description = "Validate repository templates, PSX policy and GIX topology with executable tests"
 command = ["go", "test", "./tests", "-run", "^TestRepositoryGovernance", "-count=1"]
@@ -81,7 +93,7 @@ timeout_seconds = 900
 [tasks.release-check]
 description = "Run the cross-platform release verification gate"
 command = ["git", "diff", "--check"]
-depends_on = ["modules", "format", "vet", "test", "governance", "gix-config", "build", "boundary", "schema-sync", "structure"]
+depends_on = ["modules", "format", "vet", "test", "fuzz-smoke", "performance-smoke", "governance", "gix-config", "build", "boundary", "schema-sync", "structure"]
 timeout_seconds = 900
 
 [tasks.check]
