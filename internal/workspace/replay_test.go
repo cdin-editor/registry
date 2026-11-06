@@ -348,7 +348,6 @@ func TestReplayRejectsInvalidManifestAndUnreplayableCommitsWithoutPublishing(t *
 	}
 }
 
-
 func TestReplayRejectsRemoteReleaseSourceIdentityMismatch(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	repositoryURI := "https://example.invalid/engine.git"
