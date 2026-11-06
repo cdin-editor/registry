@@ -255,10 +255,10 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 	}
 	rename := hooks.rename
 	if rename == nil {
-		rename = os.Rename
+		rename = renameDirectoryNoReplace
 	}
 	if err := rename(stage, destination); err != nil {
-		return Prepared{}, fmt.Errorf("workspace: publish complete workspace atomically: %w", err)
+		return Prepared{}, fmt.Errorf("workspace: publish complete workspace without replacing destination: %w", err)
 	}
 
 	return Prepared{
