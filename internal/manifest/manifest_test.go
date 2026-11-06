@@ -549,7 +549,6 @@ func reverseCollectorSources(values []collector.Source) {
 	}
 }
 
-
 // TestREG024CanonicalRejectsCyclicValues ensures the UTF-8 preflight does not
 // recurse indefinitely on values that json.Marshal must reject as cyclic.
 func TestREG024CanonicalRejectsCyclicValues(t *testing.T) {
@@ -557,6 +556,13 @@ func TestREG024CanonicalRejectsCyclicValues(t *testing.T) {
 	cyclicMap["self"] = cyclicMap
 	if _, err := MarshalCanonical(cyclicMap); err == nil {
 		t.Fatal("cyclic map unexpectedly passed canonical serialization")
+	}
+
+	var cyclicSlice []any
+	cyclicSlice = make([]any, 1)
+	cyclicSlice[0] = cyclicSlice
+	if _, err := MarshalCanonical(cyclicSlice); err == nil {
+		t.Fatal("cyclic slice unexpectedly passed canonical serialization")
 	}
 
 	type cyclicNode struct {
