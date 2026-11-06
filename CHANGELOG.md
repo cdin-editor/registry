@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Add `registry manifest discover`, a deterministic read-only audit operation that verifies historical Manifests before loading current Catalogs and emits a schema-validated Update Discovery Report bound to historical Manifest, Product Definition and Catalog digests. Record stable withdrawal and selection reasons without recollecting sources or mutating historical Workspaces.
+- Mirror Registry Data Contract 1.2.0 Update Discovery Report schema and validate its nested Resolution Report reference using the shared embedded-schema compiler.
+
 - Implement explicit metadata-cache Manifest pins, strict-replay/fetch leases and fail-closed age/budget garbage collection; expose `cache pin`, `cache unpin` and `cache gc`.
 - Add content-addressed Git-object caching keyed by full commit IDs, commit/object-graph verification before cache use, corruption refetch, Manifest pins, replay leases and age/budget garbage collection.
 
@@ -51,7 +54,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Not yet implemented
 
-- Update discovery and auditable retrieval/withdrawal decisions.
-- Update discovery and related update/cache lifecycle operations.
 - Parent-directory fsync and uniform crash/power-loss durability guarantees across supported filesystems and operating systems.
-- Full update-versus-replay, broader cache concurrency and performance/fuzz matrices.
+- Broader update-versus-replay/cache concurrency, bounded concurrency and performance/fuzz matrices.
