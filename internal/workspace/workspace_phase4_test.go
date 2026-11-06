@@ -26,7 +26,7 @@ func resolutionWithTwoSourceUnits(repository, revision string) resolver.Result {
 	return result
 }
 
-func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string) {
+func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string, collectorTempDirs ...string) {
 	t.Helper()
 	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
 		t.Fatalf("failed prepare left destination %q: %v", destination, err)
@@ -41,6 +41,24 @@ func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string) {
 	if _, err := os.Lstat(filepath.Join(filepath.Dir(destination), "."+filepath.Base(destination)+".registry.lock")); !os.IsNotExist(err) {
 		t.Fatalf("failed prepare leaked its lock: %v", err)
 	}
+	for _, tempDir := range collectorTempDirs {
+		entries, err := os.ReadDir(tempDir)
+		if err != nil {
+			t.Fatalf("inspect Collector temporary directory %q: %v", tempDir, err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("Collector leaked temporary Git clone or hook directories in %q: %v", tempDir, entries)
+		}
+	}
+}
+
+func newCollectorTempDir(t *testing.T) string {
+	t.Helper()
+	directory := filepath.Join(t.TempDir(), "collector-temp")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return directory
 }
 
 // TestREG022FailureAfterFirstSourceUnitWasStaged proves Collector rollback is
@@ -48,11 +66,14 @@ func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string) {
 func TestREG022FailureAfterFirstSourceUnitWasStaged(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
-	_, err := Prepare(context.Background(), resolutionWithTwoSourceUnits(repository, revision), workspaceOptions(destination))
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
+	_, err := Prepare(context.Background(), resolutionWithTwoSourceUnits(repository, revision), options)
 	if err == nil || !strings.Contains(err.Error(), "collect selected sources") {
 		t.Fatalf("Prepare error = %v, want second-source collection failure", err)
 	}
-	assertPrepareFailureLeavesNoArtifacts(t, destination)
+	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 }
 
 // TestREG022FailureAfterAllSourcesBeforeManifest covers the boundary after
@@ -60,6 +81,9 @@ func TestREG022FailureAfterFirstSourceUnitWasStaged(t *testing.T) {
 func TestREG022FailureAfterAllSourcesBeforeManifest(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
 	failure := errors.New("injected post-collection failure")
 	hooks := prepareHooks{
 		afterCollect: func(sources []collector.Source) error {
@@ -69,11 +93,11 @@ func TestREG022FailureAfterAllSourcesBeforeManifest(t *testing.T) {
 			return failure
 		},
 	}
-	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 	if !errors.Is(err, failure) {
 		t.Fatalf("Prepare error = %v, want injected post-collection failure", err)
 	}
-	assertPrepareFailureLeavesNoArtifacts(t, destination)
+	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 }
 
 type faultWorkspaceFile struct {
@@ -114,6 +138,9 @@ func TestREG022ManifestAndReportWriteAndSyncFailures(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			repository, revision := createSourceRepository(t)
 			destination := filepath.Join(t.TempDir(), "prepared")
+			collectorTemp := newCollectorTempDir(t)
+			options := workspaceOptions(destination)
+			options.TempDir = collectorTemp
 			hooks := prepareHooks{
 				openFile: func(path string, flag int, mode os.FileMode) (stagedFile, error) {
 					file, err := os.OpenFile(path, flag, mode)
@@ -124,11 +151,11 @@ func TestREG022ManifestAndReportWriteAndSyncFailures(t *testing.T) {
 					return &faultWorkspaceFile{File: file, failWrite: inject && testCase.failWrite, failSync: inject && testCase.failSync}, nil
 				},
 			}
-			_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+			_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 			if err == nil {
 				t.Fatal("Prepare unexpectedly succeeded with an injected document persistence failure")
 			}
-			assertPrepareFailureLeavesNoArtifacts(t, destination)
+			assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 		})
 	}
 }
@@ -160,16 +187,19 @@ func TestREG022CancellationAtWorkspaceBoundaries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			repository, revision := createSourceRepository(t)
 			destination := filepath.Join(t.TempDir(), "prepared")
+			collectorTemp := newCollectorTempDir(t)
+			options := workspaceOptions(destination)
+			options.TempDir = collectorTemp
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			hooks := prepareHooks{}
 			testCase.hook(&hooks, cancel)
 
-			_, err := prepare(ctx, successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+			_, err := prepare(ctx, successfulResolution(repository, revision), options, hooks)
 			if !errors.Is(err, context.Canceled) {
 				t.Fatalf("Prepare error = %v, want context.Canceled", err)
 			}
-			assertPrepareFailureLeavesNoArtifacts(t, destination)
+			assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 		})
 	}
 }
@@ -218,7 +248,7 @@ func TestREG022OwnedLockIsRemovedOnFailure(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(parent, ".prepared.registry.lock")); !os.IsNotExist(err) {
 		t.Fatalf("owned lock was not cleaned up: %v", err)
 	}
-	assertPrepareFailureLeavesNoArtifacts(t, destination)
+	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 }
 
 // TestREG022ConcurrentDestinationCreationIsNotOverwritten creates a competing
@@ -235,7 +265,7 @@ func TestREG022ConcurrentDestinationCreationIsNotOverwritten(t *testing.T) {
 			if err := os.WriteFile(sentinel, []byte("external"), 0o644); err != nil {
 				return err
 			}
-			return os.Rename(oldPath, newPath)
+			return renameDirectoryNoReplace(oldPath, newPath)
 		},
 	}
 	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
@@ -385,11 +415,14 @@ func TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths(t *tes
 func TestREG022FailureImmediatelyBeforeRename(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
 	failure := errors.New("injected pre-rename failure")
 	hooks := prepareHooks{
 		beforePublish: func() error { return failure },
 	}
-	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 	if !errors.Is(err, failure) {
 		t.Fatalf("Prepare error = %v, want injected pre-rename failure", err)
 	}
