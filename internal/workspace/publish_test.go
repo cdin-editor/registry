@@ -212,8 +212,7 @@ func TestREG022StagingSymlinkSwapBeforePublicationFailsClosed(t *testing.T) {
 			if err := os.Symlink(outside, stages[0]); err != nil {
 				return err
 			}
-			t.Cleanup(func() { _ = os.RemoveAll(movedStage) })
-			return nil
+			return os.RemoveAll(movedStage)
 		},
 	}
 	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
