@@ -309,7 +309,17 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	defer os.RemoveAll(repoDir)
 	run := func(args ...string) ([]byte, error) {
 		withConfig := []string{"-c", "core.hooksPath=" + hooksDir, "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
-		return options.Git.Run(ctx, repoDir, credentialEnv, append(withConfig, args...)...)
+		output, runErr := options.Git.Run(ctx, repoDir, credentialEnv, append(withConfig, args...)...)
+		if runErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			// GitRunner is an injected trust boundary. Its errors may contain
+			// remote stderr, repository URIs or credential values; do not wrap
+			// arbitrary text into Collector diagnostics (REG-026).
+			return nil, errors.New("collector: Git command failed")
+		}
+		return output, nil
 	}
 	initArgs := []string{"init", "--quiet"}
 	if len(revision) == 64 {
