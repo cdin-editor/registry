@@ -193,7 +193,10 @@ def sync_schemas(mode: str) -> None:
             )
             downloaded = temp / name
             fetch_schema(url, downloaded)
-            run([sys.executable, "-m", "json.tool", str(downloaded)])
+            subprocess.run(
+                [sys.executable, "-m", "json.tool", str(downloaded)],
+                cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
+            )
             if mode == "--update":
                 shutil.copyfile(downloaded, destination / name)
                 shutil.copyfile(downloaded, embedded / name)
