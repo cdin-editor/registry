@@ -3,8 +3,10 @@ package workspace
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -176,5 +178,51 @@ func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("existing destination symlink was incorrectly treated as absent: %v", err)
+	}
+}
+
+
+func TestREG022StagingSymlinkSwapBeforePublicationFailsClosed(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	parent := t.TempDir()
+	destination := filepath.Join(parent, "prepared")
+	outside := filepath.Join(t.TempDir(), "outside")
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
+	if err := os.Mkdir(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "sentinel"), []byte("external"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var movedStage string
+	hooks := prepareHooks{
+		beforePublish: func() error {
+			stages, err := filepath.Glob(filepath.Join(parent, ".prepared.registry-stage-*"))
+			if err != nil {
+				return err
+			}
+			if len(stages) != 1 {
+				return fmt.Errorf("staging entries = %v, want exactly one", stages)
+			}
+			movedStage = stages[0] + ".moved"
+			if err := os.Rename(stages[0], movedStage); err != nil {
+				return err
+			}
+			return os.Symlink(outside, stages[0])
+		},
+	}
+	if movedStage != "" {
+		t.Cleanup(func() { _ = os.RemoveAll(movedStage) })
+	}
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
+	if err == nil || !strings.Contains(err.Error(), "staging directory changed") {
+		t.Fatalf("Prepare error = %v, want fail-closed staging symlink rejection", err)
+	}
+	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
+	content, readErr := os.ReadFile(filepath.Join(outside, "sentinel"))
+	if readErr != nil || string(content) != "external" {
+		t.Fatalf("external symlink target changed: content=%q err=%v", content, readErr)
 	}
 }
