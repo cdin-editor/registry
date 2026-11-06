@@ -436,5 +436,5 @@ func TestREG022FailureImmediatelyBeforeRename(t *testing.T) {
 	if !errors.Is(err, failure) {
 		t.Fatalf("Prepare error = %v, want injected pre-rename failure", err)
 	}
-	assertPrepareFailureLeavesNoArtifacts(t, destination)
+	assertPrepareFailureLeavesNoArtifacts(t, destination, collectorTemp)
 }
