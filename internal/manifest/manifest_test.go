@@ -347,9 +347,9 @@ func TestREG024ReportGoldenBytesAndDetachedDigest(t *testing.T) {
 		SchemaVersion: "1.1.0",
 		Result:        "success",
 		Selected: []resolver.SelectedCandidate{{
-			ComponentID:        "engine",
-			Variant:            "default",
-			Version:            "1.0.0",
+			ComponentID: "engine",
+			Variant:     "default",
+			Version:     "1.0.0",
 		}},
 		AppliedConstraints: []resolver.AppliedConstraint{{
 			ComponentID:       "engine",
