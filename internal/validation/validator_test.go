@@ -197,8 +197,8 @@ func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
 		"current_resolution": json.RawMessage(resolution),
 		"decisions": []any{
 			map[string]any{
-				"component_id":    "engine",
-				"variant":      "default",
+				"component_id": "engine",
+				"variant":         "default",
 				"historical": map[string]any{
 					"version":         "1.0.0",
 					"metadata_uri":    "https://metadata.example.invalid/engine-1.0.0.json",
@@ -216,7 +216,7 @@ func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
 		"candidate_decisions": []any{
 			map[string]any{
 				"component_id":    "engine",
-				"variant":      "default",
+				"variant":         "default",
 				"version":         "2.0.0",
 				"catalog_id":      "stable",
 				"metadata_uri":    "https://metadata.example.invalid/engine-2.0.0.json",
@@ -275,8 +275,8 @@ func TestValidateUpdateDiscoveryReportAllowsNewlySelectedComponent(t *testing.T)
 				"component_id": "new-engine",
 				"variant":      "default",
 				"historical": map[string]any{
-					"version": "",
-					"metadata_uri": "",
+					"version":         "",
+					"metadata_uri":    "",
 					"metadata_sha256": "",
 				},
 				"historical_release_state": "not_present",
