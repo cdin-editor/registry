@@ -13,18 +13,18 @@ import (
 const updateReportSchemaVersion = "1.0.0"
 
 const (
-	UpdateResultNoChanges       = "no_changes"
-	UpdateResultChangesDetected = "changes_detected"
+	UpdateResultNoChanges        = "no_changes"
+	UpdateResultChangesDetected  = "changes_detected"
 	UpdateResultResolutionFailed = "resolution_failed"
 
-	UpdateReasonUnchanged                  = "UNCHANGED"
-	UpdateReasonUpdateAvailable             = "UPDATE_AVAILABLE"
-	UpdateReasonSelectionChanged            = "SELECTION_CHANGED"
-	UpdateReasonReleaseIdentityChanged      = "RELEASE_IDENTITY_CHANGED"
-	UpdateReasonHistoricalWithdrawn         = "HISTORICAL_RELEASE_WITHDRAWN"
-	UpdateReasonHistoricalUnavailable       = "HISTORICAL_RELEASE_UNAVAILABLE"
-	UpdateReasonHistoricalIdentityChanged   = "HISTORICAL_RELEASE_IDENTITY_CHANGED"
-	UpdateReasonComponentRemoved            = "COMPONENT_REMOVED_FROM_RESOLUTION"
+	UpdateReasonUnchanged                 = "UNCHANGED"
+	UpdateReasonUpdateAvailable           = "UPDATE_AVAILABLE"
+	UpdateReasonSelectionChanged          = "SELECTION_CHANGED"
+	UpdateReasonReleaseIdentityChanged    = "RELEASE_IDENTITY_CHANGED"
+	UpdateReasonHistoricalWithdrawn       = "HISTORICAL_RELEASE_WITHDRAWN"
+	UpdateReasonHistoricalUnavailable     = "HISTORICAL_RELEASE_UNAVAILABLE"
+	UpdateReasonHistoricalIdentityChanged = "HISTORICAL_RELEASE_IDENTITY_CHANGED"
+	UpdateReasonComponentRemoved          = "COMPONENT_REMOVED_FROM_RESOLUTION"
 	UpdateReasonResolutionFailed          = "CURRENT_RESOLUTION_FAILED"
 	UpdateReasonNewlySelected               = "NEWLY_SELECTED"
 
