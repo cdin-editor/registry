@@ -43,6 +43,7 @@ schemas=(
   component-release.schema.json
   resolved-manifest.schema.json
   resolution-report.schema.json
+  update-discovery-report.schema.json
 )
 
 for name in "${schemas[@]}"; do
