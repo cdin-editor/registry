@@ -190,7 +190,7 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	releaseDigest := manifest.Digest(releaseBytes)
 	indexBytes, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.0.0",
-		CatalogID: "stable",
+		CatalogID:     "stable",
 		Entries: []catalog.Entry{{
 			ComponentID: "engine", Variant: "default", Version: "1.0.0",
 			MetadataURI: releaseURI, MetadataSHA: releaseDigest,
@@ -223,7 +223,7 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 
 	changedIndex, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.0.0",
-		CatalogID: "stable",
+		CatalogID:     "stable",
 		Entries: []catalog.Entry{
 			{ComponentID: "engine", Variant: "default", Version: "1.0.0", MetadataURI: releaseURI, MetadataSHA: releaseDigest},
 			{ComponentID: "engine", Variant: "default", Version: "2.0.0", MetadataURI: "https://metadata.example.invalid/releases/engine-2.0.0.json", MetadataSHA: strings.Repeat("a", 64)},
