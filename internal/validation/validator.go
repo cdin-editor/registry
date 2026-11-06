@@ -18,6 +18,13 @@ type Validator struct {
 
 func New() (*Validator, error) {
 	validator := &Validator{compiled: make(map[Kind]*jsonschema.Schema, len(allKinds))}
+	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat()
+
+	// Register every Spec-owned schema before compiling any of them. This lets
+	// public documents reuse other versioned contracts through absolute $ref
+	// identifiers without fetching schemas over the network.
+	schemaIDs := make(map[Kind]string, len(allKinds))
 	for _, kind := range allKinds {
 		name := "registry/v1/" + string(kind) + ".schema.json"
 		data, err := schemas.FS.ReadFile(name)
@@ -39,18 +46,20 @@ func New() (*Validator, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse schema %s: %w", name, err)
 		}
-		compiler := jsonschema.NewCompiler()
-		compiler.AssertFormat()
 		if err := compiler.AddResource(metadata.ID, document); err != nil {
 			return nil, fmt.Errorf("register schema %s: %w", name, err)
 		}
-		compiled, err := compiler.Compile(metadata.ID)
+		schemaIDs[kind] = metadata.ID
+	}
+
+	for _, kind := range allKinds {
+		compiled, err := compiler.Compile(schemaIDs[kind])
 		if err != nil {
-			return nil, fmt.Errorf("compile schema %s: %w", name, err)
+			return nil, fmt.Errorf("compile schema %s: %w", kind, err)
 		}
 		validator.compiled[kind] = compiled
 	}
-	return validator, nil
+	return validator, nil;
 }
 
 // Validate checks strict JSON/YAML syntax and the Spec-owned schema for one
