@@ -144,10 +144,36 @@ func TestReplayDoesNotConsultChangedCatalogWhenMetadataChecksAreOffline(t *testi
 	resolution := replayResolution(repository, repositoryURI, revision)
 	encoded, digest := buildReplayManifest(t, resolution)
 
-	changedCatalog := []byte(`{"schema_version":"1.0.0","catalog_id":"stable","entries":[]}`)
+	changedCatalog, err := json.Marshal(catalog.Index{
+		SchemaVersion: "1.0.0",
+		CatalogID:     "stable",
+		Entries: []catalog.Entry{{
+			ComponentID: "engine", Variant: "default", Version: "2.0.0",
+			MetadataURI: "https://metadata.example.invalid/releases/engine-2.0.0.json",
+			MetadataSHA: strings.Repeat("a", 64),
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	fetcher := &replayFixtureFetcher{payloads: map[string][]byte{
 		resolution.Graph.Catalogs[0].MetadataURI: changedCatalog,
 	}}
+	preparedDestination := filepath.Join(t.TempDir(), "already-prepared")
+	prepared, err := Prepare(context.Background(), resolution, replayOptions(preparedDestination, repositoryURI, repository))
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparedManifestBefore, err := os.ReadFile(prepared.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparedSourcePath := filepath.Join(prepared.WorkspacePath, "components", "engine", "default", "sources", "source", "engine.c")
+	preparedSourceBefore, err := os.ReadFile(preparedSourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	destination := filepath.Join(t.TempDir(), "offline-replay")
 	replayed, err := Replay(context.Background(), encoded, digest, ReplayOptions{
 		Workspace:       replayOptions(destination, repositoryURI, repository),
@@ -165,6 +191,23 @@ func TestReplayDoesNotConsultChangedCatalogWhenMetadataChecksAreOffline(t *testi
 	}
 	if string(got) != string(encoded) {
 		t.Fatal("changed Catalog state altered the persisted Manifest during offline replay")
+	}
+	if prepared.ManifestSHA256 != digest || string(preparedManifestBefore) != string(encoded) {
+		t.Fatal("pre-existing Workspace does not contain the expected Manifest before replay")
+	}
+	preparedManifestAfter, err := os.ReadFile(prepared.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparedSourceAfter, err := os.ReadFile(preparedSourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(preparedManifestAfter) != string(preparedManifestBefore) {
+		t.Fatal("offline replay or changed Catalog mutated the pre-existing Manifest")
+	}
+	if string(preparedSourceAfter) != string(preparedSourceBefore) {
+		t.Fatal("offline replay or changed Catalog mutated the pre-existing Workspace source")
 	}
 }
 
