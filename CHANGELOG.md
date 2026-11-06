@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Publish prepared Workspaces through OS-native atomic no-replace directory rename on Linux, macOS and Windows; fail closed on unsupported operating systems.
+- Add empty-destination race, destination-symlink, staging-symlink swap and simultaneous-publisher tests. Assert temporary Git clone and disabled-hook cleanup across injected Workspace failures.
+
 - Define metadata-cache retention and eviction policy without changing immutable URI+expected-digest cache identity or verify-before-use behavior.
 - Add Workspace failure injection for multi-source rollback, Manifest/Report write and sync faults, cancellation, lock contention/stale-lock handling and competing destination creation.
 - Add end-to-end Workspace coverage for shared repositories across components/variants and multiple source units, plus native Linux/macOS/Windows test jobs.
