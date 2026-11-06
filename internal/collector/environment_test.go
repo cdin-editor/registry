@@ -165,9 +165,10 @@ func TestCommandGitCancellationTerminatesChildProcess(t *testing.T) {
 		t.Skipf("sleep executable unavailable: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	directory := t.TempDir()
 	finished := make(chan error, 1)
 	go func() {
-		_, runErr := (CommandGit{Binary: binary}).Run(ctx, t.TempDir(), nil, "30")
+		_, runErr := (CommandGit{Binary: binary}).Run(ctx, directory, nil, "30")
 		finished <- runErr
 	}()
 	select {
