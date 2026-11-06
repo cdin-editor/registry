@@ -95,7 +95,12 @@ func TestGitProcessEnvironmentAcceptsOnlyExplicitCredentialBoundary(t *testing.T
 		t.Fatalf("valid explicit credential environment rejected: %v", err)
 	}
 	joined := strings.Join(got, "\n")
-	for _, expected := range append([]string{"PATH=/usr/bin", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_ASKPASS="+askpass, "GIT_ASKPASS_REQUIRE=force", "REGISTRY_GIT_CREDENTIAL_TOKEN=opaque-secret"}, "GIT_CONFIG_GLOBAL="+os.DevNull) {
+	expectedValues := []string{
+		"PATH=/usr/bin", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1",
+		"GIT_ASKPASS=" + askpass, "GIT_ASKPASS_REQUIRE=force",
+		"REGISTRY_GIT_CREDENTIAL_TOKEN=opaque-secret", "GIT_CONFIG_GLOBAL=" + os.DevNull,
+	}
+	for _, expected := range expectedValues {
 		if !strings.Contains(joined, expected) {
 			t.Errorf("process environment omitted %q: %s", expected, joined)
 		}
