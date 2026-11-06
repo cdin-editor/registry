@@ -35,6 +35,16 @@ A missing source or missing provenance fails closed: the function returns no Doc
 
 Set-like arrays in Manifest and Report are sorted by documented identity keys. Topological `resolution_order` and cycle paths preserve their semantic order. Detached SHA-256 is computed over canonical bytes and is not embedded in the document it hashes.
 
+## Deterministic evidence and Unicode handling
+
+`MarshalReport` sorts every top-level set-like report collection, including applied constraints by component, variant, constraint and source identity. It preserves graph sequences whose order is semantic.
+
+`MarshalCanonical` rejects invalid UTF-8 before Go's JSON encoder can replace invalid byte sequences. Canonicalization does not normalize Unicode. The persisted-input parser rejects unpaired surrogate escapes because their decoded replacement character cannot reproduce the supplied canonical bytes.
+
+Golden tests pin complete Manifest and Report bytes plus detached SHA-256 digests. They repeat serialization and permute equivalent Catalog, root, component, source-unit, dependency, contract and report inputs. RFC 8785 tests cover the section 3.2.3 UTF-16 property-order vector and Appendix B IEEE-754 bit-pattern examples, including subnormals, negative zero, exponent thresholds and non-finite values.
+
+These checks establish deterministic serialization and canonical-byte handling; they do not verify an external detached digest, prove authenticity, or implement Manifest verification/replay.
+
 ## Evidence
 
 Tests validate the constructed Manifest against the embedded Spec-owned schema, reject missing/extra source records, test UTF-16 key ordering, escaping and JCS numeric vectors, verify report array shape/order and prevent Manifest generation from a failed resolution.
