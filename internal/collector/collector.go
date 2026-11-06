@@ -73,6 +73,7 @@ func (g CommandGit) Run(ctx context.Context, dir string, env []string, args ...s
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = dir
+	configureGitProcess(cmd)
 	cmd.Env = processEnv
 	output, err := cmd.CombinedOutput()
 	if err != nil {
