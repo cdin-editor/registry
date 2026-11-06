@@ -48,3 +48,25 @@ These checks establish deterministic serialization and canonical-byte handling; 
 ## Evidence
 
 Tests validate the constructed Manifest against the embedded Spec-owned schema, reject missing/extra source records, test UTF-16 key ordering, escaping and JCS numeric vectors, verify report array shape/order and prevent Manifest generation from a failed resolution.
+
+
+## Manifest verification
+
+`Verify` validates a persisted Manifest as a complete public document, not
+merely as canonical JSON. It checks the exact canonical byte representation,
+the embedded Spec-owned Resolved Manifest schema, the supported Manifest and
+Registry versions, and the semantic relationships needed for reproducibility:
+unique and strictly ordered identities, Catalog/release metadata URI and
+lowercase SHA-256 provenance, full lowercase Git object IDs, HTTPS repository
+URIs without embedded credentials, canonical confined workspace paths,
+root-to-release identity, selected dependency identity, and dependency-first
+resolution order.
+
+The detached SHA-256 argument is optional because the digest is stored outside
+the document. When supplied, it must be lowercase hexadecimal SHA-256 and must
+match the exact canonical input bytes. Omitting it does not skip canonical,
+schema or provenance validation; it only means no external digest comparison
+was requested. Verification is local and read-only: it does not contact
+Catalogs, fetch Git objects, select releases, collect source or write a
+Workspace. A successful verification is not a signature or publisher
+authenticity check.
