@@ -28,6 +28,32 @@ An exact hostname allow-list and IP checks reduce SSRF exposure, but they do not
 - Transport and response-body failures are reported using safe classifications. Arbitrary RoundTripper, DNS, socket and server-controlled error text is discarded because it may echo URLs, userinfo, tokens or other secret material. Local cancellation, timeout and redirect-policy failures remain distinguishable.
 - Git source retrieval is likewise public-only today. `CommandGit` receives an allow-listed process environment and does not inherit ambient credential helpers, askpass programs, SSH agent state or proxy settings. See [Collector design](collector.md).
 
+## Bounded Catalog metadata loading
+
+Catalog Index admission is bounded before schema parsing to 8 MiB and 4,096
+entries. A single Release Metadata document is limited to 8 MiB and the
+aggregate payload budget for one Catalog is 256 MiB. These are implementation
+resource limits, not public schema fields.
+
+The qualified default worker pool runs at most four Release Metadata fetches
+concurrently. The `Load` entry point uses four workers by default;
+`LoadWithOptions` can request a lower count from one to four. This default was
+enabled after cancellation, cleanup, deterministic ordering, cache-integrity,
+race-detector and native Linux/macOS/Windows tests passed. The worker pool has a
+fixed size; it does not create one goroutine per Index entry. Fetch completion
+may be out of order, but digest checks, schema validation, identity checks,
+duplicate handling and final Release ordering occur in original Index order.
+The Validator therefore remains serial and no Catalog output depends on
+network completion timing.
+
+The first cancellation or index-ordered fetch/processing failure cancels the
+worker context, closes the job stream and joins all started workers before
+returning. `Load` returns no Catalog on any error. Injected `Fetcher`
+implementations must be safe for concurrent calls and must honor context
+cancellation. Tests assert the maximum in-flight count, cancellation cleanup,
+out-of-order completion with stable Release ordering and failure without
+partial Catalog publication.
+
 ## Digest-bound cache
 
 `HTTPFetcher.FetchWithDigest` keys a cache entry by SHA-256 of the immutable metadata URI plus the declared expected SHA-256. A cache hit is used only if the file is a regular non-symlink file, is within the configured size bound and its actual bytes hash to the expected digest. Corrupt entries are removed and fetched again.
@@ -106,6 +132,8 @@ every read is still re-hashed before use and corruption triggers refetch.
 - Redirect-limit exhaustion and unsafe redirect targets.
 - Mixed public/prohibited DNS answers and proof that the checked IP is the dialed IP.
 - Authorization/cookie/proxy absence and remote-error redaction.
+- Bounded concurrent release metadata fetches (maximum four), cancellation/join behavior, stable index-order validation and no partial Catalog return.
+- Catalog Index (8 MiB/4,096 entries), per-document (8 MiB) and aggregate metadata (256 MiB) admission/resource limits.
 - Age/budget eviction order, explicit Manifest pins, active replay leases,
   maintenance contention and malformed-reference fail-closed behavior.
 

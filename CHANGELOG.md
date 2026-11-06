@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Enable the qualified four-worker Catalog metadata fetch pool by default after native Linux/macOS/Windows, race, cancellation/join, deterministic-order and cache-integrity verification; retain `LoadOptions` for callers that need a lower worker count.
+- Enforce platform-native private cache permissions: Unix `0700`/`0600` modes and protected Windows DACLs limited to the current user, Local System and Administrators; document the caller-selected parent-directory trust boundary.
+- Bound Resolver dependency/contract/source declarations to 65,536 in addition to existing candidate, graph-node and search-state limits.
+- Bound Catalog Release Metadata retrieval to four concurrent requests while preserving index-order validation/output and all-or-nothing failure; add cancellation joining, 8 MiB/4,096-entry/256 MiB Catalog budgets and explicit no-partial-result tests.
+- Bound Resolver input to 16,384 Catalog candidates, 1,024 roots/transitive components and 100,000 search states; reject resource exhaustion with `RESOLUTION_LIMIT` and no partial Graph.
+- Add seeded fuzz targets and required bounded fuzz smoke campaigns for JSON/YAML, SemVer/constraints, Catalog loading, Resolver graph construction and source-path validation.
+- Add large Catalog, wide/deep/backtracking Resolver, source-tree copy and metadata/Git cache GC benchmarks.
+- Expand native Ubuntu/macOS/Windows CI to run every Registry Go package when Catalog, Resolver, validation, Collector or Workspace code changes.
 - Add `registry manifest discover`, a deterministic read-only audit operation that verifies historical Manifests before loading current Catalogs and emits a schema-validated Update Discovery Report bound to historical Manifest, Product Definition and Catalog digests. Record stable withdrawal and selection reasons without recollecting sources or mutating historical Workspaces.
 - Mirror Registry Data Contract 1.2.0 Update Discovery Report schema and validate its nested Resolution Report reference using the shared embedded-schema compiler.
 

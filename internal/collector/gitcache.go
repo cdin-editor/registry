@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cdin-editor/registry/internal/privatedir"
 )
 
 const (
@@ -106,6 +108,9 @@ func newGitObjectCacheWithPolicy(directory string, budget int64, maxAge time.Dur
 			return nil, fmt.Errorf("collector: secure Git-object cache directory: %w", err)
 		}
 	}
+	if err := privatedir.SecureTree(root); err != nil {
+		return nil, fmt.Errorf("collector: secure Git-object cache permissions: %w", err)
+	}
 	return &GitObjectCache{
 		root: root, objects: objects, control: control, pins: pins,
 		leases: leases, locks: locks, gcLock: filepath.Join(control, "gc.lock"),
@@ -194,7 +199,7 @@ func (c *GitObjectCache) withObject(
 			return false, err
 		}
 		if _, err := gitObjectTreeSize(staging); err != nil {
-			return false, fmt.Errorf("collector: fetched Git-object database contains an unsafe filesystem entry")
+			return false, fmt.Errorf("collector: fetched Git-object database contains an unsafe filesystem entry: %w", err)
 		}
 		if err := verify(staging); err != nil {
 			return false, fmt.Errorf("collector: fetched Git-object database failed integrity verification")
@@ -601,7 +606,11 @@ func gitObjectTreeSize(root string) (int64, error) {
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 || !(info.IsDir() || info.Mode().IsRegular()) {
-			return fmt.Errorf("Git-object cache contains a symlink or special file")
+			relative, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				relative = "<unknown>"
+			}
+			return fmt.Errorf("Git-object cache entry %q has unsupported mode %s", filepath.ToSlash(relative), info.Mode().Type())
 		}
 		if info.Mode().IsRegular() {
 			total += info.Size()

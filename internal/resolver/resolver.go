@@ -30,9 +30,12 @@ import (
 )
 
 const (
-	manifestSchemaVersion  = "1.0.0"
-	reportSchemaVersion    = "1.1.0"
-	defaultMaxSearchStates = 100000
+	manifestSchemaVersion   = "1.0.0"
+	reportSchemaVersion     = "1.1.0"
+	defaultMaxSearchStates  = 100000
+	maxResolverCandidates   = 16384
+	maxResolverDeclarations = 65536
+	maxResolvedComponents   = 1024
 )
 
 // ConflictCode is the closed Registry 1.1 conflict vocabulary.
@@ -351,6 +354,53 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 		result.Report.Conflicts = append(result.Report.Conflicts, Conflict{Code: ConflictNoRootRequirements, Message: "Product Definition contains no root component requirements"})
 		return result
 	}
+	if len(def.Components) > maxResolvedComponents {
+		result.Report.Conflicts = append(result.Report.Conflicts, Conflict{
+			Code:    ConflictResolutionLimit,
+			Message: fmt.Sprintf("Product Definition has %d root requirements; the Registry component limit is %d", len(def.Components), maxResolvedComponents),
+		})
+		return result
+	}
+	totalCandidates := 0
+	totalDeclarations := len(def.EnvironmentContracts)
+	if totalDeclarations > maxResolverDeclarations {
+		result.Report.Conflicts = append(result.Report.Conflicts, Conflict{
+			Code:    ConflictResolutionLimit,
+			Message: fmt.Sprintf("Product Definition declarations exceed the Registry limit of %d", maxResolverDeclarations),
+		})
+		return result
+	}
+	for _, cat := range catalogs {
+		if cat == nil {
+			continue
+		}
+		if len(cat.Releases) > maxResolverCandidates-totalCandidates {
+			result.Report.Conflicts = append(result.Report.Conflicts, Conflict{
+				Code:    ConflictResolutionLimit,
+				Message: fmt.Sprintf("Catalog release candidates exceed the Registry limit of %d", maxResolverCandidates),
+			})
+			return result
+		}
+		totalCandidates += len(cat.Releases)
+		for _, release := range cat.Releases {
+			declarations := []int{
+				len(release.SourceUnits),
+				len(release.Dependencies),
+				len(release.Contracts.Provides),
+				len(release.Contracts.Requires),
+			}
+			for _, count := range declarations {
+				if count > maxResolverDeclarations-totalDeclarations {
+					result.Report.Conflicts = append(result.Report.Conflicts, Conflict{
+						Code:    ConflictResolutionLimit,
+						Message: fmt.Sprintf("Catalog dependency, contract and source declarations exceed the Registry limit of %d", maxResolverDeclarations),
+					})
+					return result
+				}
+				totalDeclarations += count
+			}
+		}
+	}
 	candidateMap, catalogRefs, conflict := buildCandidates(catalogs)
 	if conflict != nil {
 		result.Report.Conflicts = append(result.Report.Conflicts, *conflict)
@@ -505,6 +555,12 @@ func candidateProvenanceLess(left, right candidate) bool {
 
 // search performs bounded deterministic backtracking. Candidate branches get cloned state so dependencies from an unsuccessful release cannot leak (REG-008/010/011).
 func (s *solver) search(state *searchState, environment []EnvironmentContract) (*searchState, *Conflict) {
+	if len(state.chosen) > maxResolvedComponents {
+		return state, &Conflict{
+			Code:    ConflictResolutionLimit,
+			Message: fmt.Sprintf("resolved graph exceeds the Registry component limit of %d", maxResolvedComponents),
+		}
+	}
 	s.states++
 	if s.states > s.maxStates {
 		return state, &Conflict{Code: ConflictResolutionLimit, Message: fmt.Sprintf("resolution exceeded the deterministic search-state limit of %d", s.maxStates)}
