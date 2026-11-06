@@ -128,7 +128,7 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 			return renameDirectoryNoReplace(oldPath, newPath)
 		},
 	}
-	_, err := prepare(testContext(t), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
 	if err == nil || !os.IsExist(err) {
 		t.Fatalf("Prepare error = %v, want atomic destination-exists failure", err)
 	}
@@ -139,12 +139,6 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 	assertPrepareFailureLeavesNoArtifacts(t, destination)
 }
 
-// testContext creates a background context and keeps the helper local to this
-// package's tests; Prepare itself remains responsible for cancellation checks.
-func testContext(t *testing.T) context.Context {
-	t.Helper()
-	return context.Background()
-}
 
 func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
 	parent := t.TempDir()
