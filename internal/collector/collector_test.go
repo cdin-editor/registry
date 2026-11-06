@@ -532,3 +532,37 @@ func TestREG026SubmodulesAreNotFetchedOrMaterialized(t *testing.T) {
 		t.Fatalf("submodule content was fetched/materialized: %v", err)
 	}
 }
+
+
+type secretErrorGit struct {
+	marker string
+}
+
+func (g secretErrorGit) Run(context.Context, string, []string, ...string) ([]byte, error) {
+	return nil, errors.New("remote stderr https://user:" + g.marker + "@source.invalid/repo.git token=" + g.marker)
+}
+
+// TestREG026CollectorRedactsInjectedGitRunnerErrors proves a custom process
+// runner cannot bypass the Collector diagnostic redaction boundary.
+func TestREG026CollectorRedactsInjectedGitRunnerErrors(t *testing.T) {
+	const marker = "collector-git-runner-secret-1de9"
+	repository := "https://source.example.invalid/repository.git"
+	tempRoot := t.TempDir()
+	destination := filepath.Join(t.TempDir(), "prepared")
+	graph := graphForSources(strings.Repeat("a", 40), repository, catalog.SourceUnit{ID: "source"})
+	_, err := Collect(context.Background(), graph, destination, Options{
+		Git: secretErrorGit{marker: marker}, Policy: allowTestRepository{}, TempDir: tempRoot,
+	})
+	if err == nil || !strings.Contains(err.Error(), "Git command failed") {
+		t.Fatalf("expected safe Git failure classification, got %v", err)
+	}
+	if strings.Contains(err.Error(), marker) || strings.Contains(err.Error(), "source.invalid") {
+		t.Fatalf("Collector diagnostic leaked injected runner details: %v", err)
+	}
+	for _, pattern := range []string{"registry-git-source-*", "registry-disabled-hooks-*"} {
+		matches, globErr := filepath.Glob(filepath.Join(tempRoot, pattern))
+		if globErr != nil || len(matches) != 0 {
+			t.Fatalf("temporary artifacts remain for %s: %v (%v)", pattern, matches, globErr)
+		}
+	}
+}
