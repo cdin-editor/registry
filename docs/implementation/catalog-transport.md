@@ -70,11 +70,30 @@ or the digest trust boundary:
   Catalog.Load independently verifies them again before parsing.
 
 The limits above are Registry implementation policy, not public contract
-fields. The current transport already enforces URI+digest identity and
-verify-before-use; age/budget eviction, manifest pins, replay leases and
-serialized garbage collection are **defined here but remain Phase 7
-implementation work**. Until that work lands, entries are retained rather
-than opportunistically deleted.
+fields. The implementation now enforces:
+
+- `registry cache pin --manifest <file|-> --cache-dir <directory>` verifies a
+  canonical Manifest and stores an immutable pin identified by the exact
+  Manifest SHA-256. Repeating the same pin is idempotent.
+- `registry cache unpin --manifest-sha256 <hex> --cache-dir <directory>`
+  releases that explicit retention reference.
+- `registry cache gc --cache-dir <directory>` takes the exclusive maintenance
+  lock, validates the complete pin/lease snapshot, then removes unprotected
+  entries older than 90 days and least-recently-verified entries until the
+  256 MiB target budget is met. Protected entries may keep the cache above
+  budget.
+- Strict replay holds a lease for every metadata identity in its saved
+  Manifest; each digest-aware fetch also holds an entry lease from lookup
+  through verification and cache write. Cache hits update their
+  last-verified time only after digest verification.
+- If a pin/lease snapshot is malformed or unsafe, GC removes nothing. A
+  leftover maintenance lock or lease after abnormal termination is preserved
+  and requires operator investigation; Registry does not guess that it is
+  stale or delete it automatically.
+
+The cache continues to be keyed by the exact URI bytes plus lowercase expected
+SHA-256. A pin protects the cache identity, not potentially corrupt bytes;
+every read is still re-hashed before use and corruption triggers refetch.
 
 ## Tests
 
@@ -87,5 +106,7 @@ than opportunistically deleted.
 - Redirect-limit exhaustion and unsafe redirect targets.
 - Mixed public/prohibited DNS answers and proof that the checked IP is the dialed IP.
 - Authorization/cookie/proxy absence and remote-error redaction.
+- Age/budget eviction order, explicit Manifest pins, active replay leases,
+  maintenance contention and malformed-reference fail-closed behavior.
 
 These tests validate transport behavior using an injected HTTP RoundTripper and resolver; deployment firewall and public DNS routing must be validated in the deployment environment.

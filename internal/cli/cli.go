@@ -75,6 +75,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "manifest":
 		return runManifest(ctx, args[1:], stdin, stdout, stderr)
 
+	case "cache":
+		return runCache(ctx, args[1:], stdin, stdout, stderr)
+
 	default:
 		return usageError(stderr, "unknown command %q", args[0])
 	}
@@ -423,6 +426,9 @@ Usage:
   registry prepare --product <file> --catalog <file|https-uri>... --allow-host <host>... --output <dir> [--cache-dir <dir>]
   registry manifest verify --input <file|-> [--sha256 <hex>]
   registry manifest replay --input <file|-> --output <dir> --allow-host <host>... [--sha256 <hex>] [--verify-remote-metadata] [--cache-dir <dir>]
+  registry cache pin --manifest <file|-> --cache-dir <dir>
+  registry cache unpin --manifest-sha256 <hex> --cache-dir <dir>
+  registry cache gc --cache-dir <dir>
 
 Document kinds:
   product-definition
@@ -441,5 +447,7 @@ Notes:
   Replay makes no Catalog metadata requests by default; --verify-remote-metadata enables strict checks.
   Replay requires explicit source/metadata host policy through --allow-host.
   Network Catalog and source hosts must be explicitly allow-listed.
-  --cache-dir enables the integrity-checked, digest-addressed metadata cache.`))
+  --cache-dir enables the integrity-checked, digest-addressed metadata cache.
+  cache pin/unpin retains or releases a verified Manifest's metadata identities.
+  cache gc evicts only entries outside retained Manifest pins and active replay leases.`))
 }

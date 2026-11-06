@@ -1,0 +1,198 @@
+package catalog
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func cacheManifestJSON(catalogURI, catalogSHA, releaseURI, releaseSHA string) []byte {
+	document := struct {
+		Catalogs []struct {
+			MetadataURI string `json:"metadata_uri"`
+			MetadataSHA string `json:"metadata_sha256"`
+		} `json:"catalogs"`
+		Components []struct {
+			ReleaseURI string `json:"release_metadata_uri"`
+			ReleaseSHA string `json:"release_metadata_sha256"`
+		} `json:"components"`
+	}{}
+	if catalogURI != "" {
+		item := struct {
+			MetadataURI string `json:"metadata_uri"`
+			MetadataSHA string `json:"metadata_sha256"`
+		}{catalogURI, catalogSHA}
+		document.Catalogs = append(document.Catalogs, item)
+	}
+	if releaseURI != "" {
+		item := struct {
+			ReleaseURI string `json:"release_metadata_uri"`
+			ReleaseSHA string `json:"release_metadata_sha256"`
+		}{releaseURI, releaseSHA}
+		document.Components = append(document.Components, item)
+	}
+	encoded, _ := json.Marshal(document)
+	return encoded
+}
+
+func writeCacheFixture(t *testing.T, cache *MetadataCache, uri, digest, body string, modTime time.Time) string {
+	t.Helper()
+	path := filepath.Join(cache.root, metadataCacheKey(uri, digest)+".json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, modTime, modTime); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestMetadataCacheGCPreservesManifestPinsAndActiveReplayLeases(t *testing.T) {
+	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	shaA := expectedDigest("metadata-a")
+	shaB := expectedDigest("metadata-b")
+	shaC := expectedDigest("metadata-c")
+	pathA := writeCacheFixture(t, cache, "https://catalog.example.invalid/a.json", shaA, "a", old)
+	pathB := writeCacheFixture(t, cache, "https://catalog.example.invalid/b.json", shaB, "b", old)
+	pathC := writeCacheFixture(t, cache, "https://catalog.example.invalid/c.json", shaC, "c", old)
+
+	pinnedManifest := cacheManifestJSON("https://catalog.example.invalid/a.json", shaA, "", "")
+	pinID, err := cache.RetainManifest(pinnedManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaseManifest := cacheManifestJSON("", "", "https://catalog.example.invalid/b.json", shaB)
+	release, err := cache.BeginReplayLease(context.Background(), leaseManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := cache.GarbageCollect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RemovedEntries != 1 {
+		t.Fatalf("removed entries = %d, want only the unprotected entry", result.RemovedEntries)
+	}
+	for name, path := range map[string]string{"pinned": pathA, "leased": pathB} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s cache entry was removed: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(pathC); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unprotected stale entry still exists: %v", err)
+	}
+
+	release()
+	if err := cache.ReleaseManifest(pinID); err != nil {
+		t.Fatal(err)
+	}
+	result, err = cache.GarbageCollect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RemovedEntries != 2 {
+		t.Fatalf("second GC removed %d entries, want 2", result.RemovedEntries)
+	}
+}
+
+func TestMetadataCacheGCBudgetEvictsLeastRecentlyVerifiedUnpinnedEntries(t *testing.T) {
+	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 5, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	shaA, shaB, shaC := expectedDigest("a"), expectedDigest("b"), expectedDigest("c")
+	pathA := writeCacheFixture(t, cache, "https://catalog.example.invalid/a", shaA, "aaaa", now.Add(-3*time.Hour))
+	pathB := writeCacheFixture(t, cache, "https://catalog.example.invalid/b", shaB, "bbbb", now.Add(-2*time.Hour))
+	pathC := writeCacheFixture(t, cache, "https://catalog.example.invalid/c", shaC, "cccc", now.Add(-time.Hour))
+	result, err := cache.GarbageCollect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RemovedEntries != 2 || result.RemainingBytes != 4 {
+		t.Fatalf("GC result = %+v, want two entries removed and four bytes retained", result)
+	}
+	if _, err := os.Stat(pathA); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oldest entry was not evicted: %v", err)
+	}
+	if _, err := os.Stat(pathB); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("second-oldest entry was not evicted: %v", err)
+	}
+	if _, err := os.Stat(pathC); err != nil {
+		t.Fatalf("newest entry should remain: %v", err)
+	}
+}
+
+func TestMetadataCacheGCFailsClosedOnIncompleteReferenceSnapshot(t *testing.T) {
+	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1, time.Nanosecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := writeCacheFixture(t, cache, "https://catalog.example.invalid/a", expectedDigest("a"), "data", time.Now().Add(-time.Hour))
+	if err := os.WriteFile(filepath.Join(cache.pins, "broken.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := cache.GarbageCollect(context.Background())
+	if err == nil {
+		t.Fatal("GC unexpectedly accepted a malformed pin snapshot")
+	}
+	if result.RemovedEntries != 0 {
+		t.Fatalf("GC removed %d entries after snapshot validation failed", result.RemovedEntries)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("cache entry was removed despite fail-closed GC: %v", err)
+	}
+}
+
+func TestMetadataCacheGCRejectsConcurrentMaintenance(t *testing.T) {
+	cache, err := NewMetadataCache(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := os.OpenFile(cache.lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = lock.Close()
+	if _, err := cache.GarbageCollect(context.Background()); !errors.Is(err, ErrCacheMaintenanceBusy) {
+		t.Fatalf("GC error = %v, want ErrCacheMaintenanceBusy", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := cache.BeginReplayLease(ctx, cacheManifestJSON("", "", "", "")); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("lease error = %v, want context deadline", err)
+	}
+}
+
+func TestMetadataCachePinIdentityUsesExactManifestBytesAndStableMetadataKeys(t *testing.T) {
+	cache, err := NewMetadataCache(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := cacheManifestJSON("https://catalog.example.invalid/index.json", expectedDigest("index"), "", "")
+	first, err := cache.RetainManifest(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cache.RetainManifest(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != sha256Hex(data) || second != first {
+		t.Fatalf("pin IDs = %q and %q, want exact Manifest SHA-256", first, second)
+	}
+	if metadataCacheKey("https://catalog.example.invalid/a", expectedDigest("a")) == metadataCacheKey("https://catalog.example.invalid/a", expectedDigest("b")) {
+		t.Fatal("cache identity did not include the expected digest")
+	}
+	if metadataCacheKey("https://catalog.example.invalid/a", expectedDigest("a")) == metadataCacheKey("https://catalog.example.invalid/b", expectedDigest("a")) {
+		t.Fatal("cache identity did not include the exact URI")
+	}
+}
