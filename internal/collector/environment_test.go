@@ -160,24 +160,25 @@ func TestCommandGitRedactsChildStderrAndCredentialValues(t *testing.T) {
 	}
 }
 
-func TestCommandGitCancellationTerminatesChildProcess(t *testing.T) {
+func TestCommandGitCancellationTerminatesActualGitChildProcess(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("sleep child fixture is Unix-specific")
+		t.Skip("Git daemon cancellation fixture is Unix-specific")
 	}
-	binary, err := exec.LookPath("sleep")
+	binary, err := exec.LookPath("git")
 	if err != nil {
-		t.Skipf("sleep executable unavailable: %v", err)
+		t.Skipf("git executable unavailable: %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	directory := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
 	finished := make(chan error, 1)
 	go func() {
-		_, runErr := (CommandGit{Binary: binary}).Run(ctx, directory, nil, "30")
+		_, runErr := (CommandGit{Binary: binary}).Run(ctx, directory, nil,
+			"daemon", "--reuseaddr", "--base-path="+directory, "--listen=127.0.0.1", "--port=0")
 		finished <- runErr
 	}()
 	select {
 	case runErr := <-finished:
-		t.Fatalf("child process exited before cancellation: %v", runErr)
+		t.Fatalf("Git daemon exited before cancellation: %v", runErr)
 	case <-time.After(100 * time.Millisecond):
 	}
 	cancel()
@@ -187,7 +188,7 @@ func TestCommandGitCancellationTerminatesChildProcess(t *testing.T) {
 			t.Fatalf("CommandGit error = %v, want context.Canceled", runErr)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("CommandGit did not terminate the child process after cancellation")
+		t.Fatal("CommandGit did not terminate the Git daemon process after cancellation")
 	}
 }
 
