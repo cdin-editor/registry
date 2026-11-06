@@ -130,8 +130,13 @@ func TestREG021REG022PublishesCompleteWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.WorkspacePath != destination {
-		t.Fatalf("workspace path = %q, want %q", prepared.WorkspacePath, destination)
+	canonicalParent, err := filepath.EvalSymlinks(filepath.Dir(destination))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantWorkspacePath := filepath.Join(canonicalParent, filepath.Base(destination))
+	if prepared.WorkspacePath != wantWorkspacePath {
+		t.Fatalf("workspace path = %q, want %q", prepared.WorkspacePath, wantWorkspacePath)
 	}
 	for _, path := range []string{
 		prepared.ManifestPath,
