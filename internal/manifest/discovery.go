@@ -86,10 +86,12 @@ type UpdateDiscoveryReport struct {
 	CandidateDecisions        []UpdateCandidateDecision   `json:"candidate_decisions"`
 }
 
-// BuildUpdateDiscoveryReport compares a verified historical Manifest with a
-// fresh Resolver result. The caller owns input verification and Catalog loading;
-// this function performs no I/O and cannot mutate the Manifest, Catalogs or
-// Resolver values supplied to it.
+// BuildUpdateDiscoveryReport creates the deterministic, separate audit artifact
+// required by REG-027. The caller verifies the historical Manifest and loads
+// the current Catalogs; this function performs no I/O and cannot mutate those
+// inputs or the saved Workspace.
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#update-discovery-report
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/cli.md.
 func BuildUpdateDiscoveryReport(
 	historicalBytes []byte,
 	historical Document,

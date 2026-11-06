@@ -322,15 +322,17 @@ type solver struct {
 	maxStates       int
 }
 
-// Resolve performs a deterministic backtracking resolution. Backtracking is
-// necessary because selecting the highest release greedily can introduce a
-// transitive constraint that makes the graph impossible even though a lower
-// release would satisfy the entire graph. Candidates are always explored in
-// descending SemVer order; no catalog order or publication time is a tie-breaker.
+// Resolve performs deterministic, consumer-independent version/dependency/
+// contract resolution (REG-006–REG-016). Backtracking is necessary because a
+// greedy highest-version choice can make transitive constraints impossible.
+// Candidates are explored in descending SemVer order; catalog order and
+// publication time are not tie-breakers.
 //
-// The function assumes the caller already validated public documents against
-// the v1 schemas, but it repeats identity/version/constraint checks at this
-// trust boundary. Expected conflicts are returned in Report, not as Go errors.
+// The caller validates public input schemas first; Resolve repeats identity,
+// version and constraint checks at this trust boundary. Expected conflicts are
+// returned in Report rather than as Go errors.
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#5-resolution-semantics
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/resolver.md.
 func Resolve(def ProductDefinition, catalogs []*catalog.Catalog) Result {
 	return resolveWithMaxSearchStates(def, catalogs, defaultMaxSearchStates)
 }

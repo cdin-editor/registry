@@ -262,9 +262,11 @@ func (c *MetadataCache) beginLease(ctx context.Context, keys []string) (func(), 
 	}
 }
 
-// GarbageCollect removes only unpinned, unleased entries. It validates the
-// complete reference snapshot before deleting anything; an unreadable,
-// malformed or unsafe snapshot fails closed with zero removals.
+// GarbageCollect removes only unpinned, unleased metadata identities (REG-019/026).
+// It validates the complete reference snapshot before deleting anything;
+// an unreadable, malformed or unsafe snapshot fails closed with zero removals.
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#8-security-and-trust-boundary
+// Design: docs/implementation/catalog-transport.md#metadata-cache-retention-and-eviction-policy.
 func (c *MetadataCache) GarbageCollect(ctx context.Context) (MetadataCacheGCResult, error) {
 	if c == nil {
 		return MetadataCacheGCResult{}, fmt.Errorf("catalog: metadata cache is not initialized")

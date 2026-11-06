@@ -42,12 +42,15 @@ type ReplayOptions struct {
 }
 
 // Replay consumes a persisted canonical Manifest and publishes a new workspace
-// containing the exact source commits it records. The supplied detached digest
-// is optional, but when present it must match the exact input bytes.
+// containing only the exact full source commits it records (REG-018/023/024/026).
+// It never invokes Resolver/version selection or executes collected source.
 //
-// The Manifest is verified before any remote metadata or Git access. Rebuild
-// equality is checked inside the private staging transaction, before publish;
-// a mismatch therefore cannot leave a partial or divergent destination.
+// The Manifest is verified before remote metadata or Git access. Rebuilt
+// canonical bytes must equal the input inside private staging before publication;
+// a mismatch cannot leave a partial or divergent destination.
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#7-resolved-manifest-and-resolution-report
+// Trust boundary: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#8-security-and-trust-boundary
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/manifest.md and workspace.md.
 func Replay(ctx context.Context, canonicalManifest []byte, expectedSHA256 string, options ReplayOptions) (Prepared, error) {
 	if ctx == nil {
 		return Prepared{}, fmt.Errorf("workspace: replay context is required")
