@@ -8,59 +8,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Enable the qualified four-worker Catalog metadata fetch pool by default after native Linux/macOS/Windows, race, cancellation/join, deterministic-order and cache-integrity verification; retain `LoadOptions` for callers that need a lower worker count.
-- Enforce platform-native private cache permissions: Unix `0700`/`0600` modes and protected Windows DACLs limited to the current user, Local System and Administrators; document the caller-selected parent-directory trust boundary.
+- Add the clean-room Product Definition → Catalog → Resolver → Prepare → Verify → Replay integration test using real Spec schemas and a temporary Git repository.
+- Add explicit Phase 9 test-to-REG traceability for REG-001–REG-027 and reconcile the normative baseline to Registry Data Contracts 1.2.0.
+- Add exact REG/Spec/design references to security-sensitive Catalog, Resolver, cache, replay, update-discovery and private-directory entry points.
+- Add the Update Discovery Report to CLI schema-kind help and schema-list regression coverage.
+
+- Enable the qualified four-worker Catalog metadata fetch pool by default after native Linux/macOS/Windows, race, cancellation/join, deterministic-order and cache-integrity verification; retain LoadOptions for callers that need a lower worker count.
+- Enforce platform-native private cache permissions: Unix 0700/0600 modes and protected Windows DACLs limited to the current user, Local System and Administrators; document the caller-selected parent-directory trust boundary.
 - Bound Resolver dependency/contract/source declarations to 65,536 in addition to existing candidate, graph-node and search-state limits.
-- Bound Catalog Release Metadata retrieval to four concurrent requests while preserving index-order validation/output and all-or-nothing failure; add cancellation joining, 8 MiB/4,096-entry/256 MiB Catalog budgets and explicit no-partial-result tests.
-- Bound Resolver input to 16,384 Catalog candidates, 1,024 roots/transitive components and 100,000 search states; reject resource exhaustion with `RESOLUTION_LIMIT` and no partial Graph.
-- Add seeded fuzz targets and required bounded fuzz smoke campaigns for JSON/YAML, SemVer/constraints, Catalog loading, Resolver graph construction and source-path validation.
-- Add large Catalog, wide/deep/backtracking Resolver, source-tree copy and metadata/Git cache GC benchmarks.
-- Expand native Ubuntu/macOS/Windows CI to run every Registry Go package when Catalog, Resolver, validation, Collector or Workspace code changes.
-- Add `registry manifest discover`, a deterministic read-only audit operation that verifies historical Manifests before loading current Catalogs and emits a schema-validated Update Discovery Report bound to historical Manifest, Product Definition and Catalog digests. Record stable withdrawal and selection reasons without recollecting sources or mutating historical Workspaces.
-- Mirror Registry Data Contract 1.2.0 Update Discovery Report schema and validate its nested Resolution Report reference using the shared embedded-schema compiler.
-
-- Implement explicit metadata-cache Manifest pins, strict-replay/fetch leases and fail-closed age/budget garbage collection; expose `cache pin`, `cache unpin` and `cache gc`.
-- Add content-addressed Git-object caching keyed by full commit IDs, commit/object-graph verification before cache use, corruption refetch, Manifest pins, replay leases and age/budget garbage collection.
-
-- Add `manifest verify` and `manifest replay` CLI commands with stable machine-readable error codes, explicit host policy, offline/strict metadata modes and signal-driven cancellation/cleanup.
-
-- Bound the canonical JSON UTF-8 preflight for cyclic maps, slices and pointers; cyclic values now reach the encoder's normal error path instead of recursive validation.
-
-- Apply protected Windows workspace/lock DACLs for Owner Rights, LocalSystem and Administrators; verify ACE identities, rights and inheritance on native Windows.
-
-- Pin complete Manifest/Report canonical bytes and detached digests across repeated runs and equivalent input permutations; expand RFC 8785 Unicode/IEEE-754 vectors and reject invalid UTF-8 before serialization.
-
-- Publish prepared Workspaces through OS-native atomic no-replace directory rename on Linux, macOS and Windows; fail closed on unsupported operating systems.
-- Add empty-destination race, destination-symlink, staging-symlink swap and simultaneous-publisher tests. Assert temporary Git clone and disabled-hook cleanup across injected Workspace failures.
-
-- Define metadata-cache retention and eviction policy without changing immutable URI+expected-digest cache identity or verify-before-use behavior. Enforce the policy through explicit Manifest pins, replay/fetch leases and serialized GC.
-- Add Workspace failure injection for multi-source rollback, Manifest/Report write and sync faults, cancellation, lock contention/stale-lock handling and competing destination creation.
-- Add end-to-end Workspace coverage for shared repositories across components/variants and multiple source units, plus native Linux/macOS/Windows test jobs.
-- Harden Collector Git execution with an explicit credential-provider environment, non-interactive process policy, process-group cancellation, helper-descendant cleanup and partial source-tree rollback.
-- Add Collector tests for repository reuse across logical components/variants, credential isolation, actual child termination, cancellation cleanup, submodule/filter/hook isolation, and missing/malformed repositories.
-
-- Add Registry Resolver 1.1.0 report evidence: sourced applied constraints, immutable candidate provenance, typed conflict/rejection codes and structured contract-provider diagnostics.
-- Add adversarial Resolver coverage for diamond graphs, duplicated constraints/providers, transitive conflicts, fallback branch isolation, permutation invariance and bounded search.
-- Add SemVer 2.0.0 parser vectors alongside precedence and unbounded-identifier tests.
-- Add the provider-neutral Pipeline task graph and pin reusable CI, documentation, security and release workflows to a reviewed Pipeline commit.
-- Add PSX repository-structure validation and executable governance tests for PR/Issue templates and repository policy.
-- Add GIX branch-flow validation using GIX itself, plus a main/develop Git Flow matching the CDIN repositories.
-- Add pull request and issue templates for bugs, feature requests and Spec/contract changes.
-- Pin the Registry schema mirror to an immutable CDIN Spec commit and add a drift-check/synchronization script.
-- Add cross-platform release target compilation through Pipeline's release runner.
-- Add a transport-injected Catalog Index loader with digest-before-parse verification, release identity checks, default-variant normalization, duplicate deduplication and conflict rejection.
-- Preserve typed dependency and contract declarations in Catalog releases for resolver consumption.
-- Add SemVer 2.0.0 parser/precedence and Registry 1.0.0 constraint parsing/evaluation.
-- Add deterministic dependency/version/contract resolver with backtracking, cycle diagnostics, branch-scoped evidence and structured in-memory results.
+- Bound Catalog Release Metadata retrieval to four concurrent requests while preserving index-order validation/output and all-or-nothing failure; add cancellation joining and Catalog byte/count budgets.
+- Add seeded fuzz targets and required bounded fuzz smoke campaigns for JSON/YAML, SemVer/constraints, Catalog loading, Resolver graph construction, source/cache references and credential redaction.
+- Add Catalog, Resolver, source-tree copy and metadata/Git cache GC benchmark smoke.
+- Expand native Ubuntu/macOS/Windows CI to run all Registry Go packages when core paths change.
+- Add registry manifest discover, a deterministic read-only audit operation bound to historical Manifest, Product Definition and Catalog digests.
+- Add metadata-cache Manifest pins, strict-replay/fetch leases and fail-closed age/budget garbage collection; expose cache pin, unpin and gc.
+- Add content-addressed Git-object caching keyed by full commit IDs, commit/object-graph verification, corruption refetch, Manifest pins, replay leases and garbage collection.
+- Add manifest verify and manifest replay CLI commands with stable errors, explicit host policy, offline/strict metadata modes and signal-driven cancellation/cleanup.
+- Publish prepared Workspaces through OS-native atomic no-replace directory rename on Linux, macOS and Windows; add failure-injection and destination-race tests.
+- Harden Collector Git execution with an explicit credential-provider environment, process-group cancellation and partial source-tree rollback.
+- Add Resolver 1.1.0 report evidence: sourced constraints, immutable candidate provenance, typed conflict/rejection codes and structured provider diagnostics.
+- Add adversarial Resolver tests, official SemVer parser vectors, strict JSON/YAML validation, repository governance, GIX/PSX checks and Spec schema synchronization.
 
 ### Changed
 
-- Make Pipeline the source of truth for local task execution and CI/release orchestration; keep GitHub workflows as thin provider adapters.
-- Require governance, GIX configuration, PSX structure and schema-mirror checks in the release verification graph.
-- Strengthen JSON/YAML validation by rejecting duplicate JSON keys, unsupported YAML forms, recursive aliases and trailing documents/values.
-- Update contributor, development and repository documentation to describe the shared engineering tools and the implemented verification boundary.
+- Make Pipeline the source of truth for local tasks and CI/release orchestration; GitHub workflows remain provider adapters.
+- Keep the Registry consumer-independent: public domains are composed at the CLI boundary and no consumer-specific resolver policy is introduced.
+- Document verified behavior separately from operational assumptions and explicit non-guarantees.
 
-### Not yet implemented
+### Explicit non-guarantees and follow-up hardening
 
-- Parent-directory fsync and uniform crash/power-loss durability guarantees across supported filesystems and operating systems.
-- Broader update-versus-replay/cache concurrency, bounded concurrency and performance/fuzz matrices.
+- Parent-directory fsync and uniform crash/power-loss durability guarantees across filesystems and operating systems are not provided.
+- Publisher signing, signature verification, attestations, SBOM generation, component vulnerability scanning, build sandboxing and deployment firewall enforcement are outside Registry's guarantees.
+- Git submodule and Git LFS object retrieval are unsupported.
+- Longer sustained fuzz campaigns, workload-sized performance baselines and broader concurrent update/replay/GC interleaving stress remain operational hardening work. The four-worker Catalog metadata pool is bounded; Git fetch and source copying remain sequential.
