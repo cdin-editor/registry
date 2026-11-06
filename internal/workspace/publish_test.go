@@ -49,7 +49,7 @@ func TestRenameDirectoryNoReplaceRejectsEmptyDestination(t *testing.T) {
 	}
 
 	err := renameDirectoryNoReplace(source, destination)
-	if err == nil || !os.IsExist(err) {
+	if err == nil || !errors.Is(err, os.ErrExist) {
 		t.Fatalf("rename error = %v, want existing-destination error", err)
 	}
 	if _, err := os.Stat(filepath.Join(source, "manifest.json")); err != nil {
@@ -96,7 +96,7 @@ func TestRenameDirectoryNoReplaceConcurrentWritersHaveOneWinner(t *testing.T) {
 		for _, err := range errs {
 			if err == nil {
 				winners++
-			} else if !os.IsExist(err) {
+			} else if !errors.Is(err, os.ErrExist) {
 				t.Fatalf("rename error = %v, want success or destination-exists", err)
 			}
 		}
@@ -134,7 +134,7 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 		},
 	}
 	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
-	if err == nil || !os.IsExist(err) {
+	if err == nil || !errors.Is(err, os.ErrExist) {
 		t.Fatalf("Prepare error = %v, want atomic destination-exists failure", err)
 	}
 	entries, readErr := os.ReadDir(destination)
@@ -166,7 +166,7 @@ func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
 	}
 
 	err := renameDirectoryNoReplace(source, destination)
-	if err == nil || !os.IsExist(err) {
+	if err == nil || !errors.Is(err, os.ErrExist) {
 		t.Fatalf("rename error = %v, want existing symlink destination error", err)
 	}
 	content, readErr := os.ReadFile(filepath.Join(outside, "sentinel"))
