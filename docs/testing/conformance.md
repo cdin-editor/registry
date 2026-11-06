@@ -1,6 +1,6 @@
 # Conformance
 
-Registry must implement normative `REG-001` through `REG-026` in the
+Registry must implement normative `REG-001` through `REG-027` in the
 [CDIN Spec Registry data contracts](https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md).
 
 This page separates verified behavior from schema presence and future work.
@@ -27,16 +27,17 @@ without executable behavior and tests.
 | Manifest replay | Reconstructs the saved graph without Resolver/version selection, retrieves exact full commits, checks byte-identical Manifest output before Workspace publication and does not execute component code. |
 | Manifest CLI | File/stdin verification, JSON receipts, stable error codes, offline/strict replay, source failure, cancellation, destination collision and usage errors are tested. |
 | Native Workspace publication | Ubuntu, macOS and Windows native jobs exercise no-replace publication, cleanup and permissions; crash/power-loss durability is not claimed. |
+| Update discovery | Verifies the historical Manifest before Catalog fetch, resolves current state with the generic Resolver, validates the deterministic report against its own schema and the referenced Resolution Report schema, and leaves historical files/Workspace untouched; see `TestManifestDiscoverReportsUnchangedAndWritesImmutableAuditFile`, `TestManifestDiscoverPreservesWithdrawalDecisionWhenMetadataDigestChanges`, and validation cross-reference tests. |
 | Repository boundaries | Pipeline invokes PSX and package/consumer-independence boundary checks. |
 
 ## Remaining qualifications and work
 
 - Fuzz targets, complete REG-001–REG-026 traceability and large-graph performance/resource budgets remain future work.
-- Update discovery, Git-object cache lifecycle/garbage collection, retained-Manifest pins and retrieval/withdrawal audit records remain Phase 7.
+- Broader update-versus-replay and cache corruption/concurrent-access evidence, bounded concurrency after cancellation/cleanup, and full performance/fuzz matrices remain Phase 7/8 work.
 - End-to-end clean-room preparation from a Product Definition plus one or more production Catalogs remains a separate completion gate.
 - Parent-directory fsync and uniform crash/power-loss durability are not implemented or claimed.
 - Deployment-wide Git DNS/IP egress enforcement remains the deployment firewall's responsibility.
 
 CI evidence applies only to commands/platforms actually run. The first Resolver
 slice does not prove Collector, Workspace, Manifest serialization or full
-REG-001–REG-026 conformance.
+REG-001–REG-027 conformance.
