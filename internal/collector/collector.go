@@ -132,6 +132,7 @@ type Options struct {
 	Git         GitRunner
 	Policy      RepositoryPolicy
 	Credentials GitCredentialProvider
+	GitCache    *GitObjectCache
 	TempDir     string
 }
 
@@ -219,9 +220,12 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 			if err := options.Policy.ValidateRepository(unit.RepositoryURI); err != nil {
 				return nil, fmt.Errorf("collector: source %s/%s repository rejected: %w", component.ComponentID, unit.ID, err)
 			}
-			credentialEnv, err := credentialEnvironmentFor(ctx, options.Credentials, unit.RepositoryURI)
-			if err != nil {
-				return nil, err
+			var credentialEnv []string
+			if options.GitCache == nil {
+				credentialEnv, err = credentialEnvironmentFor(ctx, options.Credentials, unit.RepositoryURI)
+				if err != nil {
+					return nil, err
+				}
 			}
 			relative := filepath.Join("components", component.ComponentID, component.Variant, "sources", unit.ID)
 			key := filepath.ToSlash(relative)
@@ -297,6 +301,9 @@ func parseRepositoryURI(value string) (repositoryURI, error) {
 // a commit with the requested full object ID, then checks it out detached.
 // Hook paths and prompting are disabled for every Git invocation (REG-018/026).
 func collectOne(ctx context.Context, options Options, hooksDir string, credentialEnv []string, repository, revision, subdirectory, target string) (string, error) {
+	if options.GitCache != nil {
+		return collectOneWithGitCache(ctx, options, hooksDir, repository, revision, subdirectory, target)
+	}
 	targetComplete := false
 	defer func() {
 		if !targetComplete {
@@ -366,6 +373,124 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 		return "", err
 	}
 	targetComplete = true
+	return strings.ToLower(revision), nil
+}
+
+
+func collectOneWithGitCache(ctx context.Context, options Options, hooksDir string, repository, revision, subdirectory, target string) (string, error) {
+	revision = strings.ToLower(revision)
+	targetComplete := false
+	defer func() {
+		if !targetComplete {
+			_ = os.RemoveAll(target)
+		}
+	}()
+	checkoutDir, err := os.MkdirTemp(options.TempDir, "registry-git-checkout-*")
+	if err != nil {
+		return "", fmt.Errorf("collector: create cached checkout directory: %w", err)
+	}
+	defer os.RemoveAll(checkoutDir)
+
+	withConfig := []string{
+		"-c", "core.hooksPath=" + hooksDir,
+		"-c", "filter.lfs.smudge=",
+		"-c", "filter.lfs.process=",
+		"-c", "filter.lfs.required=false",
+	}
+	runCached := func(gitDir string, args ...string) ([]byte, error) {
+		command := append([]string{}, withConfig...)
+		command = append(command, "--git-dir="+gitDir)
+		command = append(command, args...)
+		output, runErr := options.Git.Run(ctx, gitDir, nil, command...)
+		if runErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, errors.New("collector: Git-object cache operation failed")
+		}
+		return output, nil
+	}
+	verify := func(gitDir string) error {
+		kind, err := runCached(gitDir, "cat-file", "-t", revision)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(kind)) != "commit" {
+			return fmt.Errorf("collector: cached Git object is not a commit")
+		}
+		object, err := runCached(gitDir, "cat-file", "commit", revision)
+		if err != nil {
+			return err
+		}
+		if gitObjectHash(revision, object) != revision {
+			return fmt.Errorf("collector: cached commit object ID mismatch")
+		}
+		if _, err := runCached(gitDir, "fsck", "--full", "--strict", "--no-reflogs", revision); err != nil {
+			return fmt.Errorf("collector: cached Git object graph failed integrity verification")
+		}
+		return nil
+	}
+	populate := func(staging string) error {
+		command := append([]string{}, withConfig...)
+		initArgs := []string{"init", "--bare", "--quiet"}
+		if len(revision) == 64 {
+			initArgs = append(initArgs, "--object-format=sha256")
+		}
+		initArgs = append(initArgs, ".")
+		command = append(command, initArgs...)
+		if _, err := options.Git.Run(ctx, staging, credentialEnv, command...); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return errors.New("collector: initialize Git-object cache staging failed")
+		}
+		credentialEnv, err := credentialEnvironmentFor(ctx, options.Credentials, repository)
+		if err != nil {
+			return err
+		}
+		command = append([]string{}, withConfig...)
+		command = append(command, "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", repository, revision)
+		if _, err := options.Git.Run(ctx, staging, credentialEnv, command...); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return errors.New("collector: fetch declared Git commit into object cache failed")
+		}
+		if err := os.Remove(filepath.Join(staging, "FETCH_HEAD")); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("collector: remove temporary Git fetch metadata: %w", err)
+		}
+		return nil
+	}
+	use := func(gitDir string) error {
+		command := append([]string{}, withConfig...)
+		command = append(command, "-c", "core.bare=false", "--git-dir="+gitDir, "--work-tree="+checkoutDir,
+			"checkout", "--quiet", "--detach", "--no-recurse-submodules", revision)
+		if _, err := options.Git.Run(ctx, checkoutDir, nil, command...); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return errors.New("collector: checkout verified Git-object cache entry failed")
+		}
+		head, err := runCached(gitDir, "rev-parse", "--verify", "HEAD^{commit}")
+		if err != nil || strings.ToLower(strings.TrimSpace(string(head))) != revision {
+			return fmt.Errorf("collector: cached checkout commit identity mismatch")
+		}
+		sourceRoot, err := sourceDirectory(checkoutDir, subdirectory)
+		if err != nil {
+			return err
+		}
+		if err := copyTree(ctx, sourceRoot, target); err != nil {
+			return fmt.Errorf("collector: copy cached source tree: %w", err)
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		targetComplete = true
+		return nil
+	}
+	if _, err := options.GitCache.WithObject(ctx, revision, verify, populate, use); err != nil {
+		return "", err
+	}
 	return strings.ToLower(revision), nil
 }
 

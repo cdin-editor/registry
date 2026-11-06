@@ -68,8 +68,11 @@ Metadata behavior is explicit:
   against the recorded SHA-256 and schemas before identities, source units,
   dependency targets and contracts are compared. A changed snapshot fails
   closed; it never causes a new version selection.
-- `--cache-dir` configures the digest-addressed metadata cache only in strict
-  mode. It does not enable Git-object caching.
+- `--cache-dir` configures the digest-addressed metadata cache for strict
+  metadata verification and the content-addressed Git-object cache for
+  `prepare` and `manifest replay`. The Git cache lives under
+  `<cache-dir>/.git-objects`; offline replay can therefore reuse verified
+  commits without contacting the source remote.
 
 A successful replay writes a JSON receipt to stdout containing the published
 Workspace, Manifest and Report paths and detached digests. The Workspace is
@@ -98,6 +101,7 @@ registry: error[CODE]: actionable diagnostic
 | `MANIFEST_DIGEST_MISMATCH` | 1 | Input bytes do not match the supplied digest |
 | `MANIFEST_INVALID` | 1 | Canonical bytes, public schema or provenance validation failed |
 | `REPLAY_METADATA_CONFIG_FAILED` | 1 | Strict metadata transport could not be configured |
+| `REPLAY_GIT_CACHE_CONFIG_FAILED` | 1 | Content-addressed Git-object cache could not be configured |
 | `REPLAY_METADATA_FAILED` | 1 | Recorded remote metadata failed digest/schema/identity checks |
 | `REPLAY_SOURCE_FAILED` | 1 | A pinned source commit could not be retrieved or verified |
 | `REPLAY_DESTINATION_EXISTS` | 1 | Destination already exists and is preserved |
@@ -131,11 +135,35 @@ firewall; deployments remain responsible for Git network egress controls.
 SHA-256 detects byte changes relative to a trusted receipt but is not a
 signature, attestation or publisher-authenticity proof.
 
+
+## Git-object cache retention and collection
+
+When a cache directory is supplied to `prepare` or `manifest replay`, full
+Git commit IDs are used as content addresses under
+`<cache-dir>/.git-objects`. A cache hit is verified with Git's object-type
+check, a recomputed commit-object hash and strict object-graph `git fsck`
+before it is used. Corrupt/incomplete entries are discarded and fetched again.
+The bare cache stores no remote configuration or credential material.
+
+The same `cache pin`, `cache unpin` and `cache gc` commands manage both
+metadata and Git-object retention. A verified Manifest pin protects all its
+recorded source commit IDs. A replay-wide lease protects every source commit
+until the whole replay finishes, including objects not yet collected. Individual
+object-use leases also protect checkout and copy operations.
+
+Git-object GC uses a 90-day age bound and a 1 GiB target budget, evicting the
+oldest unprotected verified repositories first. Protected objects may keep the
+cache above budget. Each cache's complete reference snapshot and inventory
+must be readable and safe before its GC pass can delete anything. The metadata and Git-object passes are independently
+serialized rather than one cross-cache transaction; when one pass fails after
+the other has completed, repeating `cache gc` is safe and idempotent.
 ## Metadata cache retention and collection
 
 The metadata cache keeps the exact URI+expected-digest identity. Entries may
 be removed only by explicit garbage collection; retained Manifests and active
-strict replays protect their referenced identities.
+strict replays protect their referenced identities. The Git-object cache uses
+the full commit ID and applies a separate 1 GiB budget with the same 90-day
+age bound.
 
 ```sh
 registry cache pin --manifest ./prepared/registry-manifest.json --cache-dir ./registry-cache
@@ -151,6 +179,7 @@ above budget when pins or leases alone exceed the target. The output is a
 machine-readable JSON receipt with removal counts and bytes.
 
 GC fails closed when the pin/lease snapshot is missing, malformed or unsafe.
-The maintenance lock is exclusive. A maintenance lock or lease left by an
-abnormally terminated process is not automatically reclaimed: investigate the
-owner and remove only a confirmed-stale control file as an operator action.
+The maintenance lock is exclusive. A maintenance lock, per-object lock or
+lease left by an abnormally terminated process is not automatically reclaimed:
+investigate the owner and remove only a confirmed-stale control file as an
+operator action.

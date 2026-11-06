@@ -97,14 +97,25 @@ func TestRegistryCachePinUnpinAndGC(t *testing.T) {
 	if err := json.Unmarshal(gcOut.Bytes(), &collected); err != nil {
 		t.Fatal(err)
 	}
-	if collected.Operation != "gc" || collected.ProtectedEntries != 2 {
-		t.Fatalf("GC receipt = %+v, want both Manifest metadata identities protected", collected)
+	if collected.Operation != "gc" || collected.ProtectedEntries != 2 || collected.ProtectedGit != 1 {
+		t.Fatalf("GC receipt = %+v, want both metadata identities and one source commit protected", collected)
 	}
 
 	var unpinOut, unpinErr bytes.Buffer
 	code = runCache(context.Background(), []string{"unpin", "--manifest-sha256", pinned.ManifestSHA256, "--cache-dir", cacheDir}, bytes.NewReader(nil), &unpinOut, &unpinErr)
 	if code != exitOK {
 		t.Fatalf("unpin exit=%d stderr=%q", code, unpinErr.String())
+	}
+	metadataPins, err := os.ReadDir(filepath.Join(cacheDir, ".registry-cache", "pins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitPins, err := os.ReadDir(filepath.Join(cacheDir, ".git-objects", ".registry-cache", "pins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metadataPins) != 0 || len(gitPins) != 0 {
+		t.Fatalf("unpin left metadata/Git pins: %d/%d", len(metadataPins), len(gitPins))
 	}
 }
 
@@ -124,6 +135,13 @@ func TestRegistryCachePinRejectsInvalidManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(pins) != 0 {
-		t.Fatalf("invalid Manifest created %d pin files", len(pins))
+		t.Fatalf("invalid Manifest created %d metadata pin files", len(pins))
+	}
+	gitPins, err := os.ReadDir(filepath.Join(cacheDir, ".git-objects", ".registry-cache", "pins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gitPins) != 0 {
+		t.Fatalf("invalid Manifest created %d Git-object pin files", len(gitPins))
 	}
 }

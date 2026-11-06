@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/cdin-editor/registry/internal/catalog"
@@ -133,6 +134,13 @@ func runManifestWithDependencies(
 			Validator:        validator,
 		},
 		VerifyRemoteMetadata: options.verifyRemoteMetadata,
+	}
+	if options.cacheDir != "" {
+		gitObjectCache, err := collector.NewGitObjectCache(filepath.Join(options.cacheDir, ".git-objects"))
+		if err != nil {
+			return writeManifestError(stderr, "REPLAY_GIT_CACHE_CONFIG_FAILED", "cannot configure Git-object cache; check --cache-dir")
+		}
+		replayOptions.Workspace.GitObjectCache = gitObjectCache
 	}
 	if options.verifyRemoteMetadata {
 		if newFetcher == nil {

@@ -23,14 +23,38 @@
 2. Require a full 40- or 64-character hexadecimal object ID. A branch, tag or abbreviated commit is not accepted.
 3. Apply repository URI policy before Git receives the value.
 4. Derive the destination solely from stable IDs: `components/<component>/<variant>/sources/<source-unit>/`.
-5. Create an isolated temporary repository; disable prompts, system/global Git config, hooks, LFS smudge/process filters and automatic submodule recursion.
-6. Fetch the declared revision without tags, verify it resolves to a commit whose full object ID equals the declared revision, then checkout detached and verify HEAD again.
-7. Validate the declared source subdirectory one path component at a time. Reject parent traversal, absolute forms, symlink components and missing/non-directory paths.
-8. Copy regular files/directories only. Exclude the temporary `.git` directory and reject symlinks and special files. Do not run hooks, filters, scripts, submodules or LFS downloads.
-9. Copy in bounded chunks while checking context cancellation between reads/writes. A cancelled or failed copy removes the partial source target.
-10. Clean temporary repository, hook directory and any source targets created by a failed `Collect` operation on every exit path.
+5. Disable prompts, system/global Git config, hooks, LFS smudge/process filters and automatic submodule recursion for every Git command.
+6. Without a configured object cache, fetch the declared revision into an isolated temporary repository, verify the full commit ID, checkout detached and verify HEAD again.
+7. With a configured object cache, use a private bare repository keyed only by the full commit object ID. On a miss, fetch the exact ID directly from the validated repository URI, verify the commit and complete reachable object graph, then atomically publish the object database. On a hit, re-verify the commit type, recompute the Git object ID from its raw commit bytes and run strict `git fsck` before checkout. A corrupt entry is discarded and re-fetched; a cache hit never bypasses commit identity or object-graph verification.
+8. Checkout from the verified bare object database into a separate temporary worktree. The cache contains no configured remote and no credential material; credentials are supplied only to the fetch process and never stored with cached objects.
+9. Validate the declared source subdirectory one path component at a time. Reject parent traversal, absolute forms, symlink components and missing/non-directory paths.
+10. Copy regular files/directories only. Exclude Git metadata and reject symlinks and special files. Do not run hooks, filters, scripts, submodules or LFS downloads.
+11. Copy in bounded chunks while checking context cancellation between reads/writes. A cancelled or failed copy removes the partial source target.
+12. Clean temporary checkout, hook directory and any source targets created by a failed `Collect` operation on every exit path.
 
 The collector writes only into a caller-supplied staging root; Workspace owns final publication.
+
+## Git-object cache
+
+When `--cache-dir` is supplied to `prepare` or `manifest replay`, the CLI
+uses `<cache-dir>/.git-objects` for content-addressed bare Git object
+databases. SHA-1 and SHA-256 object formats have separate namespaces, and each
+entry is keyed by the exact full lowercase commit ID. The cache never uses
+repository names or branches as identity.
+
+Each object cache operation holds a per-object lock and an active lease. Replay
+also holds a Manifest-wide lease for all source commit IDs before collecting
+the first unit. `cache pin` and `cache unpin` retain/release the same verified
+Manifest identity in both metadata and Git caches. `cache gc` validates both
+reference snapshots before collecting each cache independently.
+
+Git-object GC applies a 90-day maximum age and a 1 GiB target budget. It removes
+the least-recently-verified unprotected bare repositories first. Retained
+Manifest pins and active replay/fetch leases are never evicted to meet the
+budget. As with the metadata cache, malformed or unsafe reference/inventory
+state fails closed. A stale per-object lock or lease after abnormal process
+termination is not automatically reclaimed; it requires operator inspection.
+
 
 ## Security qualification
 
@@ -38,4 +62,4 @@ The HTTPS host allow-list validates the URI but cannot by itself enforce a deplo
 
 ## Tests
 
-Temporary Git repositories prove exact commit retrieval, multiple source units from one repository, branch/tag/abbreviated-ID rejection, missing and malformed repository failures, subdirectory collection, no `.git` copy, hook/filter/submodule isolation, traversal/symlink/special-file rejection, source-tree rollback, and reuse of one repository across logical components/variants without path collisions. Process tests prove an actual Git daemon is terminated by context cancellation and Unix helper descendants do not survive process-group cancellation; Collector tests prove cancellation during fetch and source copy cleans temporary directories and partial targets. Environment tests prove only an explicit, validated askpass credential provider can inject credential values and Git failures do not echo stderr or arguments.
+Temporary Git repositories prove exact commit retrieval and cached-object hit/corruption recovery, multiple source units from one repository, branch/tag/abbreviated-ID rejection, missing and malformed repository failures, subdirectory collection, no `.git` copy, hook/filter/submodule isolation, traversal/symlink/special-file rejection, source-tree rollback, and reuse of one repository across logical components/variants without path collisions. Process tests prove an actual Git daemon is terminated by context cancellation and Unix helper descendants do not survive process-group cancellation; Collector tests prove cancellation during fetch and source copy cleans temporary directories and partial targets. Environment tests prove only an explicit, validated askpass credential provider can inject credential values and Git failures do not echo stderr or arguments.

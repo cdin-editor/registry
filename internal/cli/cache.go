@@ -6,21 +6,26 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cdin-editor/registry/internal/catalog"
+	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/validation"
 )
 
 type cacheReceipt struct {
-	Operation        string `json:"operation"`
-	ManifestSHA256   string `json:"manifest_sha256,omitempty"`
-	RemovedEntries   int    `json:"removed_entries,omitempty"`
-	RemovedBytes     int64  `json:"removed_bytes,omitempty"`
-	RemainingBytes   int64  `json:"remaining_bytes,omitempty"`
-	ProtectedEntries int    `json:"protected_entries,omitempty"`
+	Operation         string `json:"operation"`
+	ManifestSHA256    string `json:"manifest_sha256,omitempty"`
+	RemovedEntries    int    `json:"removed_entries,omitempty"`
+	RemovedBytes      int64  `json:"removed_bytes,omitempty"`
+	RemainingBytes    int64  `json:"remaining_bytes,omitempty"`
+	ProtectedEntries  int    `json:"protected_entries,omitempty"`
+	RemovedGitObjects int    `json:"removed_git_objects,omitempty"`
+	RemovedGitBytes   int64  `json:"removed_git_bytes,omitempty"`
+	RemainingGitBytes int64  `json:"remaining_git_bytes,omitempty"`
+	ProtectedGit      int    `json:"protected_git_objects,omitempty"`
 }
 
 type cacheCommandOptions struct {
@@ -48,11 +53,17 @@ func runCache(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	if err != nil {
 		return usageError(stderr, "%v", err)
 	}
-	cache, err := catalog.NewMetadataCache(options.cacheDir)
+	metadataCache, err := catalog.NewMetadataCache(options.cacheDir)
 	if err != nil {
 		fmt.Fprintln(stderr, "registry: cannot initialize metadata cache")
 		return exitInvalid
 	}
+	gitCache, err := collector.NewGitObjectCache(filepath.Join(options.cacheDir, ".git-objects"))
+	if err != nil {
+		fmt.Fprintln(stderr, "registry: cannot initialize Git-object cache")
+		return exitInvalid
+	}
+
 	switch operation {
 	case "pin":
 		input, err := readInput(options.manifestPath, stdin)
@@ -66,17 +77,40 @@ func runCache(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 			return exitInvalid
 		}
 		if err := manifest.Verify(input.data, "", validator); err != nil {
-			fmt.Fprintln(stderr, "registry: Manifest must pass canonical-byte, schema and provenance verification before it can be retained")
+			fmt.Fprintln(stderr, "registry: Manifest must pass canonical-byte, public-schema and provenance verification before it can be retained")
 			return exitInvalid
 		}
-		id, err := cache.RetainManifest(input.data)
+		id, err := metadataCache.RetainManifest(input.data)
 		if err != nil {
 			fmt.Fprintln(stderr, "registry: could not retain Manifest metadata references")
 			return exitInvalid
 		}
+		gitID, err := gitCache.RetainManifest(input.data)
+		if err != nil {
+			_ = metadataCache.ReleaseManifest(id)
+			fmt.Fprintln(stderr, "registry: could not retain Manifest Git-object references")
+			return exitInvalid
+		}
+		if gitID != id {
+			_ = gitCache.ReleaseManifest(gitID)
+			_ = metadataCache.ReleaseManifest(id)
+			fmt.Fprintln(stderr, "registry: inconsistent Manifest retention identity")
+			return exitInvalid
+		}
 		return writeCacheReceipt(stdout, stderr, cacheReceipt{Operation: "pin", ManifestSHA256: id})
+
 	case "unpin":
-		if err := cache.ReleaseManifest(options.manifestSHA256); err != nil {
+		// Both releases are idempotent, so a transient failure can be retried
+		// with the same Manifest digest without losing reference identity.
+		if err := gitCache.ReleaseManifest(options.manifestSHA256); err != nil {
+			if errors.Is(err, collector.ErrGitObjectCacheBusy) {
+				fmt.Fprintln(stderr, "registry: Git-object cache maintenance is busy")
+			} else {
+				fmt.Fprintln(stderr, "registry: could not release Manifest Git-object pin")
+			}
+			return exitInvalid
+		}
+		if err := metadataCache.ReleaseManifest(options.manifestSHA256); err != nil {
 			if errors.Is(err, catalog.ErrCacheMaintenanceBusy) {
 				fmt.Fprintln(stderr, "registry: metadata cache maintenance is busy")
 			} else {
@@ -85,22 +119,40 @@ func runCache(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 			return exitInvalid
 		}
 		return writeCacheReceipt(stdout, stderr, cacheReceipt{Operation: "unpin", ManifestSHA256: options.manifestSHA256})
+
 	case "gc":
-		result, err := cache.GarbageCollect(ctx)
+		metadataResult, err := metadataCache.GarbageCollect(ctx)
 		if err != nil {
 			if errors.Is(err, catalog.ErrCacheMaintenanceBusy) {
 				fmt.Fprintln(stderr, "registry: metadata cache maintenance is busy")
 			} else if ctx.Err() != nil {
-				fmt.Fprintln(stderr, "registry: cache garbage collection canceled")
+				fmt.Fprintln(stderr, "registry: metadata cache garbage collection canceled")
 			} else {
-				fmt.Fprintln(stderr, "registry: cache garbage collection failed closed; no deletion was authorized by an incomplete reference snapshot")
+				fmt.Fprintln(stderr, "registry: metadata cache garbage collection failed closed; reference snapshot is incomplete")
+			}
+			return exitInvalid
+		}
+		gitResult, err := gitCache.GarbageCollect(ctx)
+		if err != nil {
+			if errors.Is(err, collector.ErrGitObjectCacheBusy) {
+				fmt.Fprintln(stderr, "registry: Git-object cache maintenance is busy")
+			} else if ctx.Err() != nil {
+				fmt.Fprintln(stderr, "registry: Git-object cache garbage collection canceled")
+			} else {
+				fmt.Fprintln(stderr, "registry: Git-object cache garbage collection failed closed; reference snapshot or inventory is incomplete")
 			}
 			return exitInvalid
 		}
 		return writeCacheReceipt(stdout, stderr, cacheReceipt{
-			Operation: "gc", RemovedEntries: result.RemovedEntries,
-			RemovedBytes: result.RemovedBytes, RemainingBytes: result.RemainingBytes,
-			ProtectedEntries: result.ProtectedEntries,
+			Operation: "gc",
+			RemovedEntries: metadataResult.RemovedEntries,
+			RemovedBytes: metadataResult.RemovedBytes,
+			RemainingBytes: metadataResult.RemainingBytes,
+			ProtectedEntries: metadataResult.ProtectedEntries,
+			RemovedGitObjects: gitResult.RemovedObjects,
+			RemovedGitBytes: gitResult.RemovedBytes,
+			RemainingGitBytes: gitResult.RemainingBytes,
+			ProtectedGit: gitResult.ProtectedObjects,
 		})
 	}
 	return exitUsage
@@ -148,10 +200,8 @@ func parseCacheCommandOptions(operation string, args []string) (cacheCommandOpti
 			return options, fmt.Errorf("--manifest-sha256 must be lowercase SHA-256")
 		}
 		for _, value := range options.manifestSHA256 {
-			if value < '0' || value > '9' {
-				if value < 'a' || value > 'f' {
-					return options, fmt.Errorf("--manifest-sha256 must be lowercase SHA-256")
-				}
+			if (value < '0' || value > '9') && (value < 'a' || value > 'f') {
+				return options, fmt.Errorf("--manifest-sha256 must be lowercase SHA-256")
 			}
 		}
 	case "gc":
@@ -174,5 +224,3 @@ func writeCacheReceipt(stdout, stderr io.Writer, receipt cacheReceipt) int {
 	}
 	return exitOK
 }
-
-var _ = os.ErrNotExist
