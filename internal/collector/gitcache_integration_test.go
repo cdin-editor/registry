@@ -93,6 +93,9 @@ func TestCollectGitObjectCacheHitAvoidsRemoteFetchAndCorruptionRefetches(t *test
 	if _, err := os.Stat(filepath.Join(cachePath, "FETCH_HEAD")); !os.IsNotExist(err) {
 		t.Fatalf("bare Git cache retained FETCH_HEAD metadata: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(cachePath, "index")); !os.IsNotExist(err) {
+		t.Fatalf("bare Git cache retained a shared worktree index: %v", err)
+	}
 	if got := git.remoteFetchCount(); got != 1 {
 		t.Fatalf("remote fetches after initial population = %d, want 1", got)
 	}

@@ -461,6 +461,15 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 		return nil
 	}
 	use := func(gitDir string) error {
+		// A bare repository has one shared index file. Per-object locking
+		// serializes checkout, but each temporary worktree still needs a
+		// fresh index so a previous worktree's stat cache cannot suppress
+		// materialization into this one.
+		indexPath := filepath.Join(gitDir, "index")
+		if err := os.Remove(indexPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("collector: reset Git-object cache index: %w", err)
+		}
+		defer os.Remove(indexPath)
 		command := append([]string{}, withConfig...)
 		command = append(command, "-c", "core.bare=false", "--git-dir="+gitDir, "--work-tree="+checkoutDir,
 			"checkout", "--quiet", "--detach", "--no-recurse-submodules", revision)
