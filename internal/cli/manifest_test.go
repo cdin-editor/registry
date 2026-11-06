@@ -417,7 +417,7 @@ func TestManifestCLIReplayStrictMetadataUsesExplicitAllowList(t *testing.T) {
 func TestManifestCLIUsageErrorsHaveStableExitCodeAndCode(t *testing.T) {
 	cases := [][]string{
 		{"verify"},
-		{"verify", "--input", "manifest.json"},
+		{"verify", "--input"},
 		{"replay"},
 		{"replay", "--input", "manifest.json", "--output", "out"},
 		{"replay", "--input", "manifest.json", "--allow-host", "source.example.invalid"},
