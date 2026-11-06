@@ -59,7 +59,7 @@ func New() (*Validator, error) {
 		}
 		validator.compiled[kind] = compiled
 	}
-	return validator, nil;
+	return validator, nil
 }
 
 // Validate checks strict JSON/YAML syntax and the Spec-owned schema for one
