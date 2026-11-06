@@ -161,11 +161,15 @@ func parseUpdateDiscoveryOptions(args []string) (updateDiscoveryOptions, error) 
 			seen[flag] = true
 			options.inputPath = value
 		case "--sha256":
-			if seen[flag] { return options, fmt.Errorf("%s may be specified only once", flag) }
+			if seen[flag] {
+				return options, fmt.Errorf("%s may be specified only once", flag)
+			}
 			seen[flag] = true
 			options.expectedSHA256 = value
 		case "--product":
-			if seen[flag] { return options, fmt.Errorf("%s may be specified only once", flag) }
+			if seen[flag] {
+				return options, fmt.Errorf("%s may be specified only once", flag)
+			}
 			seen[flag] = true
 			options.productPath = value
 		case "--catalog":
@@ -179,11 +183,15 @@ func parseUpdateDiscoveryOptions(args []string) (updateDiscoveryOptions, error) 
 				options.allowedHosts = append(options.allowedHosts, host)
 			}
 		case "--cache-dir":
-			if seen[flag] { return options, fmt.Errorf("%s may be specified only once", flag) }
+			if seen[flag] {
+				return options, fmt.Errorf("%s may be specified only once", flag)
+			}
 			seen[flag] = true
 			options.cacheDir = value
 		case "--report":
-			if seen[flag] { return options, fmt.Errorf("%s may be specified only once", flag) }
+			if seen[flag] {
+				return options, fmt.Errorf("%s may be specified only once", flag)
+			}
 			seen[flag] = true
 			options.reportPath = value
 		}
