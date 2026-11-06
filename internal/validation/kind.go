@@ -9,12 +9,12 @@ import (
 type Kind string
 
 const (
-	ProductDefinition Kind = "product-definition"
-	CatalogIndex      Kind = "catalog-index"
-	ComponentRelease  Kind = "component-release"
-	ResolvedManifest  Kind = "resolved-manifest"
-	ResolutionReport  Kind = "resolution-report"
-	UpdateDiscoveryReport Kind = "update-discovery-report"
+	ProductDefinition      Kind = "product-definition"
+	CatalogIndex           Kind = "catalog-index"
+	ComponentRelease       Kind = "component-release"
+	ResolvedManifest       Kind = "resolved-manifest"
+	ResolutionReport       Kind = "resolution-report"
+	UpdateDiscoveryReport  Kind = "update-discovery-report"
 )
 
 var allKinds = []Kind{
