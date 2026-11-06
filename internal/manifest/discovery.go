@@ -25,7 +25,7 @@ const (
 	UpdateReasonHistoricalUnavailable       = "HISTORICAL_RELEASE_UNAVAILABLE"
 	UpdateReasonHistoricalIdentityChanged   = "HISTORICAL_RELEASE_IDENTITY_CHANGED"
 	UpdateReasonComponentRemoved            = "COMPONENT_REMOVED_FROM_RESOLUTION"
-	UpdateReasonResolutionFailed            = "CURRENT_RESOLUTION_FAILED"
+	UpdateReasonResolutionFailed          = "CURRENT_RESOLUTION_FAILED"
 	UpdateReasonNewlySelected               = "NEWLY_SELECTED"
 
 	UpdateCandidateSelected                 = "SELECTED"
