@@ -762,19 +762,20 @@ func TestREG024VerifyManifestChecksDependencyOrderAndSetOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	addon := document.Components[0]
+	engine := document.Components[0]
+	addon := engine
 	addon.ComponentID = "addon"
 	addon.Version = "2.0.0"
 	addon.ReleaseMetadataURI = "https://catalog.example.invalid/releases/addon-2.0.0.json"
 	addon.SourceUnits = []SourceUnit{{
-		SourceUnitID: "source",
+		SourceUnitID:  "source",
 		RepositoryURI: "https://github.com/example/addon.git",
-		Revision: testRevision,
+		Revision:      testRevision,
 		WorkspacePath: "components/addon/default/sources/source",
 	}}
 	addon.Dependencies = []Dependency{{ComponentID: "engine", Variant: "default", Version: "1.0.0"}}
-	document.Components[0].Dependencies = nil
-	document.Components = append(document.Components, addon)
+	engine.Dependencies = []Dependency{}
+	document.Components = []Component{addon, engine}
 	document.ResolutionOrder = []resolver.Node{
 		{ComponentID: "engine", Variant: "default", Version: "1.0.0"},
 		{ComponentID: "addon", Variant: "default", Version: "2.0.0"},
