@@ -246,3 +246,105 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 		t.Fatalf("strict metadata failure published a destination: stat err=%v", err)
 	}
 }
+
+
+// replayCountingGitRunner records whether replay reached source retrieval.
+type replayCountingGitRunner struct {
+	delegate replayGitRunner
+	calls    int
+}
+
+func (g *replayCountingGitRunner) Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
+	g.calls++
+	return g.delegate.Run(ctx, dir, env, args...)
+}
+
+func TestReplayRejectsInvalidManifestAndUnreplayableCommitsWithoutPublishing(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	repositoryURI := "https://example.invalid/engine.git"
+	resolution := replayResolution(repository, repositoryURI, revision)
+	validManifest, _ := buildReplayManifest(t, resolution)
+
+	mutate := func(change func(*manifest.Document)) []byte {
+		t.Helper()
+		var document manifest.Document
+		if err := json.Unmarshal(validManifest, &document); err != nil {
+			t.Fatal(err)
+		}
+		change(&document)
+		encoded, err := manifest.MarshalCanonical(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	cases := []struct {
+		name      string
+		input     []byte
+		expectGit bool
+	}{
+		{
+			name:  "non-canonical bytes",
+			input: append(append([]byte(nil), validManifest...), ' '),
+		},
+		{
+			name: "missing release provenance",
+			input: mutate(func(document *manifest.Document) {
+				document.Components[0].ReleaseMetadataSHA = ""
+			}),
+		},
+		{
+			name: "unsafe workspace path",
+			input: mutate(func(document *manifest.Document) {
+				document.Components[0].SourceUnits[0].WorkspacePath = "components/engine/default/sources/../../escape"
+			}),
+		},
+		{
+			name: "non-full Git revision",
+			input: mutate(func(document *manifest.Document) {
+				document.Components[0].SourceUnits[0].Revision = "abcdef123456"
+			}),
+		},
+		{
+			name: "missing source repository identity",
+			input: mutate(func(document *manifest.Document) {
+				document.Components[0].SourceUnits[0].RepositoryURI = ""
+			}),
+		},
+		{
+			name: "invalid source unit identity",
+			input: mutate(func(document *manifest.Document) {
+				document.Components[0].SourceUnits[0].SourceUnitID = ""
+			}),
+		},
+		{
+			name: "full revision that is not an available commit",
+			input: mutate(func(document *manifest.Document) {
+				document.Components[0].SourceUnits[0].Revision = strings.Repeat("0", 40)
+			}),
+			expectGit: true,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "rejected-replay")
+			options := replayOptions(destination, repositoryURI, repository)
+			git := &replayCountingGitRunner{
+				delegate: replayGitRunner{repositoryURI: repositoryURI, localPath: repository},
+			}
+			options.Git = git
+			if _, err := Replay(context.Background(), testCase.input, "", ReplayOptions{Workspace: options}); err == nil {
+				t.Fatal("invalid or unreplayable Manifest unexpectedly succeeded")
+			}
+			if testCase.expectGit && git.calls == 0 {
+				t.Fatal("validly-shaped but unavailable commit did not reach Git retrieval")
+			}
+			if !testCase.expectGit && git.calls != 0 {
+				t.Fatalf("invalid Manifest reached Git %d times before rejection", git.calls)
+			}
+			if _, err := os.Stat(destination); !os.IsNotExist(err) {
+				t.Fatalf("rejected replay published a destination: stat err=%v", err)
+			}
+		})
+	}
+}
