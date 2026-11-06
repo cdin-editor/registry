@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,25 @@ const (
 	manifestFilename = "registry-manifest.json"
 	reportFilename   = "resolution-report.json"
 )
+
+// stagedFile is the minimum file contract needed for durable staged documents.
+// The unexported hook seam below lets package tests inject write and sync faults
+// without changing the public Workspace API.
+type stagedFile interface {
+	Write([]byte) (int, error)
+	Sync() error
+	Close() error
+}
+
+type prepareHooks struct {
+	afterCollect      func([]collector.Source) error
+	afterManifest     func([]byte) error
+	beforeReportWrite func() error
+	afterReport       func([]byte) error
+	beforePublish     func() error
+	openFile          func(string, int, os.FileMode) (stagedFile, error)
+	rename            func(string, string) error
+}
 
 // Options contains the external boundaries required for one prepare operation.
 // Destination must not already exist; Registry never mutates an older workspace.
@@ -66,6 +86,12 @@ type Prepared struct {
 // public output documents, then atomically publishes the complete workspace.
 // It returns no Prepared value unless the final rename succeeds.
 func Prepare(ctx context.Context, resolution resolver.Result, options Options) (Prepared, error) {
+	return prepare(ctx, resolution, options, prepareHooks{})
+}
+
+// prepare keeps failure injection private to this package. Production callers
+// always use Prepare and cannot replace filesystem operations or stage hooks.
+func prepare(ctx context.Context, resolution resolver.Result, options Options, hooks prepareHooks) (Prepared, error) {
 	if ctx == nil {
 		return Prepared{}, fmt.Errorf("workspace: context is required")
 	}
@@ -146,6 +172,11 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	if err != nil {
 		return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err)
 	}
+	if hooks.afterCollect != nil {
+		if err := hooks.afterCollect(sources); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: after source collection: %w", err)
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}
@@ -161,6 +192,14 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	if err := options.Validator.Validate(validation.ResolvedManifest, manifestBytes, manifestFilename); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: validate Resolved Manifest: %w", err)
 	}
+	if hooks.afterManifest != nil {
+		if err := hooks.afterManifest(manifestBytes); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: after Manifest validation: %w", err)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return Prepared{}, err
+	}
 
 	reportBytes, err := manifest.MarshalReport(resolution.Report)
 	if err != nil {
@@ -173,14 +212,38 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 		return Prepared{}, err
 	}
 
-	if err := writeExclusive(stage, manifestFilename, manifestBytes); err != nil {
+	if err := writeExclusiveUsing(stage, manifestFilename, manifestBytes, hooks.openFile); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: write Resolved Manifest: %w", err)
 	}
-	if err := writeExclusive(stage, reportFilename, reportBytes); err != nil {
+	if err := ctx.Err(); err != nil {
+		return Prepared{}, err
+	}
+	if hooks.beforeReportWrite != nil {
+		if err := hooks.beforeReportWrite(); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: before Resolution Report write: %w", err)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return Prepared{}, err
+	}
+	if err := writeExclusiveUsing(stage, reportFilename, reportBytes, hooks.openFile); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: write Resolution Report: %w", err)
+	}
+	if hooks.afterReport != nil {
+		if err := hooks.afterReport(reportBytes); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: after Resolution Report write: %w", err)
+		}
 	}
 	if err := ensureNoSymlinkAncestors(stage); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: staging directory changed unexpectedly: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return Prepared{}, err
+	}
+	if hooks.beforePublish != nil {
+		if err := hooks.beforePublish(); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: before publication: %w", err)
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
@@ -190,7 +253,11 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Prepared{}, fmt.Errorf("workspace: recheck destination: %w", err)
 	}
-	if err := os.Rename(stage, destination); err != nil {
+	rename := hooks.rename
+	if rename == nil {
+		rename = os.Rename
+	}
+	if err := rename(stage, destination); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: publish complete workspace atomically: %w", err)
 	}
 
@@ -207,13 +274,28 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 // writeExclusive writes and fsyncs a complete document before it becomes part
 // of the staged workspace. O_EXCL prevents accidental replacement within stage.
 func writeExclusive(root, filename string, content []byte) error {
+	return writeExclusiveUsing(root, filename, content, nil)
+}
+
+func writeExclusiveUsing(root, filename string, content []byte, open func(string, int, os.FileMode) (stagedFile, error)) error {
 	target := filepath.Join(root, filename)
-	file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if open == nil {
+		open = func(path string, flag int, mode os.FileMode) (stagedFile, error) {
+			return os.OpenFile(path, flag, mode)
+		}
+	}
+	file, err := open(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
-	_, writeErr := file.Write(content)
-	syncErr := file.Sync()
+	written, writeErr := file.Write(content)
+	if writeErr == nil && written != len(content) {
+		writeErr = io.ErrShortWrite
+	}
+	syncErr := error(nil)
+	if writeErr == nil {
+		syncErr = file.Sync()
+	}
 	closeErr := file.Close()
 	if writeErr != nil {
 		return writeErr
