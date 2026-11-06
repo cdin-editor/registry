@@ -139,7 +139,6 @@ func TestREG022EmptyDestinationRaceIsNotOverwritten(t *testing.T) {
 	assertPrepareFailureLeavesNoArtifacts(t, destination)
 }
 
-
 func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
 	parent := t.TempDir()
 	source := filepath.Join(parent, "stage")
