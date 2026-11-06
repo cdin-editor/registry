@@ -87,7 +87,7 @@ func runManifestDiscover(
 	}
 	fetcher, err := newFetcher(catalog.HTTPFetcherOptions{
 		AllowedHosts: options.allowedHosts,
-		CacheDir: options.cacheDir,
+		CacheDir:     options.cacheDir,
 	})
 	if err != nil {
 		return writeManifestError(stderr, "DISCOVERY_CATALOG_CONFIG_FAILED", "cannot configure current Catalog transport; check --allow-host and --cache-dir")
@@ -155,7 +155,9 @@ func parseUpdateDiscoveryOptions(args []string) (updateDiscoveryOptions, error) 
 		i++
 		switch flag {
 		case "--input":
-			if seen[flag] { return options, fmt.Errorf("%s may be specified only once", flag) }
+			if seen[flag] {
+				return options, fmt.Errorf("%s may be specified only once", flag)
+			}
 			seen[flag] = true
 			options.inputPath = value
 		case "--sha256":
@@ -171,7 +173,9 @@ func parseUpdateDiscoveryOptions(args []string) (updateDiscoveryOptions, error) 
 		case "--allow-host":
 			for _, host := range strings.Split(value, ",") {
 				host = strings.ToLower(strings.TrimSpace(host))
-				if host == "" { return options, fmt.Errorf("--allow-host contains an empty host") }
+				if host == "" {
+					return options, fmt.Errorf("--allow-host contains an empty host")
+				}
 				options.allowedHosts = append(options.allowedHosts, host)
 			}
 		case "--cache-dir":
@@ -184,11 +188,21 @@ func parseUpdateDiscoveryOptions(args []string) (updateDiscoveryOptions, error) 
 			options.reportPath = value
 		}
 	}
-	if options.inputPath == "" { return options, fmt.Errorf("--input is required") }
-	if options.productPath == "" { return options, fmt.Errorf("--product is required") }
-	if len(options.catalogs) == 0 { return options, fmt.Errorf("at least one --catalog is required") }
-	if len(options.allowedHosts) == 0 { return options, fmt.Errorf("at least one --allow-host is required") }
-	if options.reportPath == "-" { return options, fmt.Errorf("--report requires a file path; stdout already receives the report") }
+	if options.inputPath == "" {
+		return options, fmt.Errorf("--input is required")
+	}
+	if options.productPath == "" {
+		return options, fmt.Errorf("--product is required")
+	}
+	if len(options.catalogs) == 0 {
+		return options, fmt.Errorf("at least one --catalog is required")
+	}
+	if len(options.allowedHosts) == 0 {
+		return options, fmt.Errorf("at least one --allow-host is required")
+	}
+	if options.reportPath == "-" {
+		return options, fmt.Errorf("--report requires a file path; stdout already receives the report")
+	}
 	return options, nil
 }
 
@@ -217,7 +231,9 @@ func writeDiscoveryReportFile(path string, data []byte) error {
 	}
 	created := true
 	defer func() {
-		if created { _ = os.Remove(absolute) }
+		if created {
+			_ = os.Remove(absolute)
+		}
 	}()
 	if _, err := file.Write(data); err != nil {
 		_ = file.Close()
