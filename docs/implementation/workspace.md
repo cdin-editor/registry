@@ -20,14 +20,24 @@
 5. Collect all declared source units into staging.
 6. Build the Manifest from the resolver graph and Collector records; serialize Manifest and Report canonically and validate both against the embedded v1 schemas.
 7. Write output documents with exclusive create, restrictive permissions and fsync.
-8. Recheck context and destination, then rename the completed staging directory to the destination.
-9. Return the published paths and detached digests only after rename succeeds.
+8. Recheck context and the staging path, then publish with a native atomic
+   no-replace directory rename.
+9. Return the published paths and detached digests only after publication succeeds.
 
 A deferred cleanup removes the private staging directory and the lock owned by
 this operation on every failure path. A pre-existing destination is never
-intentionally overwritten. The final directory rename stays on the same
-filesystem. The destination is checked again immediately before rename to
-reject a competing creator.
+overwritten. The final directory rename stays on the same filesystem. The
+destination is checked before publication for an early diagnostic, then the
+native no-replace operation closes the check/rename race, including when an
+unrelated process creates an empty destination immediately before publication.
+
+The supported native implementations are:
+- Linux: `renameat2(..., RENAME_NOREPLACE)`.
+- macOS: `renamex_np(..., RENAME_EXCL)`.
+- Windows: `MoveFileEx(..., 0)`, without replace or cross-volume-copy flags.
+
+On other operating systems the publication helper fails closed rather than
+falling back to a racy check followed by `os.Rename`.
 
 An existing lock is treated as busy whether it belongs to a live operation or
 was left by abnormal termination. Registry does not guess that a lock is stale:
@@ -45,23 +55,23 @@ between material stages, and failure immediately before publication. Every
 such case must leave no destination or staging directory and must remove the
 lock owned by the failing operation.
 
-A competing process is also injected at the final rename boundary. Its
-destination data must survive; Registry must return an error and clean its own
-stage and lock. The destination recheck is not a substitute for the OS-specific
-atomic no-replace rename primitive against an empty-directory race; callers
-should reserve output paths for Registry until that platform guarantee is
-implemented and verified. A competing non-empty destination is covered by
-`TestREG022ConcurrentDestinationCreationIsNotOverwritten`.
+Competing-process tests inject both empty and non-empty destinations at the
+final rename boundary. The destination must survive unchanged; Registry must
+return an error and clean its own stage and lock. The no-replace helper also
+runs two concurrent publishers against one absent destination and proves that
+exactly one complete directory wins. Existing destination symlinks are not
+followed. A stage path replaced by a symlink before publication is rejected.
 
 ## Limits and durability
 
 The sibling lock serializes only Registry publishers that follow this
-protocol. It does not exclude unrelated processes. File contents are synced
-before publication, but the parent directory is not fsynced and the package
-does not claim uniform crash durability. Same-filesystem directory rename
-provides the namespace publication boundary on the tested platform; the exact
-rename, locking, cleanup and durability guarantees require native Linux,
-macOS and Windows CI evidence before a cross-platform guarantee is claimed.
+protocol. It does not exclude unrelated processes. Native no-replace
+publication prevents an existing destination from being replaced on Linux,
+macOS and Windows, and those implementations are exercised by the native
+Workspace workflow. File contents are synced before publication, but the
+parent directory is not fsynced and the package does not claim uniform crash
+durability. A successful atomic namespace rename is not by itself a guarantee
+that the directory entry survives sudden power loss on every filesystem.
 
 ## Tests
 
@@ -73,14 +83,17 @@ The Phase 4 matrix additionally injects:
 - Manifest and Report write and fsync failures;
 - cancellation after collection, after Manifest validation, before Report write, after Report write and before publication;
 - pre-rename failure, lock contention, stale-lock fail-closed handling and owned-lock cleanup;
-- an unrelated non-empty destination appearing inside the final rename boundary.
+- unrelated empty and non-empty destinations appearing inside the final rename boundary;
+- two concurrent native publishers competing for one destination, with exactly one complete winner;
+- destination symlink rejection and staging-path symlink replacement rejection;
+- cleanup assertions for temporary Git clones and disabled-hook directories.
 
 `TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths`
 covers the complete Workspace path layout for multiple source units that share
 one repository and commit across component/variant identities.
 
 The native matrix runs `go test ./internal/workspace/...` through the pinned
-Pipeline task on Ubuntu, macOS and Windows. It establishes observed behavior
-only for the runner images and toolchain on which the workflow passes; it does
-not by itself establish parent-directory crash durability or atomic no-replace
-semantics against an empty destination race.
+Pipeline task on Ubuntu, macOS and Windows. The native tests establish the
+no-replace syscall behavior on the corresponding runner images and toolchain.
+They do not establish parent-directory crash durability or power-loss
+persistence guarantees.
