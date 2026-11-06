@@ -549,7 +549,6 @@ func reverseCollectorSources(values []collector.Source) {
 	}
 }
 
-
 // TestREG024VerifyManifestAcceptsCompleteCanonicalDocument verifies the public
 // Manifest schema, canonical bytes, detached digest and provenance together.
 func TestREG024VerifyManifestAcceptsCompleteCanonicalDocument(t *testing.T) {
