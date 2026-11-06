@@ -23,21 +23,21 @@ func resolvedFixture() (*resolver.Graph, []collector.Source) {
 	graph := &resolver.Graph{
 		SchemaVersion: schemaVersion,
 		Catalogs: []resolver.CatalogReference{{
-			CatalogID:   "stable",
+			CatalogID: "stable",
 			MetadataURI: "https://catalog.example.invalid/index.json",
 			MetadataSHA: testDigest,
 		}},
 		Roots: []resolver.Requirement{{ComponentID: "engine", Variant: "default", VersionConstraint: "=1.0.0"}},
 		Components: []resolver.ResolvedComponent{{
-			ComponentID:        "engine",
-			Variant:            "default",
-			Version:            "1.0.0",
+			ComponentID: "engine",
+			Variant: "default",
+			Version: "1.0.0",
 			ReleaseMetadataURI: "https://catalog.example.invalid/releases/engine-1.0.0.json",
 			ReleaseMetadataSHA: testDigest,
 			SourceUnits: []catalogModel.SourceUnit{{
-				ID:            "source",
+				ID: "source",
 				RepositoryURI: "https://github.com/example/engine.git",
-				Revision:      testRevision,
+				Revision: testRevision,
 			}},
 			Dependencies: []resolver.ResolvedDependency{},
 			Contracts: catalogModel.Contracts{
@@ -48,10 +48,10 @@ func resolvedFixture() (*resolver.Graph, []collector.Source) {
 		ResolutionOrder: []resolver.Node{{ComponentID: "engine", Variant: "default", Version: "1.0.0"}},
 	}
 	collected := []collector.Source{{
-		ComponentID:   "engine",
-		Variant:       "default",
-		SourceUnitID:  "source",
-		Revision:      testRevision,
+		ComponentID: "engine",
+		Variant: "default",
+		SourceUnitID: "source",
+		Revision: testRevision,
 		WorkspacePath: "components/engine/default/sources/source",
 	}}
 	return graph, collected
@@ -93,10 +93,10 @@ func TestREG023RejectsMissingOrExtraCollectorResults(t *testing.T) {
 		t.Fatal("expected missing Collector result to fail")
 	}
 	sources = append(sources, collector.Source{
-		ComponentID:   "engine",
-		Variant:       "default",
-		SourceUnitID:  "extra",
-		Revision:      testRevision,
+		ComponentID: "engine",
+		Variant: "default",
+		SourceUnitID: "extra",
+		Revision: testRevision,
 		WorkspacePath: "components/engine/default/sources/extra",
 	})
 	if _, err := Build(graph, sources, "1.2.3"); err == nil {
@@ -179,7 +179,7 @@ func TestREG024CanonicalJSONNumbersUseECMAScriptFormatting(t *testing.T) {
 func TestREG024ReportSerializationNormalizesEmptyCollections(t *testing.T) {
 	report := resolver.Report{
 		SchemaVersion: schemaVersion,
-		Result:        "failure",
+		Result: "failure",
 		Conflicts: []resolver.Conflict{
 			{Code: "Z_CONFLICT", Message: "last", InvolvedComponents: []string{"z", "a"}},
 			{Code: "A_CONFLICT", Message: "first"},
@@ -345,15 +345,15 @@ func TestREG024ManifestGoldenBytesAndDetachedDigest(t *testing.T) {
 func TestREG024ReportGoldenBytesAndDetachedDigest(t *testing.T) {
 	report := resolver.Report{
 		SchemaVersion: "1.1.0",
-		Result:        "success",
+		Result: "success",
 		Selected: []resolver.SelectedCandidate{{
 			ComponentID: "engine",
-			Variant:     "default",
-			Version:     "1.0.0",
+			Variant: "default",
+			Version: "1.0.0",
 		}},
 		AppliedConstraints: []resolver.AppliedConstraint{{
-			ComponentID:       "engine",
-			Variant:           "default",
+			ComponentID: "engine",
+			Variant: "default",
 			VersionConstraint: "=1.0.0",
 			Source: resolver.ConstraintSource{
 				Type: resolver.ConstraintSourceRoot,
@@ -452,7 +452,7 @@ func TestREG024ManifestAndReportDeterministicAcrossInputPermutations(t *testing.
 
 	report := resolver.Report{
 		SchemaVersion: "1.1.0",
-		Result:        "success",
+		Result: "success",
 		Selected: []resolver.SelectedCandidate{
 			{ComponentID: "engine", Variant: "default", Version: "1.0.0"},
 			{ComponentID: "addon", Variant: "default", Version: "2.0.0"},
@@ -767,9 +767,9 @@ func TestREG024VerifyManifestChecksDependencyOrderAndSetOrdering(t *testing.T) {
 	addon.Version = "2.0.0"
 	addon.ReleaseMetadataURI = "https://catalog.example.invalid/releases/addon-2.0.0.json"
 	addon.SourceUnits = []SourceUnit{{
-		SourceUnitID:  "source",
+		SourceUnitID: "source",
 		RepositoryURI: "https://github.com/example/addon.git",
-		Revision:      testRevision,
+		Revision: testRevision,
 		WorkspacePath: "components/addon/default/sources/source",
 	}}
 	addon.Dependencies = []Dependency{{ComponentID: "engine", Variant: "default", Version: "1.0.0"}}
@@ -799,7 +799,6 @@ func TestREG024VerifyManifestChecksDependencyOrderAndSetOrdering(t *testing.T) {
 		t.Fatal("dependent-before-dependency order unexpectedly passed verification")
 	}
 }
-
 
 // TestREG024CanonicalRejectsCyclicValues ensures the UTF-8 preflight does not
 // recurse indefinitely on values that json.Marshal must reject as cyclic.

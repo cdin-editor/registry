@@ -110,12 +110,12 @@ func Replay(ctx context.Context, canonicalManifest []byte, expectedSHA256 string
 
 func resolutionFromManifest(document manifest.Document) (resolver.Result, error) {
 	graph := &resolver.Graph{
-		SchemaVersion:        document.SchemaVersion,
-		Catalogs:             make([]resolver.CatalogReference, 0, len(document.Catalogs)),
-		Roots:                make([]resolver.Requirement, 0, len(document.Roots)),
+		SchemaVersion: document.SchemaVersion,
+		Catalogs: make([]resolver.CatalogReference, 0, len(document.Catalogs)),
+		Roots: make([]resolver.Requirement, 0, len(document.Roots)),
 		EnvironmentContracts: make([]resolver.EnvironmentContract, 0, len(document.EnvironmentContracts)),
-		Components:           make([]resolver.ResolvedComponent, 0, len(document.Components)),
-		ResolutionOrder:      append([]resolver.Node(nil), document.ResolutionOrder...),
+		Components: make([]resolver.ResolvedComponent, 0, len(document.Components)),
+		ResolutionOrder: append([]resolver.Node(nil), document.ResolutionOrder...),
 	}
 	for _, item := range document.Catalogs {
 		graph.Catalogs = append(graph.Catalogs, resolver.CatalogReference{
@@ -134,31 +134,31 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 	}
 
 	report := resolver.Report{
-		SchemaVersion:      "1.1.0",
-		Result:             "success",
-		Selected:           make([]resolver.SelectedCandidate, 0, len(document.Components)),
+		SchemaVersion: "1.1.0",
+		Result: "success",
+		Selected: make([]resolver.SelectedCandidate, 0, len(document.Components)),
 		AppliedConstraints: []resolver.AppliedConstraint{},
 		RejectedCandidates: []resolver.RejectedCandidate{},
-		Conflicts:          []resolver.Conflict{},
-		Warnings:           []resolver.Warning{{
-			Code:    "MANIFEST_REPLAY_PINNED",
+		Conflicts: []resolver.Conflict{},
+		Warnings: []resolver.Warning{{
+			Code: "MANIFEST_REPLAY_PINNED",
 			Message: "Replayed the exact selected versions and source commits from the verified Manifest; version selection was not rerun.",
 		}},
 	}
 	for _, item := range document.Components {
 		component := resolver.ResolvedComponent{
-			ComponentID:        item.ComponentID,
-			Variant:            item.Variant,
-			Version:            item.Version,
+			ComponentID: item.ComponentID,
+			Variant: item.Variant,
+			Version: item.Version,
 			ReleaseMetadataURI: item.ReleaseMetadataURI,
 			ReleaseMetadataSHA: item.ReleaseMetadataSHA,
-			SourceUnits:        make([]catalog.SourceUnit, 0, len(item.SourceUnits)),
-			Dependencies:       make([]resolver.ResolvedDependency, 0, len(item.Dependencies)),
-			Contracts:          item.Contracts,
+			SourceUnits: make([]catalog.SourceUnit, 0, len(item.SourceUnits)),
+			Dependencies: make([]resolver.ResolvedDependency, 0, len(item.Dependencies)),
+			Contracts: item.Contracts,
 		}
 		for _, source := range item.SourceUnits {
 			component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
-				ID:       source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+				ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
 				Revision: source.Revision, Subdirectory: source.Subdirectory,
 			})
 		}
@@ -167,14 +167,14 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 				ComponentID: dependency.ComponentID, Variant: dependency.Variant, Version: dependency.Version,
 			})
 			report.AppliedConstraints = append(report.AppliedConstraints, resolver.AppliedConstraint{
-				ComponentID:       dependency.ComponentID,
-				Variant:           dependency.Variant,
+				ComponentID: dependency.ComponentID,
+				Variant: dependency.Variant,
 				VersionConstraint: "=" + dependency.Version,
-				Source:            resolver.ConstraintSource{
-					Type:        resolver.ConstraintSourceDependency,
+				Source: resolver.ConstraintSource{
+					Type: resolver.ConstraintSourceDependency,
 					ComponentID: item.ComponentID,
-					Variant:     item.Variant,
-					Version:     item.Version,
+					Variant: item.Variant,
+					Version: item.Version,
 				},
 			})
 		}
@@ -185,10 +185,10 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 	}
 	for _, root := range document.Roots {
 		report.AppliedConstraints = append(report.AppliedConstraints, resolver.AppliedConstraint{
-			ComponentID:       root.ComponentID,
-			Variant:           root.Variant,
+			ComponentID: root.ComponentID,
+			Variant: root.Variant,
 			VersionConstraint: "=" + root.Version,
-			Source:            resolver.ConstraintSource{Type: resolver.ConstraintSourceRoot},
+			Source: resolver.ConstraintSource{Type: resolver.ConstraintSourceRoot},
 		})
 	}
 	return resolver.Result{Graph: graph, Report: report}, nil
