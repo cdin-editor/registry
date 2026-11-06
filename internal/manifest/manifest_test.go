@@ -548,3 +548,254 @@ func reverseCollectorSources(values []collector.Source) {
 		values[left], values[right] = values[right], values[left]
 	}
 }
+
+
+// TestREG024VerifyManifestAcceptsCompleteCanonicalDocument verifies the public
+// Manifest schema, canonical bytes, detached digest and provenance together.
+func TestREG024VerifyManifestAcceptsCompleteCanonicalDocument(t *testing.T) {
+	graph, sources := resolvedFixture()
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(encoded, Digest(encoded), validator); err != nil {
+		t.Fatalf("complete canonical Manifest failed verification: %v", err)
+	}
+	// A digest is deliberately optional; without an external receipt the
+	// verifier still checks canonical form, schema and semantic provenance.
+	if err := Verify(encoded, "", validator); err != nil {
+		t.Fatalf("Manifest without an external digest failed verification: %v", err)
+	}
+}
+
+// TestREG024VerifyManifestRejectsBadBytesDigestAndSchema proves that
+// canonicalization alone is not treated as full Manifest verification.
+func TestREG024VerifyManifestRejectsBadBytesDigestAndSchema(t *testing.T) {
+	graph, sources := resolvedFixture()
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range []struct {
+		name   string
+		input  []byte
+		digest string
+	}{
+		{name: "empty input"},
+		{name: "non-canonical bytes", input: []byte("{ \"schema_version\": \"1.0.0\" }")},
+		{name: "wrong detached digest", input: encoded, digest: strings.Repeat("0", 64)},
+		{name: "malformed detached digest", input: encoded, digest: "sha256:" + Digest(encoded)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := Verify(testCase.input, testCase.digest, validator); err == nil {
+				t.Fatal("invalid Manifest input unexpectedly passed verification")
+			}
+		})
+	}
+
+	unknownVersion := document
+	unknownVersion.SchemaVersion = "2.0.0"
+	unknownBytes, err := MarshalCanonical(unknownVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(unknownBytes, "", validator); err == nil {
+		t.Fatal("unsupported Manifest schema version unexpectedly passed verification")
+	}
+
+	missingRequired := document
+	missingRequired.Components = nil
+	missingBytes, err := MarshalCanonical(missingRequired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(missingBytes, "", validator); err == nil {
+		t.Fatal("Manifest without required components unexpectedly passed verification")
+	}
+}
+
+// TestREG024VerifyManifestRejectsUnsafeOrMissingProvenance exercises semantic
+// checks beyond the JSON Schema's structural validation.
+func TestREG024VerifyManifestRejectsUnsafeOrMissingProvenance(t *testing.T) {
+	graph, sources := resolvedFixture()
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*Document)
+	}{
+		{
+			name: "missing catalog digest",
+			mutate: func(d *Document) {
+				d.Catalogs[0].MetadataSHA = ""
+			},
+		},
+		{
+			name: "credential-bearing catalog URI",
+			mutate: func(d *Document) {
+				d.Catalogs[0].MetadataURI = "https://user:secret@catalog.example.invalid/index.json"
+			},
+		},
+		{
+			name: "unsupported metadata URI scheme",
+			mutate: func(d *Document) {
+				d.Components[0].ReleaseMetadataURI = "ftp://catalog.example.invalid/release.json"
+			},
+		},
+		{
+			name: "missing release digest",
+			mutate: func(d *Document) {
+				d.Components[0].ReleaseMetadataSHA = ""
+			},
+		},
+		{
+			name: "non-full Git revision",
+			mutate: func(d *Document) {
+				d.Components[0].SourceUnits[0].Revision = "abcdef123456"
+			},
+		},
+		{
+			name: "uppercase Git revision",
+			mutate: func(d *Document) {
+				d.Components[0].SourceUnits[0].Revision = strings.ToUpper(testRevision)
+			},
+		},
+		{
+			name: "credential-bearing repository URI",
+			mutate: func(d *Document) {
+				d.Components[0].SourceUnits[0].RepositoryURI = "https://user:secret@github.com/example/engine.git"
+			},
+		},
+		{
+			name: "path traversal",
+			mutate: func(d *Document) {
+				d.Components[0].SourceUnits[0].WorkspacePath = "components/engine/default/sources/../../escape"
+			},
+		},
+		{
+			name: "non-canonical source path",
+			mutate: func(d *Document) {
+				d.Components[0].SourceUnits[0].WorkspacePath = "sources/engine"
+			},
+		},
+		{
+			name: "unsafe subdirectory",
+			mutate: func(d *Document) {
+				d.Components[0].SourceUnits[0].Subdirectory = "../outside"
+			},
+		},
+		{
+			name: "root version differs from selected release",
+			mutate: func(d *Document) {
+				d.Roots[0].Version = "2.0.0"
+			},
+		},
+		{
+			name: "dependency refers to unselected version",
+			mutate: func(d *Document) {
+				d.Components[0].Dependencies = []Dependency{{ComponentID: "engine", Variant: "default", Version: "2.0.0"}}
+			},
+		},
+		{
+			name: "incomplete resolution order",
+			mutate: func(d *Document) {
+				d.ResolutionOrder = nil
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mutated := cloneManifest(t, document)
+			testCase.mutate(&mutated)
+			encoded, err := MarshalCanonical(mutated)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := Verify(encoded, "", validator); err == nil {
+				t.Fatal("invalid Manifest unexpectedly passed verification")
+			}
+		})
+	}
+}
+
+func cloneManifest(t *testing.T, document Document) Document {
+	t.Helper()
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clone Document
+	if err := json.Unmarshal(encoded, &clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
+}
+
+// TestREG024VerifyManifestChecksDependencyOrderAndSetOrdering ensures a
+// canonical JSON document cannot smuggle semantically unstable array order or
+// a dependency graph inconsistent with the recorded topological order.
+func TestREG024VerifyManifestChecksDependencyOrderAndSetOrdering(t *testing.T) {
+	graph, sources := resolvedFixture()
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addon := document.Components[0]
+	addon.ComponentID = "addon"
+	addon.Version = "2.0.0"
+	addon.ReleaseMetadataURI = "https://catalog.example.invalid/releases/addon-2.0.0.json"
+	addon.SourceUnits = []SourceUnit{{
+		SourceUnitID: "source",
+		RepositoryURI: "https://github.com/example/addon.git",
+		Revision: testRevision,
+		WorkspacePath: "components/addon/default/sources/source",
+	}}
+	addon.Dependencies = []Dependency{{ComponentID: "engine", Variant: "default", Version: "1.0.0"}}
+	document.Components[0].Dependencies = nil
+	document.Components = append(document.Components, addon)
+	document.ResolutionOrder = []resolver.Node{
+		{ComponentID: "engine", Variant: "default", Version: "1.0.0"},
+		{ComponentID: "addon", Variant: "default", Version: "2.0.0"},
+	}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(encoded, "", validator); err != nil {
+		t.Fatalf("valid dependency-first Manifest order failed: %v", err)
+	}
+	document.ResolutionOrder[0], document.ResolutionOrder[1] = document.ResolutionOrder[1], document.ResolutionOrder[0]
+	encoded, err = MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(encoded, "", validator); err == nil {
+		t.Fatal("dependent-before-dependency order unexpectedly passed verification")
+	}
+}
