@@ -210,11 +210,12 @@ func TestREG022StagingSymlinkSwapBeforePublicationFailsClosed(t *testing.T) {
 			if err := os.Rename(stages[0], movedStage); err != nil {
 				return err
 			}
-			return os.Symlink(outside, stages[0])
+			if err := os.Symlink(outside, stages[0]); err != nil {
+				return err
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(movedStage) })
+			return nil
 		},
-	}
-	if movedStage != "" {
-		t.Cleanup(func() { _ = os.RemoveAll(movedStage) })
 	}
 	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 	if err == nil || !strings.Contains(err.Error(), "staging directory changed") {
