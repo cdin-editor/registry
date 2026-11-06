@@ -75,7 +75,6 @@ func TestREG026GitCommandFailureDoesNotEchoArgumentsOrRemoteOutput(t *testing.T)
 	}
 }
 
-
 func TestGitProcessEnvironmentAcceptsOnlyExplicitCredentialBoundary(t *testing.T) {
 	base := []string{
 		"PATH=/usr/bin",

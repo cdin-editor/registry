@@ -214,7 +214,6 @@ func TestREG020RejectsSymlinkSourceTrees(t *testing.T) {
 	}
 }
 
-
 type fixedCredentialProvider struct {
 	environment []string
 	err         error
@@ -481,7 +480,6 @@ func TestREG026AmbientGlobalHooksAndFiltersAreIgnored(t *testing.T) {
 		t.Fatalf("hostile global hook/filter executed: %v", err)
 	}
 }
-
 
 // TestREG026SubmodulesAreNotFetchedOrMaterialized keeps source collection
 // confined to the declared commit tree even when ambient Git config requests
