@@ -33,6 +33,12 @@ command = ["go", "test", "./..."]
 depends_on = ["deps"]
 timeout_seconds = 600
 
+[tasks.workspace-native]
+description = "Run Workspace integration and failure-injection tests on the native host OS"
+command = ["go", "test", "-count=1", "./internal/workspace/..."]
+depends_on = ["deps"]
+timeout_seconds = 600
+
 [tasks.build]
 description = "Compile every Go package"
 command = ["go", "build", "./..."]
