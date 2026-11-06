@@ -251,10 +251,10 @@ func TestManifestCLIVerifyUsesStableInvalidAndIntegrityCodes(t *testing.T) {
 	path := writeCLIManifest(t, payload)
 
 	cases := []struct {
-		name       string
-		input      []byte
-		digest     string
-		wantCode   string
+		name     string
+		input    []byte
+		digest   string
+		wantCode string
 	}{
 		{name: "invalid canonical bytes", input: append(append([]byte(nil), payload...), ' '), wantCode: "MANIFEST_INVALID"},
 		{name: "digest mismatch", input: payload, digest: strings.Repeat("0", 64), wantCode: "MANIFEST_DIGEST_MISMATCH"},
