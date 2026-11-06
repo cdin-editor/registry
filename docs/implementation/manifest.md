@@ -43,7 +43,7 @@ Set-like arrays in Manifest and Report are sorted by documented identity keys. T
 
 Golden tests pin complete Manifest and Report bytes plus detached SHA-256 digests. They repeat serialization and permute equivalent Catalog, root, component, source-unit, dependency, contract and report inputs. RFC 8785 tests cover the section 3.2.3 UTF-16 property-order vector and Appendix B IEEE-754 bit-pattern examples, including subnormals, negative zero, exponent thresholds and non-finite values.
 
-These checks establish deterministic serialization and canonical-byte handling; they do not verify an external detached digest, prove authenticity, or implement Manifest verification/replay.
+These checks establish deterministic serialization and canonical-byte handling. A detached SHA-256 detects byte changes when compared with a trusted external receipt; it is not a signature and does not prove publisher authenticity.
 
 ## Evidence
 
@@ -69,3 +69,36 @@ was requested. Verification is local and read-only: it does not contact
 Catalogs, fetch Git objects, select releases, collect source or write a
 Workspace. A successful verification is not a signature or publisher
 authenticity check.
+
+
+## Manifest replay
+
+`workspace.Replay` first verifies the saved canonical Manifest and optional
+external digest, then reconstructs the already-selected graph directly from
+that document. It does not invoke the Resolver, load a Product Definition, or
+select from current Catalog releases. The Collector retrieves each exact full
+Git commit ID recorded in the Manifest, verifies the fetched object and detached
+checkout, and materializes only those source units. The generated Manifest is
+compared byte-for-byte with the input while still in private staging; a mismatch
+aborts publication through the normal Workspace cleanup path.
+
+Replay has two explicit metadata modes:
+
+- **Offline metadata mode (default):** no Catalog Index or Component Release
+  Metadata URI is contacted. The saved digests and provenance are verified
+  locally, while exact Git commits still need to be retrievable by the injected
+  Git runner (for example, from a local repository or an available remote).
+  Catalog updates cannot change the selected versions or Manifest bytes.
+- **Strict remote metadata mode (opt-in):** the injected MetadataFetcher must
+  return the exact Catalog Index and selected Release Metadata bytes recorded
+  by the Manifest. Replay checks SHA-256 before schema decoding, validates the
+  Catalog identity and selected release entries, then compares release
+  source-unit identities, dependency constraints/selected targets and contract
+  declarations. A changed Catalog Index or Release document fails closed; it
+  never triggers a new resolution.
+
+The replayed `resolution-report.json` is a new, deterministic report of the
+pinned replay operation. Its `MANIFEST_REPLAY_PINNED` warning makes clear that
+the original version constraints/report evidence are not embedded in the
+Resolved Manifest and were not re-evaluated. Replay does not execute collected
+component code or promise publisher authenticity, signatures or attestations.
