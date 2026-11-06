@@ -20,7 +20,7 @@ depends_on = ["deps"]
 
 [tasks.format]
 description = "Fail when Go source files are not gofmt-formatted"
-command = ["bash", "scripts/check-format.sh"]
+command = ["python", "scripts/registry_checks.py", "format"]
 
 [tasks.vet]
 description = "Run the Go static analyzer"
@@ -47,13 +47,13 @@ timeout_seconds = 600
 
 [tasks.fuzz-smoke]
 description = "Run short bounded fuzz campaigns for parser, SemVer, Catalog, Resolver and path trust boundaries"
-command = ["bash", "scripts/fuzz-smoke.sh"]
+command = ["python", "scripts/registry_checks.py", "fuzz-smoke"]
 depends_on = ["deps"]
 timeout_seconds = 300
 
 [tasks.performance-smoke]
 description = "Measure one iteration of bounded Catalog, Resolver, source-copy and cache-GC benchmarks"
-command = ["bash", "scripts/benchmark-smoke.sh"]
+command = ["python", "scripts/registry_checks.py", "benchmark-smoke"]
 depends_on = ["deps"]
 timeout_seconds = 300
 
@@ -71,11 +71,11 @@ timeout_seconds = 300
 
 [tasks.boundary]
 description = "Enforce Registry package and consumer-independence boundaries"
-command = ["bash", "scripts/check-boundaries.sh"]
+command = ["python", "scripts/registry_checks.py", "boundaries"]
 
 [tasks.schema-sync]
 description = "Verify local Registry schemas match the pinned CDIN Spec revision"
-command = ["bash", "scripts/sync-spec-schemas.sh", "--check"]
+command = ["python", "scripts/registry_checks.py", "schema-sync", "--check"]
 timeout_seconds = 180
 
 [tasks.structure]
