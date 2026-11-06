@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/cdin-editor/registry/internal/catalog"
-	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/resolver"
 )
