@@ -68,6 +68,7 @@ type Options struct {
 	Git              collector.GitRunner
 	RepositoryPolicy collector.RepositoryPolicy
 	Credentials      collector.GitCredentialProvider
+	GitObjectCache   *collector.GitObjectCache
 	Validator        *validation.Validator
 }
 
@@ -174,6 +175,7 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		Git:         options.Git,
 		Policy:      options.RepositoryPolicy,
 		Credentials: options.Credentials,
+		GitCache:    options.GitObjectCache,
 		TempDir:     options.TempDir,
 	})
 	if err != nil {
