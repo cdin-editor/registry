@@ -1,7 +1,7 @@
 schema_version = 1
-contract_version = "1.1.0"
+contract_version = "1.2.0"
 repository = "cdin-editor/spec"
-revision = "3e19a8d73195c1401fbe52644f2359d8f75106d8"
+revision = "de500a87d4958d7122e4cf6ab63e2f04a8f45fc6"
 schema_directory = "schemas/registry/v1"
 files = [
   "product-definition.schema.json",
@@ -9,4 +9,5 @@ files = [
   "component-release.schema.json",
   "resolved-manifest.schema.json",
   "resolution-report.schema.json",
+  "update-discovery-report.schema.json",
 ]
