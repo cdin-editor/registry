@@ -566,7 +566,6 @@ func TestREG026CollectorRedactsInjectedGitRunnerErrors(t *testing.T) {
 	}
 }
 
-
 type markerOutputGit struct {
 	marker string
 }
