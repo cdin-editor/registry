@@ -542,3 +542,9 @@ func reverseContractRequirements(values []catalogModel.ContractRequirement) {
 		values[left], values[right] = values[right], values[left]
 	}
 }
+
+func reverseCollectorSources(values []collector.Source) {
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
+	}
+}
