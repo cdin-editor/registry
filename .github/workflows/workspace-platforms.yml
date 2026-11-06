@@ -6,12 +6,16 @@ on:
     paths:
       - "internal/workspace/**"
       - "internal/collector/**"
+      - "internal/cli/**"
+      - "cmd/registry/**"
       - "pipeline.toml"
       - ".github/workflows/workspace-platforms.yml"
   pull_request:
     paths:
       - "internal/workspace/**"
       - "internal/collector/**"
+      - "internal/cli/**"
+      - "cmd/registry/**"
       - "pipeline.toml"
       - ".github/workflows/workspace-platforms.yml"
   workflow_dispatch:
@@ -65,3 +69,9 @@ jobs:
             --root "$GITHUB_WORKSPACE" \
             --config "$GITHUB_WORKSPACE/pipeline.toml" \
             --json
+
+      - name: Build and test CLI packages on the native OS
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/cli/... ./cmd/registry/...

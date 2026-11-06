@@ -33,6 +33,9 @@ type inputFile struct {
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err := ctx.Err(); err != nil {
+		if len(args) > 0 && args[0] == "manifest" {
+			return writeManifestError(stderr, "OPERATION_CANCELED", "operation canceled before it started")
+		}
 		fmt.Fprintf(stderr, "registry: %v\n", err)
 		return exitInvalid
 	}
@@ -68,6 +71,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 	case "prepare":
 		return runExecution(ctx, args[1:], true, stdout, stderr)
+
+	case "manifest":
+		return runManifest(ctx, args[1:], stdin, stdout, stderr)
 
 	default:
 		return usageError(stderr, "unknown command %q", args[0])
@@ -415,6 +421,8 @@ Usage:
   registry validate <kind> <file|->
   registry resolve --product <file> --catalog <file|https-uri>... --allow-host <host>... [--cache-dir <dir>]
   registry prepare --product <file> --catalog <file|https-uri>... --allow-host <host>... --output <dir> [--cache-dir <dir>]
+  registry manifest verify --input <file|-> [--sha256 <hex>]
+  registry manifest replay --input <file|-> --output <dir> --allow-host <host>... [--sha256 <hex>] [--verify-remote-metadata] [--cache-dir <dir>]
 
 Document kinds:
   product-definition
@@ -428,6 +436,10 @@ Notes:
   Standard input (-) is read as JSON.
   resolve emits a Resolution Report and never collects component source.
   prepare publishes a complete workspace only after all checks succeed.
-  Network catalog hosts must be explicitly allow-listed with --allow-host.
+  manifest verify checks canonical bytes, schema, provenance and an optional detached digest.
+  manifest replay recollects only the recorded full Git commits; it never runs version selection.
+  Replay makes no Catalog metadata requests by default; --verify-remote-metadata enables strict checks.
+  Replay requires explicit source/metadata host policy through --allow-host.
+  Network Catalog and source hosts must be explicitly allow-listed.
   --cache-dir enables the integrity-checked, digest-addressed metadata cache.`))
 }

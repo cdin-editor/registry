@@ -1,0 +1,13 @@
+//go:build !unix && !windows
+
+package main
+
+import (
+	"context"
+	"os"
+	"os/signal"
+)
+
+func commandContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt)
+}
