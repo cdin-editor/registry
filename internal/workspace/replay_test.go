@@ -247,7 +247,6 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	}
 }
 
-
 // replayCountingGitRunner records whether replay reached source retrieval.
 type replayCountingGitRunner struct {
 	delegate replayGitRunner
