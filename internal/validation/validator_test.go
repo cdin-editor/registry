@@ -198,7 +198,7 @@ func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
 		"decisions": []any{
 			map[string]any{
 				"component_id": "engine",
-				"variant":         "default",
+				"variant":      "default",
 				"historical": map[string]any{
 					"version":         "1.0.0",
 					"metadata_uri":    "https://metadata.example.invalid/engine-1.0.0.json",
