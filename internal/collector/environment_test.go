@@ -239,7 +239,6 @@ func TestCopyWithContextStopsBetweenChunks(t *testing.T) {
 	}
 }
 
-
 func TestCommandGitCancellationKillsDescendantProcesses(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix process-group descendant fixture")
