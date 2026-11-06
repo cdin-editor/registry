@@ -37,6 +37,7 @@ import (
 	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/resolver"
 	"github.com/cdin-editor/registry/internal/semver"
+	"github.com/cdin-editor/registry/internal/validation"
 )
 
 const schemaVersion = "1.0.0"
@@ -352,6 +353,262 @@ func ParseCanonicalStringOnly(input []byte) error {
 	}
 	if !bytes.Equal(input, canonical.Bytes()) {
 		return fmt.Errorf("manifest: input is not RFC 8785 canonical JSON")
+	}
+	return nil
+}
+
+
+ 
+// Verify checks a persisted Resolved Manifest without fetching metadata,
+// selecting releases, collecting sources or writing to a workspace. The
+// detached digest is optional because it is stored outside the Manifest bytes;
+// when supplied, it must be the lowercase SHA-256 of the exact input bytes.
+// A nil Validator initializes the embedded Spec-owned schemas locally.
+func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.Validator) error {
+	if len(canonicalBytes) == 0 {
+		return fmt.Errorf("manifest: input is empty")
+	}
+	if err := ParseCanonicalStringOnly(canonicalBytes); err != nil {
+		return fmt.Errorf("manifest: canonical byte verification failed: %w", err)
+	}
+	if expectedSHA256 != "" {
+		if !validSHA256(expectedSHA256) || expectedSHA256 != strings.ToLower(expectedSHA256) {
+			return fmt.Errorf("manifest: expected detached digest must be lowercase SHA-256")
+		}
+		if actual := Digest(canonicalBytes); actual != expectedSHA256 {
+			return fmt.Errorf("manifest: detached SHA-256 mismatch")
+		}
+	}
+	if validator == nil {
+		var err error
+		validator, err = validation.New()
+		if err != nil {
+			return fmt.Errorf("manifest: initialize Spec schema validator: %w", err)
+		}
+	}
+	if err := validator.Validate(validation.ResolvedManifest, canonicalBytes, "registry-manifest.json"); err != nil {
+		return fmt.Errorf("manifest: public schema validation failed: %w", err)
+	}
+	var document Document
+	if err := json.Unmarshal(canonicalBytes, &document); err != nil {
+		return fmt.Errorf("manifest: decode verified document: %w", err)
+	}
+	if err := validateDocument(document); err != nil {
+		return fmt.Errorf("manifest: semantic verification failed: %w", err)
+	}
+	return nil
+}
+
+func validateDocument(document Document) error {
+	if document.SchemaVersion != schemaVersion {
+		return fmt.Errorf("unsupported Manifest schema version %q", document.SchemaVersion)
+	}
+	if _, err := semver.Parse(document.RegistryVersion); err != nil {
+		return fmt.Errorf("invalid Registry version: %w", err)
+	}
+	if len(document.Roots) == 0 || len(document.Components) == 0 {
+		return fmt.Errorf("Manifest must contain at least one root and one selected component")
+	}
+	if err := requireStrictOrder(document.Catalogs, func(a, b Catalog) bool { return a.CatalogID < b.CatalogID }, "catalogs"); err != nil {
+		return err
+	}
+	catalogIDs := make(map[string]struct{}, len(document.Catalogs))
+	for _, catalog := range document.Catalogs {
+		if catalog.CatalogID == "" {
+			return fmt.Errorf("catalog ID is required")
+		}
+		if _, exists := catalogIDs[catalog.CatalogID]; exists {
+			return fmt.Errorf("duplicate Catalog ID %q", catalog.CatalogID)
+		}
+		catalogIDs[catalog.CatalogID] = struct{}{}
+		if !lowerSHA256(catalog.MetadataSHA) {
+			return fmt.Errorf("Catalog %q has missing or non-canonical metadata SHA-256", catalog.CatalogID)
+		}
+		if err := validateMetadataURI(catalog.MetadataURI); err != nil {
+			return fmt.Errorf("Catalog %q metadata URI: %w", catalog.CatalogID, err)
+		}
+	}
+	if err := requireStrictOrder(document.Roots, func(a, b Root) bool {
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		return a.Variant < b.Variant
+	}, "roots"); err != nil {
+		return err
+	}
+	if err := requireStrictOrder(document.Components, func(a, b Component) bool {
+		if a.ComponentID != b.ComponentID {
+			return a.ComponentID < b.ComponentID
+		}
+		return a.Variant < b.Variant
+	}, "components"); err != nil {
+		return err
+	}
+	if err := requireStrictOrder(document.EnvironmentContracts, func(a, b EnvironmentContract) bool {
+		if a.ContractID != b.ContractID {
+			return a.ContractID < b.ContractID
+		}
+		return a.Version < b.Version
+	}, "environment contracts"); err != nil {
+		return err
+	}
+
+	components := make(map[string]Component, len(document.Components))
+	workspacePaths := make(map[string]struct{})
+	for _, component := range document.Components {
+		key := componentKey(component.ComponentID, component.Variant)
+		if _, exists := components[key]; exists {
+			return fmt.Errorf("duplicate selected component %s/%s", component.ComponentID, component.Variant)
+		}
+		components[key] = component
+		if !lowerSHA256(component.ReleaseMetadataSHA) {
+			return fmt.Errorf("component %s/%s has missing or non-canonical release metadata SHA-256", component.ComponentID, component.Variant)
+		}
+		if err := validateMetadataURI(component.ReleaseMetadataURI); err != nil {
+			return fmt.Errorf("component %s/%s release metadata URI: %w", component.ComponentID, component.Variant, err)
+		}
+		if len(component.SourceUnits) == 0 {
+			return fmt.Errorf("component %s/%s has no source units", component.ComponentID, component.Variant)
+		}
+		if err := requireStrictOrder(component.SourceUnits, func(a, b SourceUnit) bool {
+			return a.SourceUnitID < b.SourceUnitID
+		}, "source units for "+key); err != nil {
+			return err
+		}
+		if err := requireStrictOrder(component.Dependencies, func(a, b Dependency) bool {
+			if a.ComponentID != b.ComponentID {
+				return a.ComponentID < b.ComponentID
+			}
+			return a.Variant < b.Variant
+		}, "dependencies for "+key); err != nil {
+			return err
+		}
+		if err := requireStrictOrder(component.Contracts.Provides, func(a, b catalog.ContractProvider) bool {
+			if a.ContractID != b.ContractID {
+				return a.ContractID < b.ContractID
+			}
+			return a.Version < b.Version
+		}, "provided contracts for "+key); err != nil {
+			return err
+		}
+		if err := requireStrictOrder(component.Contracts.Requires, func(a, b catalog.ContractRequirement) bool {
+			if a.ContractID != b.ContractID {
+				return a.ContractID < b.ContractID
+			}
+			return a.VersionConstraint < b.VersionConstraint
+		}, "required contracts for "+key); err != nil {
+			return err
+		}
+		for _, source := range component.SourceUnits {
+			if !fullGitObjectID(source.Revision) {
+				return fmt.Errorf("source %s/%s/%s does not record a lowercase full Git object ID", component.ComponentID, component.Variant, source.SourceUnitID)
+			}
+			if err := validateRepositoryURI(source.RepositoryURI); err != nil {
+				return fmt.Errorf("source %s/%s/%s repository URI: %w", component.ComponentID, component.Variant, source.SourceUnitID, err)
+			}
+			if source.Subdirectory != "" && !safeWorkspacePath(source.Subdirectory) {
+				return fmt.Errorf("source %s/%s/%s has unsafe subdirectory %q", component.ComponentID, component.Variant, source.SourceUnitID, source.Subdirectory)
+			}
+			expectedPath := fmt.Sprintf("components/%s/%s/sources/%s", component.ComponentID, component.Variant, source.SourceUnitID)
+			if !safeWorkspacePath(source.WorkspacePath) || source.WorkspacePath != expectedPath {
+				return fmt.Errorf("source %s/%s/%s has non-canonical or unsafe workspace path %q", component.ComponentID, component.Variant, source.SourceUnitID, source.WorkspacePath)
+			}
+			if _, exists := workspacePaths[source.WorkspacePath]; exists {
+				return fmt.Errorf("duplicate workspace path %q", source.WorkspacePath)
+			}
+			workspacePaths[source.WorkspacePath] = struct{}{}
+		}
+	}
+	for _, root := range document.Roots {
+		component, exists := components[componentKey(root.ComponentID, root.Variant)]
+		if !exists {
+			return fmt.Errorf("root %s/%s is absent from selected components", root.ComponentID, root.Variant)
+		}
+		if root.Version != component.Version {
+			return fmt.Errorf("root %s/%s version %q does not match selected version %q", root.ComponentID, root.Variant, root.Version, component.Version)
+		}
+	}
+
+	order := make(map[string]int, len(document.ResolutionOrder))
+	if len(document.ResolutionOrder) != len(document.Components) {
+		return fmt.Errorf("resolution order contains %d entries for %d selected components", len(document.ResolutionOrder), len(document.Components))
+	}
+	for index, node := range document.ResolutionOrder {
+		key := componentKey(node.ComponentID, node.Variant)
+		component, exists := components[key]
+		if !exists || component.Version != node.Version {
+			return fmt.Errorf("resolution order entry %s/%s@%s does not match a selected component", node.ComponentID, node.Variant, node.Version)
+		}
+		if _, exists := order[key]; exists {
+			return fmt.Errorf("duplicate resolution order entry %s/%s", node.ComponentID, node.Variant)
+		}
+		order[key] = index
+	}
+	for _, component := range document.Components {
+		key := componentKey(component.ComponentID, component.Variant)
+		for _, dependency := range component.Dependencies {
+			dependencyKey := componentKey(dependency.ComponentID, dependency.Variant)
+			selected, exists := components[dependencyKey]
+			if !exists || selected.Version != dependency.Version {
+				return fmt.Errorf("dependency %s/%s@%s from %s does not match a selected component", dependency.ComponentID, dependency.Variant, dependency.Version, key)
+			}
+			if order[dependencyKey] >= order[key] {
+				return fmt.Errorf("resolution order places dependency %s before its dependent %s incorrectly", dependencyKey, key)
+			}
+		}
+	}
+	return nil
+}
+
+func requireStrictOrder[T any](values []T, less func(T, T) bool, field string) error {
+	for i := 1; i < len(values); i++ {
+		if !less(values[i-1], values[i]) {
+			return fmt.Errorf("%s must be strictly sorted and contain no duplicate identities", field)
+		}
+	}
+	return nil
+}
+
+func lowerSHA256(value string) bool {
+	return validSHA256(value) && value == strings.ToLower(value)
+}
+
+func fullGitObjectID(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func validateMetadataURI(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || parsed.User != nil {
+		return fmt.Errorf("must be an absolute URI without embedded credentials")
+	}
+	switch parsed.Scheme {
+	case "https":
+		if parsed.Host == "" {
+			return fmt.Errorf("HTTPS URI must include a host")
+		}
+	case "file":
+		if parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") {
+			return fmt.Errorf("file URI must have an absolute local path")
+		}
+	default:
+		return fmt.Errorf("unsupported metadata URI scheme %q", parsed.Scheme)
+	}
+	return nil
+}
+
+func validateRepositoryURI(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+		return fmt.Errorf("must be an absolute HTTPS repository URI without embedded credentials")
 	}
 	return nil
 }
