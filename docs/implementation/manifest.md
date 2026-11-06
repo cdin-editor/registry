@@ -43,6 +43,10 @@ Set-like arrays in Manifest and Report are sorted by documented identity keys. T
 
 Golden tests pin complete Manifest and Report bytes plus detached SHA-256 digests. They repeat serialization and permute equivalent Catalog, root, component, source-unit, dependency, contract and report inputs. RFC 8785 tests cover the section 3.2.3 UTF-16 property-order vector and Appendix B IEEE-754 bit-pattern examples, including subnormals, negative zero, exponent thresholds and non-finite values.
 
+## JSON value graph safety
+
+The UTF-8 preflight tracks visited pointer, map and slice identities. Cyclic Go values are not traversed indefinitely; the subsequent JSON encoder returns its normal cycle error. This preserves serializer failure behavior while ensuring invalid UTF-8 is detected before the encoder can replace it.
+
 These checks establish deterministic serialization and canonical-byte handling. A detached SHA-256 detects byte changes when compared with a trusted external receipt; it is not a signature and does not prove publisher authenticity.
 
 ## Evidence
