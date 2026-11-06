@@ -15,9 +15,9 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: m-mdy-m/pipeline/.github/workflows/release.yml@48ae196c329531b106d9953e2e896f3d2a320b1f
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@158fd580e9e577df789fa9ba9e9c4c7740e0f426
     with:
-      pipeline-ref: 48ae196c329531b106d9953e2e896f3d2a320b1f
+      pipeline-ref: 158fd580e9e577df789fa9ba9e9c4c7740e0f426
       go-version: "1.27.3"
       test-command: "PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
       build-command: "bash scripts/release/build.sh"
