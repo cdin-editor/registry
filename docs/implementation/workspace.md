@@ -32,6 +32,7 @@ native no-replace operation closes the check/rename race, including when an
 unrelated process creates an empty destination immediately before publication.
 
 The supported native implementations are:
+
 - Linux: `renameat2(..., RENAME_NOREPLACE)`.
 - macOS: `renamex_np(..., RENAME_EXCL)`.
 - Windows: `MoveFileEx(..., 0)`, without replace or cross-volume-copy flags.
