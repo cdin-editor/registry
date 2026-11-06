@@ -347,3 +347,71 @@ func TestReplayRejectsInvalidManifestAndUnreplayableCommitsWithoutPublishing(t *
 		})
 	}
 }
+
+
+func TestReplayRejectsRemoteReleaseSourceIdentityMismatch(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	repositoryURI := "https://example.invalid/engine.git"
+	resolution := replayResolution(repository, repositoryURI, revision)
+
+	releaseURI := "https://metadata.example.invalid/releases/engine-1.0.0.json"
+	release := catalog.Release{
+		SchemaVersion: "1.0.0",
+		ComponentID:   "engine",
+		Variant:       "default",
+		Version:       "1.0.0",
+		Status:        "active",
+		SourceUnits:   append([]catalog.SourceUnit(nil), resolution.Graph.Components[0].SourceUnits...),
+		Dependencies:  []catalog.Dependency{},
+		Contracts:     resolution.Graph.Components[0].Contracts,
+	}
+	release.SourceUnits[0].RepositoryURI = "https://different.example.invalid/engine.git"
+	releaseBytes, err := json.Marshal(release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseDigest := manifest.Digest(releaseBytes)
+	indexURI := "https://metadata.example.invalid/index.json"
+	indexBytes, err := json.Marshal(catalog.Index{
+		SchemaVersion: "1.0.0",
+		CatalogID:     "stable",
+		Entries: []catalog.Entry{{
+			ComponentID: "engine", Variant: "default", Version: "1.0.0",
+			MetadataURI: releaseURI, MetadataSHA: releaseDigest,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolution.Graph.Catalogs[0].MetadataURI = indexURI
+	resolution.Graph.Catalogs[0].MetadataSHA = manifest.Digest(indexBytes)
+	resolution.Graph.Components[0].ReleaseMetadataURI = releaseURI
+	resolution.Graph.Components[0].ReleaseMetadataSHA = releaseDigest
+	encoded, digest := buildReplayManifest(t, resolution)
+
+	fetcher := &replayFixtureFetcher{payloads: map[string][]byte{
+		indexURI: indexBytes, releaseURI: releaseBytes,
+	}}
+	destination := filepath.Join(t.TempDir(), "mismatched-release")
+	options := replayOptions(destination, repositoryURI, repository)
+	git := &replayCountingGitRunner{
+		delegate: replayGitRunner{repositoryURI: repositoryURI, localPath: repository},
+	}
+	options.Git = git
+	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
+		Workspace:            options,
+		MetadataFetcher:      fetcher,
+		VerifyRemoteMetadata: true,
+	}); err == nil {
+		t.Fatal("release metadata with a different source repository unexpectedly passed replay")
+	}
+	if fetcher.calls != 2 {
+		t.Fatalf("remote metadata requests = %d, want 2", fetcher.calls)
+	}
+	if git.calls != 0 {
+		t.Fatalf("source identity mismatch reached Git retrieval %d times", git.calls)
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("source identity mismatch published a destination: stat err=%v", err)
+	}
+}
