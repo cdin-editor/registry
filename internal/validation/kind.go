@@ -14,6 +14,7 @@ const (
 	ComponentRelease  Kind = "component-release"
 	ResolvedManifest  Kind = "resolved-manifest"
 	ResolutionReport  Kind = "resolution-report"
+	UpdateDiscoveryReport Kind = "update-discovery-report"
 )
 
 var allKinds = []Kind{
@@ -22,6 +23,7 @@ var allKinds = []Kind{
 	ComponentRelease,
 	ResolvedManifest,
 	ResolutionReport,
+	UpdateDiscoveryReport,
 }
 
 func ParseKind(value string) (Kind, error) {
