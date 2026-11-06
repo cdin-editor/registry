@@ -335,3 +335,71 @@ func TestREG022WorkspacePermissionsAndSymlinkedParent(t *testing.T) {
 		t.Errorf("published workspace permissions = %o, want 700", rootInfo.Mode().Perm())
 	}
 }
+
+
+// TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths verifies
+// the full Workspace keeps separate logical paths when two selected variants
+// reuse the same physical repository and immutable commit.
+func TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	resolution := successfulResolution(repository, revision)
+	second := resolution.Graph.Components[0]
+	second.ComponentID = "engine-alt"
+	second.Variant = "tui"
+	resolution.Graph.Components = append(resolution.Graph.Components, second)
+	resolution.Graph.Roots = append(resolution.Graph.Roots, resolver.Requirement{
+		ComponentID:       "engine-alt",
+		Variant:           "tui",
+		VersionConstraint: "=1.0.0",
+	})
+	resolution.Graph.ResolutionOrder = append(resolution.Graph.ResolutionOrder, resolver.Node{
+		ComponentID: "engine-alt",
+		Variant:     "tui",
+		Version:     "1.0.0",
+	})
+	resolution.Report.Selected = append(resolution.Report.Selected, resolver.SelectedCandidate{
+		ComponentID: "engine-alt",
+		Variant:     "tui",
+		Version:     "1.0.0",
+	})
+
+	destination := filepath.Join(t.TempDir(), "prepared")
+	prepared, err := Prepare(context.Background(), resolution, workspaceOptions(destination))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPaths := []string{
+		filepath.Join(destination, "components", "engine", "default", "sources", "source", "engine.c"),
+		filepath.Join(destination, "components", "engine-alt", "tui", "sources", "source", "engine.c"),
+	}
+	if len(prepared.Sources) != 2 {
+		t.Fatalf("materialized source count = %d, want 2", len(prepared.Sources))
+	}
+	for _, path := range wantPaths {
+		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("shared-repository source path %q missing or not regular: %v", path, err)
+		}
+	}
+	if prepared.Sources[0].Revision != revision || prepared.Sources[1].Revision != revision {
+		t.Fatalf("shared repository revisions differ from requested immutable commit: %+v", prepared.Sources)
+	}
+	if prepared.Sources[0].WorkspacePath == prepared.Sources[1].WorkspacePath {
+		t.Fatalf("logical source paths collided: %+v", prepared.Sources)
+	}
+}
+
+// TestREG022FailureImmediatelyBeforeRename checks the final publication
+// boundary independently from cancellation and competing-destination cases.
+func TestREG022FailureImmediatelyBeforeRename(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	destination := filepath.Join(t.TempDir(), "prepared")
+	failure := errors.New("injected pre-rename failure")
+	hooks := prepareHooks{
+		beforePublish: func() error { return failure },
+	}
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	if !errors.Is(err, failure) {
+		t.Fatalf("Prepare error = %v, want injected pre-rename failure", err)
+	}
+	assertPrepareFailureLeavesNoArtifacts(t, destination)
+}
