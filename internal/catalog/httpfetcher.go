@@ -69,9 +69,9 @@ type HTTPFetcher struct {
 
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
-	lookupIPAddr  func(context.Context, string) ([]net.IPAddr, error)
-	dialIP        func(context.Context, string, string) (net.Conn, error)
-	allowPrivate  bool
+	lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)
+	dialIP       func(context.Context, string, string) (net.Conn, error)
+	allowPrivate bool
 }
 
 // NewHTTPFetcher creates a bounded HTTPS Fetcher with an exact host allow-list.
@@ -111,11 +111,11 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		cacheDir = metadataCache.root
 	}
 	fetcher := &HTTPFetcher{
-		allowedHosts: allowed,
-		maxBytes:     maxBytes,
-		cacheDir:     cacheDir,
+		allowedHosts:  allowed,
+		maxBytes:      maxBytes,
+		cacheDir:      cacheDir,
 		metadataCache: metadataCache,
-		lookupIPAddr: net.DefaultResolver.LookupIPAddr,
+		lookupIPAddr:  net.DefaultResolver.LookupIPAddr,
 		dialIP: (&net.Dialer{
 			Timeout:   8 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -355,7 +355,6 @@ func publicUnicast(ip net.IP) bool {
 	}
 	return true
 }
-
 
 // BeginReplayLease keeps all metadata identities referenced by a Manifest out
 // of the eviction set while a strict replay validates the recorded snapshot.
