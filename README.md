@@ -1,14 +1,97 @@
-# cdin-registry
+# CDIN Registry
 
-`cdin-registry` is a standalone Go CLI for resolving and preparing CDIN components from release catalogs. It validates product requirements and catalog metadata, selects compatible component versions, collects immutable Git revisions, and publishes a prepared workspace with a Resolved Manifest and Resolution Report.
+CDIN Registry prepares the exact set of CDIN components that a product build needs.
 
-Registry is build-time infrastructure. It does not execute component code and is not a runtime dependency of product components.
+CDIN is made from separately maintained components. Each component can publish its own releases, and those releases may depend on compatible versions of other components. When CDIN is built, someone has to answer three questions:
 
-## Build
+1. Which component releases should be used together?
+2. Which exact source revisions belong to those releases?
+3. How can the same selected set be prepared again later?
+
+Registry answers those questions. It reads a **Product Definition** and one or more **Catalogs**, selects compatible releases, downloads the declared source revisions, and writes a prepared **Workspace** with a **Resolved Manifest** and a **Resolution Report**.
+
+Registry is used while preparing a build. It is not linked into the running editor, and it does not compile or execute component code.
+
+## What Registry does for CDIN
+
+When the CDIN product is assembled, its Product Definition can request components such as:
+
+- Kernel — the document and text engine.
+- Runtime — editor behavior and extensions.
+- Backend — the native host that connects the product services.
+- Frontend — the terminal, desktop, or headless user interface.
+
+The names above explain the intended CDIN use. A component is usable only after its maintainer has published valid release metadata and the release is available through a Catalog. Listing a component here does not claim that every CDIN component release has already been published.
+
+Registry checks the requested versions and their declared dependencies and contracts. It then collects the exact Git commits named by the selected releases. CDIN can use the resulting Workspace as input to its own build, integration tests, packaging, and release process.
+
+## The usual workflow
+
+1. A component maintainer publishes a version and its release metadata.
+2. A Catalog Index makes that release discoverable and records the metadata digest.
+3. CDIN declares the components and acceptable versions in a Product Definition.
+4. Registry resolves the request and reports the selected releases.
+5. Registry prepares a Workspace and records exactly what was selected.
+6. CDIN builds and tests that Workspace.
+
+Registry does not choose what CDIN should contain. The Product Definition expresses that choice; Registry checks whether the request can be satisfied.
+
+## Quick example
+
+Build Registry and inspect its commands:
+
+```sh
+make build
+./build/registry help
+```
+
+Validate a Product Definition:
+
+```sh
+./build/registry validate product-definition ./product-definition.yaml
+```
+
+See which releases satisfy it:
+
+```sh
+./build/registry resolve \
+  --product ./product-definition.yaml \
+  --catalog https://catalog.example/index.json \
+  --allow-host catalog.example \
+  --allow-host github.com
+```
+
+Prepare the selected source in a new directory:
+
+```sh
+./build/registry prepare \
+  --product ./product-definition.yaml \
+  --catalog https://catalog.example/index.json \
+  --allow-host catalog.example \
+  --allow-host github.com \
+  --output ./build/cdin-workspace
+```
+
+The host names and Catalog URL above are examples. Replace them with the hosts used by your Catalog, release metadata, and source repositories. The output directory must not already exist.
+
+## Learn Registry
+
+- [Getting started](docs/getting-started.md) — build Registry and understand the first run.
+- [Concepts](docs/concepts.md) — Product Definitions, Catalogs, releases, and Manifests explained.
+- [Using Registry](docs/using-registry.md) — the complete resolve and prepare workflow.
+- [Product Definition](docs/product-definition.md) — declare the components a product needs.
+- [Catalogs and releases](docs/catalogs.md) — publish and describe component releases.
+- [Commands](docs/commands.md) — command reference.
+- [Outputs](docs/outputs.md) — understand the Workspace, Manifest, and reports.
+- [Examples](docs/examples.md) — copyable examples and a CDIN-shaped Product Definition.
+- [Limitations and security](docs/limitations.md) — what Registry guarantees and what it does not.
+- [Development](docs/development.md) — build and test Registry from source.
+
+## Build Registry
 
 Requirements: Go 1.27.3, Python 3.11 or newer, GNU Make, Git, and curl.
 
-Install the pinned [Pipeline](https://github.com/m-mdy-m/pipeline) task runner, then build and test:
+Install the Pipeline version used by this repository, then build:
 
 ```sh
 python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16"
@@ -20,111 +103,7 @@ make build
 make check
 ```
 
-The CLI is written to `build/registry`.
-
-## Use
-
-Inspect the CLI and available schemas:
-
-```sh
-./build/registry --version
-./build/registry schema list
-./build/registry validate product-definition examples/product-definition.yaml
-```
-
-Resolve a Product Definition against one or more Catalog Indexes:
-
-```sh
-./build/registry resolve \
-  --product ./product-definition.yaml \
-  --catalog https://registry.example/catalog/index.json \
-  --allow-host registry.example
-```
-
-Prepare and publish the selected component workspace:
-
-```sh
-./build/registry prepare \
-  --product ./product-definition.yaml \
-  --catalog https://registry.example/catalog/index.json \
-  --allow-host registry.example \
-  --output ./prepared
-```
-
-Every Catalog metadata host and source repository host must be explicitly allow-listed. Deployments must also enforce their own Git network egress policy. Registry never runs the collected component code.
-
-Discover current updates against a previously prepared Manifest without changing that Manifest or its Workspace:
-
-```sh
-./build/registry manifest discover \
-  --input ./prepared/registry-manifest.json \
-  --product ./product-definition.yaml \
-  --catalog https://registry.example/catalog/index.json \
-  --allow-host registry.example \
-  --report ./update-discovery.json
-```
-
-Update discovery verifies the historical Manifest first, validates the current
-Product Definition and Catalog metadata, then uses the normal Resolver to
-produce a deterministic, schema-validated Update Discovery Report. It does not
-fetch Git sources, rewrite historical files or publish a Workspace. The report
-is written to stdout and optionally to a new file that is never overwritten.
-
-Verify a persisted Manifest (the digest is an optional detached receipt):
-
-```sh
-./build/registry manifest verify \
-  --input ./prepared/registry-manifest.json \
-  --sha256 <manifest-sha256>
-```
-
-Replay the exact recorded Git commits into a new Workspace without resolving
-current Catalog versions:
-
-```sh
-./build/registry manifest replay \
-  --input ./prepared/registry-manifest.json \
-  --output ./replayed \
-  --allow-host github.com
-```
-
-Replay does not contact Catalog metadata by default. Add
-`--verify-remote-metadata` and allow-list the Catalog metadata hosts to
-revalidate the exact Catalog Index and Release Metadata bytes recorded in the
-Manifest. Both commands emit JSON receipts to stdout; stable error codes,
-exit codes, cancellation and cleanup behavior are documented in
-[Manifest CLI operations](docs/implementation/cli.md).
-
-Retain a Manifest's metadata and source commits in the cache and collect
-unreferenced entries explicitly. The cache directory can also be passed to
-`prepare` and `manifest replay` to reuse verified Git objects:
-
-```sh
-./build/registry cache pin --manifest ./prepared/registry-manifest.json --cache-dir ./registry-cache
-./build/registry cache gc --cache-dir ./registry-cache
-```
-
-Use `cache unpin --manifest-sha256 <digest>` to release a pin. Pins, replay
-leases and GC cover both metadata and full-ID Git-object caches. Cache lifecycle
-and integrity guarantees are documented in [Manifest CLI operations](docs/implementation/cli.md).
-
-## Development workflow
-
-The repository uses [Pipeline](https://github.com/m-mdy-m/pipeline) for build and CI tasks, [PSX](https://github.com/m-mdy-m/psx) for repository checks, and [GIX](https://github.com/m-mdy-m/gix) for branch flow.
-
-Run `pipeline validate` to validate the task graph and `make check` for the full local quality checks.
-
-## Documentation
-
-- [Build and test](docs/development/build-and-test.md)
-- [Architecture and module boundaries](docs/architecture/module-boundaries.md)
-- [Implementation status](docs/status.md)
-- [Implementation roadmap](docs/development/implementation-roadmap.md)
-- [Traceability](docs/traceability.md)
-- [Conformance tests](docs/testing/conformance.md)
-- [Examples](examples/)
-
-The normative architecture and data contracts are maintained in [CDIN Spec](https://github.com/cdin-editor/spec).
+The executable is written to `build/registry`. The current source identifies itself as `0.1.0-dev`; this is a development version, not a stable Registry 1.0.0 release.
 
 ## License
 
