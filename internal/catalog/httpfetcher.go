@@ -61,10 +61,11 @@ func (e *safePolicyError) Error() string { return e.message }
 // exact-host matching; wildcards, HTTP, embedded credentials, non-default ports,
 // query strings and fragments are rejected.
 type HTTPFetcher struct {
-	client       *http.Client
-	allowedHosts map[string]struct{}
-	maxBytes     int64
-	cacheDir     string
+	client        *http.Client
+	allowedHosts  map[string]struct{}
+	maxBytes      int64
+	cacheDir      string
+	metadataCache *MetadataCache
 
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
@@ -100,21 +101,21 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		redirects = defaultMaximumRedirect
 	}
 	cacheDir := options.CacheDir
+	var metadataCache *MetadataCache
 	if cacheDir != "" {
-		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
-			return nil, fmt.Errorf("catalog: create metadata cache: %w", err)
-		}
-		resolvedCacheDir, err := filepath.EvalSymlinks(cacheDir)
+		createdCache, err := NewMetadataCache(cacheDir)
 		if err != nil {
-			return nil, fmt.Errorf("catalog: canonicalize metadata cache: %w", err)
+			return nil, err
 		}
-		cacheDir = resolvedCacheDir
+		metadataCache = createdCache
+		cacheDir = metadataCache.root
 	}
 	fetcher := &HTTPFetcher{
-		allowedHosts: allowed,
-		maxBytes:     maxBytes,
-		cacheDir:     cacheDir,
-		lookupIPAddr: net.DefaultResolver.LookupIPAddr,
+		allowedHosts:  allowed,
+		maxBytes:      maxBytes,
+		cacheDir:      cacheDir,
+		metadataCache: metadataCache,
+		lookupIPAddr:  net.DefaultResolver.LookupIPAddr,
 		dialIP: (&net.Dialer{
 			Timeout:   8 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -181,6 +182,13 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 			return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
 		}
 		return data, nil
+	}
+	if f.metadataCache != nil {
+		release, leaseErr := f.metadataCache.beginEntryLease(ctx, metadataURI, expectedSHA)
+		if leaseErr != nil {
+			return nil, leaseErr
+		}
+		defer release()
 	}
 	cachePath := f.cachePath(metadataURI, expectedSHA)
 	if data, ok := f.readCache(cachePath, expectedSHA); ok {
@@ -348,6 +356,15 @@ func publicUnicast(ip net.IP) bool {
 	return true
 }
 
+// BeginReplayLease keeps all metadata identities referenced by a Manifest out
+// of the eviction set while a strict replay validates the recorded snapshot.
+func (f *HTTPFetcher) BeginReplayLease(ctx context.Context, manifestBytes []byte) (func(), error) {
+	if f == nil || f.metadataCache == nil {
+		return func() {}, nil
+	}
+	return f.metadataCache.BeginReplayLease(ctx, manifestBytes)
+}
+
 func (f *HTTPFetcher) cachePath(metadataURI, expectedSHA string) string {
 	sum := sha256.Sum256([]byte(metadataURI + "\x00" + expectedSHA))
 	return filepath.Join(f.cacheDir, hex.EncodeToString(sum[:])+".json")
@@ -363,6 +380,7 @@ func (f *HTTPFetcher) readCache(path, expectedSHA string) ([]byte, bool) {
 		_ = os.Remove(path)
 		return nil, false
 	}
+	_ = os.Chtimes(path, time.Now(), time.Now())
 	return data, true
 }
 

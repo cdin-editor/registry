@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Implement explicit metadata-cache Manifest pins, strict-replay/fetch leases and fail-closed age/budget garbage collection; expose `cache pin`, `cache unpin` and `cache gc`.
+
 - Add `manifest verify` and `manifest replay` CLI commands with stable machine-readable error codes, explicit host policy, offline/strict metadata modes and signal-driven cancellation/cleanup.
 
 - Bound the canonical JSON UTF-8 preflight for cyclic maps, slices and pointers; cyclic values now reach the encoder's normal error path instead of recursive validation.
@@ -19,7 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Publish prepared Workspaces through OS-native atomic no-replace directory rename on Linux, macOS and Windows; fail closed on unsupported operating systems.
 - Add empty-destination race, destination-symlink, staging-symlink swap and simultaneous-publisher tests. Assert temporary Git clone and disabled-hook cleanup across injected Workspace failures.
 
-- Define metadata-cache retention and eviction policy without changing immutable URI+expected-digest cache identity or verify-before-use behavior.
+- Define metadata-cache retention and eviction policy without changing immutable URI+expected-digest cache identity or verify-before-use behavior. Enforce the policy through explicit Manifest pins, replay/fetch leases and serialized GC.
 - Add Workspace failure injection for multi-source rollback, Manifest/Report write and sync faults, cancellation, lock contention/stale-lock handling and competing destination creation.
 - Add end-to-end Workspace coverage for shared repositories across components/variants and multiple source units, plus native Linux/macOS/Windows test jobs.
 - Harden Collector Git execution with an explicit credential-provider environment, non-interactive process policy, process-group cancellation, helper-descendant cleanup and partial source-tree rollback.
@@ -48,7 +50,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Not yet implemented
 
-- Metadata/Git cache GC and eviction enforcement, including retained-Manifest pins and active-replay leases.
+- Git-object cache GC and eviction enforcement. Metadata cache GC, retained-Manifest pins and active replay leases are implemented.
 - Update discovery and related update/cache lifecycle operations.
 - Parent-directory fsync and uniform crash/power-loss durability guarantees across supported filesystems and operating systems.
 - Cache corruption/retention, update-versus-replay and performance/fuzz matrices.
