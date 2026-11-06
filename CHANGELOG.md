@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Define metadata-cache retention and eviction policy without changing immutable URI+expected-digest cache identity or verify-before-use behavior.
+- Add Workspace failure injection for multi-source rollback, Manifest/Report write and sync faults, cancellation, lock contention/stale-lock handling and competing destination creation.
+- Add end-to-end Workspace coverage for shared repositories across components/variants and multiple source units, plus native Linux/macOS/Windows test jobs.
 - Harden Collector Git execution with an explicit credential-provider environment, non-interactive process policy, process-group cancellation, helper-descendant cleanup and partial source-tree rollback.
 - Add Collector tests for repository reuse across logical components/variants, credential isolation, actual child termination, cancellation cleanup, submodule/filter/hook isolation, and missing/malformed repositories.
 
@@ -34,7 +37,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Not yet implemented
 
-- Full Catalog HTTP transport policy, SSRF/redirect controls, cache and local fixture integration.
-- Immutable Git source collection and transactional workspace publication.
-- Serialized Resolved Manifest and Resolution Report production, RFC 8785 canonical JSON and replay.
-- CLI composition, update discovery and release hardening.
+- Metadata/Git cache GC and eviction enforcement, including retained-Manifest pins and active-replay leases.
+- Manifest verification/replay and update discovery.
+- Atomic no-replace publication against a racing empty destination on every supported OS, native platform evidence and crash-durability guarantees.
+- Cache corruption/retention, update-versus-replay and performance/fuzz matrices.
