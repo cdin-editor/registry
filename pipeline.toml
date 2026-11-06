@@ -75,7 +75,7 @@ command = ["python", "scripts/registry_checks.py", "boundaries"]
 
 [tasks.schema-sync]
 description = "Verify local Registry schemas match the pinned CDIN Spec revision"
-command = ["python", "scripts/registry_checks.py", "schema-sync", "--check"]
+command = ["python", "scripts/registry_checks.py", "schema-sync", "check"]
 timeout_seconds = 180
 
 [tasks.structure]
