@@ -238,10 +238,13 @@ func TestREG022OwnedLockIsRemovedOnFailure(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	parent := t.TempDir()
 	destination := filepath.Join(parent, "prepared")
+	collectorTemp := newCollectorTempDir(t)
+	options := workspaceOptions(destination)
+	options.TempDir = collectorTemp
 	hooks := prepareHooks{
 		afterCollect: func([]collector.Source) error { return errors.New("injected failure") },
 	}
-	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), hooks)
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), options, hooks)
 	if err == nil {
 		t.Fatal("expected injected failure")
 	}
