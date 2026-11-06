@@ -47,6 +47,7 @@ type Options struct {
 	TempDir          string
 	Git              collector.GitRunner
 	RepositoryPolicy collector.RepositoryPolicy
+	Credentials      collector.GitCredentialProvider
 	Validator        *validation.Validator
 }
 
@@ -137,9 +138,10 @@ func Prepare(ctx context.Context, resolution resolver.Result, options Options) (
 	defer os.RemoveAll(stage)
 
 	sources, err := collector.Collect(ctx, resolution.Graph, stage, collector.Options{
-		Git:     options.Git,
-		Policy:  options.RepositoryPolicy,
-		TempDir: options.TempDir,
+		Git:         options.Git,
+		Policy:      options.RepositoryPolicy,
+		Credentials: options.Credentials,
+		TempDir:     options.TempDir,
 	})
 	if err != nil {
 		return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err)
