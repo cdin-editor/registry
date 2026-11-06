@@ -66,6 +66,9 @@ func runManifestWithDependencies(
 		return manifestUsageError(stderr, "expected verify or replay")
 	}
 	operation := args[0]
+	if operation == "discover" {
+		return runManifestDiscover(ctx, args[1:], stdin, stdout, stderr, newFetcher)
+	}
 	if operation != "verify" && operation != "replay" {
 		return manifestUsageError(stderr, "unknown Manifest operation")
 	}

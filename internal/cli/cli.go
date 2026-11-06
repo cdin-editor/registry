@@ -426,6 +426,7 @@ Usage:
   registry prepare --product <file> --catalog <file|https-uri>... --allow-host <host>... --output <dir> [--cache-dir <dir>]
   registry manifest verify --input <file|-> [--sha256 <hex>]
   registry manifest replay --input <file|-> --output <dir> --allow-host <host>... [--sha256 <hex>] [--verify-remote-metadata] [--cache-dir <dir>]
+  registry manifest discover --input <file|-> --product <file> --catalog <file|https-uri>... --allow-host <host>... [--sha256 <hex>] [--cache-dir <dir>] [--report <file>]
   registry cache pin --manifest <file|-> --cache-dir <dir>
   registry cache unpin --manifest-sha256 <hex> --cache-dir <dir>
   registry cache gc --cache-dir <dir>
@@ -444,6 +445,9 @@ Notes:
   prepare publishes a complete workspace only after all checks succeed.
   manifest verify checks canonical bytes, schema, provenance and an optional detached digest.
   manifest replay recollects only the recorded full Git commits; it never runs version selection.
+  manifest discover compares a saved Manifest with current Catalog resolution and emits an immutable audit report.
+  manifest discover never collects source or modifies the historical Manifest/Workspace.
+  --report writes the canonical update-discovery report to a new file and never replaces an existing file.
   Replay makes no Catalog metadata requests by default; --verify-remote-metadata enables strict checks.
   Replay requires explicit source/metadata host policy through --allow-host.
   Network Catalog and source hosts must be explicitly allow-listed.
