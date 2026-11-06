@@ -61,17 +61,17 @@ func (e *safePolicyError) Error() string { return e.message }
 // exact-host matching; wildcards, HTTP, embedded credentials, non-default ports,
 // query strings and fragments are rejected.
 type HTTPFetcher struct {
-	client       *http.Client
-	allowedHosts map[string]struct{}
-	maxBytes     int64
-	cacheDir     string
+	client        *http.Client
+	allowedHosts  map[string]struct{}
+	maxBytes      int64
+	cacheDir      string
 	metadataCache *MetadataCache
 
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
-	lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)
-	dialIP       func(context.Context, string, string) (net.Conn, error)
-	allowPrivate bool
+	lookupIPAddr  func(context.Context, string) ([]net.IPAddr, error)
+	dialIP        func(context.Context, string, string) (net.Conn, error)
+	allowPrivate  bool
 }
 
 // NewHTTPFetcher creates a bounded HTTPS Fetcher with an exact host allow-list.

@@ -43,10 +43,10 @@ type metadataCacheReference struct {
 
 // MetadataCacheGCResult reports the effect of one complete GC pass.
 type MetadataCacheGCResult struct {
-	RemovedEntries  int   `json:"removed_entries"`
-	RemovedBytes    int64 `json:"removed_bytes"`
-	RemainingBytes  int64 `json:"remaining_bytes"`
-	ProtectedEntries int  `json:"protected_entries"`
+	RemovedEntries   int   `json:"removed_entries"`
+	RemovedBytes     int64 `json:"removed_bytes"`
+	RemainingBytes   int64 `json:"remaining_bytes"`
+	ProtectedEntries int   `json:"protected_entries"`
 }
 
 // NewMetadataCache opens a private cache directory and initializes the

@@ -15,18 +15,18 @@ import (
 )
 
 type cacheReceipt struct {
-	Operation       string `json:"operation"`
-	ManifestSHA256  string `json:"manifest_sha256,omitempty"`
-	RemovedEntries  int    `json:"removed_entries,omitempty"`
-	RemovedBytes    int64  `json:"removed_bytes,omitempty"`
-	RemainingBytes  int64  `json:"remaining_bytes,omitempty"`
-	ProtectedEntries int   `json:"protected_entries,omitempty"`
+	Operation        string `json:"operation"`
+	ManifestSHA256   string `json:"manifest_sha256,omitempty"`
+	RemovedEntries   int    `json:"removed_entries,omitempty"`
+	RemovedBytes     int64  `json:"removed_bytes,omitempty"`
+	RemainingBytes   int64  `json:"remaining_bytes,omitempty"`
+	ProtectedEntries int    `json:"protected_entries,omitempty"`
 }
 
 type cacheCommandOptions struct {
-	cacheDir        string
-	manifestPath    string
-	manifestSHA256  string
+	cacheDir       string
+	manifestPath   string
+	manifestSHA256 string
 }
 
 func runCache(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {

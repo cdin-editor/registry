@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cdin-editor/registry/internal/catalog"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/resolver"
 	"github.com/cdin-editor/registry/internal/validation"
@@ -18,23 +19,39 @@ func canonicalCacheTestManifest(t *testing.T) []byte {
 	document := manifest.Document{
 		SchemaVersion:   "1.0.0",
 		RegistryVersion: "0.1.0-dev",
-		Catalogs: []manifest.Catalog{{
-			CatalogID: "example", MetadataURI: "https://example.invalid/catalog.json",
+		Catalogs:        []manifest.Catalog{{
+			CatalogID:   "example",
+			MetadataURI: "https://example.invalid/catalog.json",
 			MetadataSHA: "0000000000000000000000000000000000000000000000000000000000000000",
 		}},
-		Roots: []manifest.Root{{ComponentID: "backend", Variant: "default", Version: "1.0.0"}},
+		Roots: []manifest.Root{{
+			ComponentID:      "backend",
+			Variant:          "default",
+			Version:          "1.0.0",
+		}},
 		Components: []manifest.Component{{
-			ComponentID: "backend", Variant: "default", Version: "1.0.0",
+			ComponentID:        "backend",
+			Variant:            "default",
+			Version:            "1.0.0",
 			ReleaseMetadataURI: "https://example.invalid/backend.json",
 			ReleaseMetadataSHA: "0000000000000000000000000000000000000000000000000000000000000000",
 			SourceUnits: []manifest.SourceUnit{{
-				SourceUnitID: "source", RepositoryURI: "https://github.com/example/backend",
-				Revision: "0123456789abcdef0123456789abcdef01234567",
+				SourceUnitID:  "source",
+				RepositoryURI: "https://github.com/example/backend",
+				Revision:      "0123456789abcdef0123456789abcdef01234567",
 				WorkspacePath: "components/backend/default/sources/source",
 			}},
 			Dependencies: []manifest.Dependency{},
+			Contracts: catalog.Contracts{
+				Provides: []catalog.ContractProvider{},
+				Requires: []catalog.ContractRequirement{},
+			},
 		}},
-		ResolutionOrder: []resolver.Node{{ComponentID: "backend", Variant: "default", Version: "1.0.0"}},
+		ResolutionOrder: []resolver.Node{{
+			ComponentID: "backend",
+			Variant:     "default",
+			Version:     "1.0.0",
+		}},
 	}
 	encoded, err := manifest.MarshalCanonical(document)
 	if err != nil {
