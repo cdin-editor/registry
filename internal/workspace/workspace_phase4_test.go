@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/catalog"
+	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/resolver"
 )
 
@@ -40,7 +40,6 @@ func resolutionWithTwoSourceUnits(repository, revision string) resolver.Result {
 	})
 	return result
 }
-
 
 func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string) {
 	t.Helper()
