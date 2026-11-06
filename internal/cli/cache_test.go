@@ -19,15 +19,15 @@ func canonicalCacheTestManifest(t *testing.T) []byte {
 	document := manifest.Document{
 		SchemaVersion:   "1.0.0",
 		RegistryVersion: "0.1.0-dev",
-		Catalogs:        []manifest.Catalog{{
+		Catalogs: []manifest.Catalog{{
 			CatalogID:   "example",
 			MetadataURI: "https://example.invalid/catalog.json",
 			MetadataSHA: "0000000000000000000000000000000000000000000000000000000000000000",
 		}},
 		Roots: []manifest.Root{{
-			ComponentID:      "backend",
-			Variant:          "default",
-			Version:          "1.0.0",
+			ComponentID: "backend",
+			Variant:     "default",
+			Version:     "1.0.0",
 		}},
 		Components: []manifest.Component{{
 			ComponentID:        "backend",
