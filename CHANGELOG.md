@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Harden Collector Git execution with an explicit credential-provider environment, non-interactive process policy, child-process cancellation and partial source-tree rollback.
+- Harden Collector Git execution with an explicit credential-provider environment, non-interactive process policy, process-group cancellation, helper-descendant cleanup and partial source-tree rollback.
 - Add Collector tests for repository reuse across logical components/variants, credential isolation, actual child termination, cancellation cleanup, submodule/filter/hook isolation, and missing/malformed repositories.
 
 - Add Registry Resolver 1.1.0 report evidence: sourced applied constraints, immutable candidate provenance, typed conflict/rejection codes and structured contract-provider diagnostics.
