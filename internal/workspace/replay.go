@@ -72,6 +72,13 @@ func Replay(ctx context.Context, canonicalManifest []byte, expectedSHA256 string
 	if err := json.Unmarshal(canonicalManifest, &document); err != nil {
 		return Prepared{}, fmt.Errorf("workspace: decode verified replay Manifest: %w", err)
 	}
+	if options.Workspace.GitObjectCache != nil {
+		release, err := options.Workspace.GitObjectCache.BeginReplayLease(ctx, canonicalManifest)
+		if err != nil {
+			return Prepared{}, fmt.Errorf("workspace: acquire replay Git-object lease: %w", err)
+		}
+		defer release()
+	}
 	if options.VerifyRemoteMetadata {
 		if options.MetadataFetcher == nil {
 			return Prepared{}, fmt.Errorf("workspace: remote metadata verification requires a MetadataFetcher")

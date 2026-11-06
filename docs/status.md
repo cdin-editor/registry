@@ -28,19 +28,20 @@ cross-platform requirement.
 | manifest replay command | Implemented; exact pinned Git commits, offline/strict metadata modes, transactional publication and stable error codes |
 | Catalog Index loading and schema validation | Implemented; all-or-nothing loader |
 | Production HTTPS metadata transport | Implemented; explicit exact-host allow-list, redirect revalidation, DNS/public-address checks and bounded reads |
-| Metadata cache | Implemented; URI+expected-digest identity, byte verification, restrictive files and corrupt-entry refetch |
+| Metadata cache | Implemented; URI+expected-digest identity, byte verification, retained-Manifest pins, replay/fetch leases, explicit fail-closed GC and corrupt-entry refetch |
 | SemVer 2.0.0 and Registry 1.0.0 constraint parser/evaluator | Implemented; unit-tested |
 | Deterministic version/dependency resolution and backtracking | Implemented; unit-tested |
 | Prerelease/withdrawal and contract-provider policies | Implemented; unit-tested |
 | Stable duplicate-release provenance across Catalog permutations | Implemented; regression-tested |
-| Immutable Git source collection | Implemented; full 40/64-character commit verification and detached checkout |
+| Immutable Git source collection | Implemented; full 40/64-character commit verification, detached checkout and optional verified content-addressed object cache |
 | Source-unit cardinality, subdirectory validation and symlink/special-file rejection | Implemented; temporary-repository tests |
 | Git hook/prompt/global-config/LFS-smudge/submodule protections | Implemented at Collector command boundary; tests cover key protections |
 | Transactional workspace staging and publication | Implemented; same-filesystem staging, lock, no-overwrite checks, cleanup and integration tests |
 | Resolved Manifest and Resolution Report serialization | Implemented; embedded-schema validation in Workspace |
 | RFC 8785-style canonical serialization and canonical-input verification | Implemented; ordering, escaping, number and rejection tests |
 | Manifest replay from a persisted Manifest | Implemented; never re-runs Resolver or executes collected code |
-| Git-object cache/eviction and update discovery | Not implemented |
+| Git-object cache | Implemented; full commit-ID bare object stores, commit hash + object-graph verification, corruption refetch, Manifest pins, replay leases and fail-closed age/budget GC |
+| Update discovery and audit decisions | Not implemented |
 | Deployment firewall enforcement for Git transport | External deployment responsibility; HTTPS host allow-list is not an egress firewall |
 | Native Linux/macOS/Windows Workspace integration | Tested in native CI; parent-directory fsync and uniform crash/power-loss durability are not claimed |
 

@@ -447,7 +447,7 @@ Notes:
   Replay makes no Catalog metadata requests by default; --verify-remote-metadata enables strict checks.
   Replay requires explicit source/metadata host policy through --allow-host.
   Network Catalog and source hosts must be explicitly allow-listed.
-  --cache-dir enables the integrity-checked, digest-addressed metadata cache.
-  cache pin/unpin retains or releases a verified Manifest's metadata identities.
+  --cache-dir enables integrity-checked metadata and content-addressed Git-object caches.
+  cache pin/unpin retains or releases metadata and source commit identities from a verified Manifest.
   cache gc evicts only entries outside retained Manifest pins and active replay leases.`))
 }

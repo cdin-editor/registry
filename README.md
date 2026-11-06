@@ -78,17 +78,18 @@ Manifest. Both commands emit JSON receipts to stdout; stable error codes,
 exit codes, cancellation and cleanup behavior are documented in
 [Manifest CLI operations](docs/implementation/cli.md).
 
-Retain a Manifest's metadata in the cache and collect unreferenced entries
-explicitly:
+Retain a Manifest's metadata and source commits in the cache and collect
+unreferenced entries explicitly. The cache directory can also be passed to
+`prepare` and `manifest replay` to reuse verified Git objects:
 
 ```sh
 ./build/registry cache pin --manifest ./prepared/registry-manifest.json --cache-dir ./registry-cache
 ./build/registry cache gc --cache-dir ./registry-cache
 ```
 
-Use `cache unpin --manifest-sha256 <digest>` to release a pin. Cache lifecycle
-commands and fail-closed GC behavior are documented in
-[Manifest CLI operations](docs/implementation/cli.md).
+Use `cache unpin --manifest-sha256 <digest>` to release a pin. Pins, replay
+leases and GC cover both metadata and full-ID Git-object caches. Cache lifecycle
+and integrity guarantees are documented in [Manifest CLI operations](docs/implementation/cli.md).
 
 ## Development workflow
 

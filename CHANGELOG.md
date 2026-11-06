@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Implement explicit metadata-cache Manifest pins, strict-replay/fetch leases and fail-closed age/budget garbage collection; expose `cache pin`, `cache unpin` and `cache gc`.
+- Add content-addressed Git-object caching keyed by full commit IDs, commit/object-graph verification before cache use, corruption refetch, Manifest pins, replay leases and age/budget garbage collection.
 
 - Add `manifest verify` and `manifest replay` CLI commands with stable machine-readable error codes, explicit host policy, offline/strict metadata modes and signal-driven cancellation/cleanup.
 
@@ -50,7 +51,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Not yet implemented
 
-- Git-object cache GC and eviction enforcement. Metadata cache GC, retained-Manifest pins and active replay leases are implemented.
+- Update discovery and auditable retrieval/withdrawal decisions.
 - Update discovery and related update/cache lifecycle operations.
 - Parent-directory fsync and uniform crash/power-loss durability guarantees across supported filesystems and operating systems.
-- Cache corruption/retention, update-versus-replay and performance/fuzz matrices.
+- Full update-versus-replay, broader cache concurrency and performance/fuzz matrices.
