@@ -31,6 +31,11 @@ func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string, col
 	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
 		t.Fatalf("failed prepare left destination %q: %v", destination, err)
 	}
+	assertPrepareFailureCleansOwnedArtifacts(t, destination, collectorTempDirs...)
+}
+
+func assertPrepareFailureCleansOwnedArtifacts(t *testing.T, destination string, collectorTempDirs ...string) {
+	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(filepath.Dir(destination), "."+filepath.Base(destination)+".registry-stage-*"))
 	if err != nil {
 		t.Fatal(err)
