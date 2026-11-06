@@ -187,10 +187,12 @@ type Source struct {
 	WorkspacePath string
 }
 
-// Collect downloads only source units declared by a successfully resolved graph
-// and materializes them at the canonical workspace-relative layout. It writes
-// into the supplied staging directory; the workspace package owns publication.
-// See REG-017/018/020/026 and the local collector design note.
+// Collect materializes only Source Units declared by a successful Resolver
+// graph at canonical workspace-relative paths. It writes into the supplied
+// staging directory; Workspace owns publication (REG-017/018/020/026).
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#6-source-collection-and-workspace
+// Trust boundary: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#8-security-and-trust-boundary
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/collector.md.
 func Collect(ctx context.Context, graph *resolver.Graph, destination string, options Options) ([]Source, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("collector: context is required")

@@ -358,10 +358,12 @@ func ParseCanonicalStringOnly(input []byte) error {
 }
 
 // Verify checks a persisted Resolved Manifest without fetching metadata,
-// selecting releases, collecting sources or writing to a workspace. The
+// selecting releases, collecting sources or writing to a Workspace. The
 // detached digest is optional because it is stored outside the Manifest bytes;
 // when supplied, it must be the lowercase SHA-256 of the exact input bytes.
-// A nil Validator initializes the embedded Spec-owned schemas locally.
+// A nil Validator initializes the embedded Spec-owned schemas locally (REG-023/024).
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#7-resolved-manifest-and-resolution-report
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/manifest.md.
 func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.Validator) error {
 	if len(canonicalBytes) == 0 {
 		return fmt.Errorf("manifest: input is empty")

@@ -15,7 +15,7 @@ func TestSchemaList(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("Run() code = %d, stderr = %s", code, stderr.String())
 	}
-	for _, kind := range []string{"catalog-index", "component-release", "product-definition", "resolution-report", "resolved-manifest"} {
+	for _, kind := range []string{"catalog-index", "component-release", "product-definition", "resolution-report", "resolved-manifest", "update-discovery-report"} {
 		if !strings.Contains(stdout.String(), kind) {
 			t.Errorf("schema list missing %q", kind)
 		}

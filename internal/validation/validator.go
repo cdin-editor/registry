@@ -16,6 +16,10 @@ type Validator struct {
 	compiled map[Kind]*jsonschema.Schema
 }
 
+// New compiles every embedded Spec-owned schema and registers cross-schema
+// references locally, without network schema retrieval (REG-005/027).
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#1-contract-inventory
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/catalog-ingestion.md.
 func New() (*Validator, error) {
 	validator := &Validator{compiled: make(map[Kind]*jsonschema.Schema, len(allKinds))}
 	compiler := jsonschema.NewCompiler()
@@ -74,6 +78,8 @@ func (v *Validator) Validate(kind Kind, input []byte, filename string) error {
 // then emits the validated JSON data model. Product Definition YAML is parsed
 // once and normalized to JSON so CLI adapters do not reimplement YAML semantics
 // or bypass duplicate-key/tag rejection (REG-001/005).
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#3-product-definition
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/catalog-ingestion.md.
 func (v *Validator) Normalize(kind Kind, input []byte, filename string) ([]byte, error) {
 	if v == nil {
 		return nil, fmt.Errorf("validator is not initialized")
