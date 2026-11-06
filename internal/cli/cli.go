@@ -437,6 +437,7 @@ Document kinds:
   component-release
   resolved-manifest
   resolution-report
+  update-discovery-report
 
 Notes:
   YAML (.yaml/.yml) is accepted only for Product Definitions.

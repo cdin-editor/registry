@@ -1,63 +1,67 @@
 # Implementation status
 
-**Stage:** Registry Core implementation and cross-platform hardening in progress; not yet complete Registry 1.0 conformance.
+**Stage:** Phase 9 stabilization is implemented on
+`chore/phase9-conformance-and-stabilization`. Registry Core 1.0 is a release
+candidate only after the branch's required CI, Documentation/YAML, Security
+Scan and native Linux/macOS/Windows workflows pass and the changes are merged
+through the protected branch flow.
 
-The repository now has more than an in-memory Resolver: it includes strict
-Catalog transport, deterministic dependency and contract resolution, immutable
-Git source collection, transactional workspace staging/publication, canonical
-Manifest/Report serialization, CLI resolve/prepare composition and read-only update discovery. These
-packages remain generic and are composed at the Registry CLI boundary; collected
-component code is never executed.
+The engine is a standalone, consumer-independent Go module. It validates
+declarative Product Definitions and Catalog metadata, resolves version,
+dependency and contract constraints, collects immutable Git source units, and
+publishes transactional Workspaces with canonical Manifests and Reports.
+Manifest verification, exact-source replay, update discovery and integrity-
+checked metadata/Git caches are part of the CLI. Registry never executes
+collected component code and does not depend on Kernel, Runtime, Backend or
+Frontend.
 
-The current implementation has passed the repository Pipeline quality gate,
-including formatting, go vet, all Go tests, governance, build, module
-boundaries, schema synchronization, PSX structure checks, release checks,
-race tests and git diff --check. This is evidence for the code on the tested
-feature-branch head, not proof of every REG-001–REG-027 deployment or
-cross-platform requirement.
+The Phase 8 baseline on `develop` was
+`f12c0eb48290b356c0ca373507874ac8b84b7954`; CI, Documentation/YAML, Security
+Scan and native Workspace jobs passed on that exact head. Phase 9 adds a
+clean-room Product Definition → Catalog → Resolver → Prepare → Verify → Replay
+integration test and reconciles the documentation/traceability set. Its
+workflow results must be read from the Phase 9 branch PR, not inferred from
+the previous develop run.
 
-| Capability | Status |
-| --- | --- |
-| CLI entry point, version, help and schema inspection | Implemented |
-| validate command and embedded Registry v1 schemas | Implemented; schemas pinned to a Spec commit |
-| Strict JSON duplicate-key/trailing-value rejection | Implemented |
-| Product Definition YAML normalization and strict YAML rejection rules | Implemented |
-| resolve command: explicit Product Definition, Catalogs and host policy; report only | Implemented; command composition and core packages tested |
-| prepare command: resolve, collect, validate outputs and publish | Implemented; underlying workspace integration tested with temporary Git repositories |
-| manifest verify command | Implemented; canonical bytes, public schema, provenance and optional external SHA-256; file/stdin tests |
-| manifest replay command | Implemented; exact pinned Git commits, offline/strict metadata modes, transactional publication and stable error codes |
-| Catalog Index loading and schema validation | Implemented; all-or-nothing loader, opt-in up to 4 concurrent metadata fetches (serial default pending qualification) and 8 MiB/4,096-entry/256 MiB Catalog budgets on the Phase 8 branch |
-| Production HTTPS metadata transport | Implemented; explicit exact-host allow-list, redirect revalidation, DNS/public-address checks and bounded reads |
-| Metadata cache | Implemented; URI+expected-digest identity, byte verification, retained-Manifest pins, replay/fetch leases, explicit fail-closed GC and corrupt-entry refetch |
-| SemVer 2.0.0 and Registry 1.0.0 constraint parser/evaluator | Implemented; unit-tested |
-| Deterministic version/dependency resolution and backtracking | Implemented; unit-tested; Phase 8 branch adds 16,384-candidate, 65,536-declaration, 1,024-component and 100,000-search-state limits |
-| Prerelease/withdrawal and contract-provider policies | Implemented; unit-tested |
-| Stable duplicate-release provenance across Catalog permutations | Implemented; regression-tested |
-| Immutable Git source collection | Implemented; full 40/64-character commit verification, detached checkout and optional verified content-addressed object cache |
-| Source-unit cardinality, subdirectory validation and symlink/special-file rejection | Implemented; temporary-repository tests |
-| Git hook/prompt/global-config/LFS-smudge/submodule protections | Implemented at Collector command boundary; tests cover key protections |
-| Transactional workspace staging and publication | Implemented; same-filesystem staging, lock, no-overwrite checks, cleanup and integration tests |
-| Resolved Manifest and Resolution Report serialization | Implemented; embedded-schema validation in Workspace |
-| RFC 8785-style canonical serialization and canonical-input verification | Implemented; ordering, escaping, number and rejection tests |
-| Manifest replay from a persisted Manifest | Implemented; never re-runs Resolver or executes collected code |
-| Git-object cache | Implemented; full commit-ID bare object stores, commit hash + object-graph verification, corruption refetch, Manifest pins, replay leases and fail-closed age/budget GC |
-| Update discovery and audit decisions | Implemented in the Phase 7 branch; verifies historical Manifest first, records immutable digest-bound decisions, validates its dedicated schema and does not collect/publish source |
-| Deployment firewall enforcement for Git transport | External deployment responsibility; HTTPS host allow-list is not an egress firewall |
-| Native Linux/macOS/Windows integration | Full `go test ./...` and Workspace Pipeline passed natively on all three OSes on the qualified pre-default head; default-path matrix reruns on this branch. Parent-directory fsync and uniform crash/power-loss durability are not claimed |
-| Bounded Catalog concurrency | Default maximum 4 fetches; native Linux/macOS/Windows, race, cancellation/join, out-of-order deterministic processing, validation/fetch failure, cache-integrity and no-partial-Catalog tests passed before enabling the default |
-| Fuzzing | Seeded fuzz targets for JSON/YAML, SemVer/constraints, Catalog loading/cache identities, Resolver graphs, source paths, Git credentials and cache references; required Pipeline smoke campaigns passed |
-| Performance/resource budgets | Catalog, Resolver, source-copy and cache-GC benchmark smoke passed; enforced byte/count/concurrency/search/graph/source-file/declaration limits documented in `docs/implementation/resource-budgets.md` |
+## Capability status
+
+|Capability|Verified implementation|
+|---|---|
+|Standalone module, CLI, package boundaries|Implemented; Pipeline governance and consumer-independence checks|
+|Public document schemas|Six Spec-owned schemas embedded and synchronized from the pinned Spec revision, including Update Discovery Report|
+|JSON/YAML input|Strict decoding; duplicate keys, trailing values, unsafe YAML forms and unsupported YAML document kinds rejected|
+|Catalog ingestion|Digest-before-parse, identity checks, deduplication, all-or-nothing loading and offline fixture coverage|
+|HTTPS metadata transport|Exact-host allow-list, redirect revalidation, DNS/public-address validation at dial time, bounded bodies/timeouts and safe error classes|
+|Metadata cache|URI+expected-digest identity, verify-before-use, Manifest pins, replay/fetch leases and fail-closed age/budget GC|
+|SemVer and constraints|SemVer 2.0.0 parsing/precedence and Registry contract constraint grammar|
+|Resolver|Deterministic transitive closure, backtracking, contract-provider matching, typed conflict evidence and fail-closed resource limits|
+|Git Collector|Full commit object identity, detached checkout, minimal environment, explicit credential provider, cancellation and source-tree validation|
+|Git-object cache|Full-ID content addressing, commit hash and reachable object-graph verification, corruption refetch, Manifest pins, replay leases and fail-closed GC|
+|Workspace|Private staging, failure-injection rollback, native atomic no-replace publication and platform-specific private permissions|
+|Manifest/Report|Typed models, schema validation, deterministic JCS-style bytes and detached SHA-256|
+|Manifest verify/replay|Persisted Manifest verification and exact-commit replay without rerunning Resolver; byte-parity tested|
+|Update discovery|Separate schema-validated audit report; historical Manifest/Workspace remain immutable|
+|Catalog metadata concurrency|`Load` uses a fixed four-worker default (hard maximum four); callers may choose one to three workers; output/error processing remains Catalog Index ordered|
+|Fuzzing / race|Seeded fuzz smoke campaigns and `go test -race ./...` in the required Pipeline gate|
+|Performance / resource budgets|Benchmark smoke plus enforced Catalog, Resolver, source and cache budgets|
+|Native platform support|All Registry Go packages and Workspace integration run natively on Ubuntu, macOS and Windows|
+|Phase 9 end-to-end|Test drives Product Definition YAML through real schema validation, Catalog loading, Resolver, Prepare, Manifest Verify and byte-identical Replay using a temporary local Git repository|
 
 ## Security and portability qualifications
 
-- Catalog HTTP transport resolves and checks public addresses at the dial boundary. Deployments still need firewall/egress controls.
-- The Git Collector validates HTTPS host allow-lists but delegates DNS/IP egress enforcement to the deployment boundary. Do not treat a hostname allow-list as a firewall.
-- Source symlinks and special files are rejected rather than followed or materialized. Submodules, Git LFS object retrieval and component build execution are not supported.
-- Workspace locking coordinates Registry instances that follow the same lock protocol. An unrelated process that ignores the lock can still race to create the destination.
-- Same-filesystem directory rename provides the publication boundary used here, but uniform crash-durability and rename semantics across Linux, macOS and Windows still require a cross-platform test matrix.
-- Manifest verification checks canonical bytes, embedded schema and semantic provenance. Replay verifies the saved Manifest, recollects the exact recorded commits, compares rebuilt canonical bytes before publication, and never invokes the Resolver.
+- Catalog metadata and Git source hosts require explicit policy. A hostname allow-list and Registry DNS checks are not a deployment firewall; production operators must enforce network egress restrictions.
+- Public Catalog/Git retrieval is unauthenticated by default. A future private-source provider must remain explicit and non-interactive.
+- Collected symlinks and special files are rejected. Git submodule contents and Git LFS objects are not fetched/materialized.
+- Source files and Resolver/Catalog inputs have enforced count/byte/search limits. Git fetching and Source Unit copying remain sequential; only Catalog Release Metadata retrieval uses bounded concurrency.
+- Cache roots use private Unix modes or protected Windows DACLs. The caller-selected parent directory remains a separate trust boundary.
+- Workspace locks coordinate cooperating Registry processes. Parent-directory fsync and uniform crash/power-loss durability are not implemented.
+- SHA-256 protects byte identity; it is not a publisher signature, attestation or provenance authority.
+- Registry does not generate publisher signatures/attestations/SBOMs, scan downloaded component vulnerabilities, sandbox CDIN build execution or run component code.
 
-A successful resolve reports a valid selection graph but does not collect source.
-A successful prepare is returned only after Collector, Manifest/Report schema
-validation and workspace publication complete. Neither command executes
-collected component code.
+## Release and evidence policy
+
+A passing workflow proves only the tasks and platforms it actually ran. For this
+branch, the acceptance record is the branch-head PR workflow set plus the named
+tests in [Traceability](traceability.md) and [Conformance](testing/conformance.md).
+Do not use the develop baseline's green status as evidence for unrun Phase 9
+changes.

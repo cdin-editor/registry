@@ -1,49 +1,46 @@
 # Conformance
 
-Registry must implement normative `REG-001` through `REG-027` in the
-[CDIN Spec Registry data contracts](https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md).
+The normative baseline is [Registry Data Contracts 1.2.0](https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md),
+covering REG-001 through REG-027. The architecture boundary is defined in
+[Registry architecture](https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry.md).
 
-This page separates verified behavior from schema presence and future work.
-A type, interface, schema, comment or document is not conformance evidence
-without executable behavior and tests.
+A schema, interface, comment or passing unrelated workflow is not conformance
+evidence. Each requirement is mapped to implementation behavior and named tests
+in [Traceability](../traceability.md).
 
-## Current evidence
+## Executable verification
 
-| Area | Verification |
-| --- | --- |
-| Schema compilation | Go tests compile every embedded v1 schema through the production validator. |
-| Valid documents | Example Product Definition, Catalog Index, Component Release Metadata, Manifest and Report are tested. |
-| JSON parser safety | Duplicate object keys, malformed input and trailing JSON values are rejected. |
-| YAML parser safety | Duplicate keys, non-string keys, custom tags, merge keys, recursive aliases and multiple documents are rejected. |
-| Catalog integrity | Exact fetched metadata bytes are SHA-256 verified before Component Release validation/decoding. |
-| Catalog identity | Default variant normalization, release identity matching, identical deduplication and conflict rejection are tested. |
-| SemVer | SemVer 2.0.0 precedence, prerelease ordering, build metadata, malformed forms and unbounded numeric identifiers are tested. |
-| Constraint grammar | Contract 1.0.0 exact/comparator-conjunction grammar, rejected syntax and boundary evaluation are tested. |
-| Dependency resolution | Transitive closure, backtracking, repeated constraints and empty intersections are tested. |
-| Selection policy | Prerelease/withdrawn policy and catalog permutation invariance are tested. |
-| Contracts | Component/environment providers, missing providers and ambiguity are tested. |
-| Graph | Cycle path, deterministic dependency-first output and failure-without-graph are tested. |
-| Manifest verification | Canonical byte equality, embedded public schema, optional detached digest, semantic provenance, safe paths and dependency-first ordering are verified. |
-| Manifest replay | Reconstructs the saved graph without Resolver/version selection, retrieves exact full commits, checks byte-identical Manifest output before Workspace publication and does not execute component code. |
-| Manifest CLI | File/stdin verification, JSON receipts, stable error codes, offline/strict replay, source failure, cancellation, destination collision and usage errors are tested. |
-| Native Workspace publication | Ubuntu, macOS and Windows native jobs exercise no-replace publication, cleanup and permissions; crash/power-loss durability is not claimed. |
-| Update discovery | Verifies the historical Manifest before Catalog fetch, resolves current state with the generic Resolver, validates the deterministic report against its own schema and the referenced Resolution Report schema, and leaves historical files/Workspace untouched; see `TestManifestDiscoverReportsUnchangedAndWritesImmutableAuditFile`, `TestManifestDiscoverPreservesWithdrawalDecisionWhenMetadataDigestChanges`, and validation cross-reference tests. |
-| Bounded Catalog loading | `Load` defaults to four concurrent metadata fetches (hard maximum four); `LoadWithOptions` can lower the count. Native Linux/macOS/Windows, race-detector, cache-integrity, cancellation/join, out-of-order index-order processing, failure cleanup, no-partial-Catalog, and Index/document/aggregate byte-budget tests passed before enabling the default. See `internal/catalog/concurrency_test.go`, `internal/catalog/resource_test.go`, and `internal/catalog/httpfetcher_test.go`. |
-| Resolver resource budgets | 16,384 Catalog candidates, 65,536 dependency/contract/source declarations, 1,024 root/transitive components and 100,000 search states are fail-closed; no partial Graph. See `internal/resolver/resource_test.go`. |
-| Source Collection budgets | Per Source Unit: 100,000 files / 1 GiB. Per Workspace: 500,000 files / 8 GiB. Checks occur before each file copy and changed/growing files are bounded during copy. See `internal/collector/resource_test.go`. |
-| Fuzzing | Seeded fuzz targets cover strict JSON/YAML, SemVer/constraints, Catalog metadata/cache references, Resolver graph inputs, source-subdirectory paths, Git credential environment and Git-object Manifest references. Pipeline runs short bounded campaigns; longer campaigns remain a maintainer action. |
-| Performance baselines | Pipeline executes one benchmark iteration for large Catalog loading, wide/deep Resolver graphs, backtracking, source-tree copy and metadata/Git cache GC. Wall-time thresholds are recorded, not treated as portable CI gates. |
-| Native platform integration | Phase 8 workflow runs all Registry Go packages natively on Ubuntu, macOS and Windows when Catalog/Resolver/validation/collector/workspace paths change. |
-| Repository boundaries | Pipeline invokes PSX and package/consumer-independence boundary checks. |
+|Boundary|Evidence|
+|---|---|
+|Schema inventory|Six embedded Spec-owned v1 schemas compile with the production validator; schema synchronization checks the pinned Spec revision|
+|JSON/YAML|Strict duplicate-key/trailing-value rejection; YAML aliases, merge keys, custom tags, multiple documents and non-string keys are rejected|
+|Declarative Product Definition|Validated/normalized before Resolver consumption; clean-room test changes Product identity/name while retaining equivalent resolution|
+|Catalog loading|Local Catalog fixtures and production loader exercise digest-before-parse, schema, identity, duplicate/conflict and all-or-nothing behavior|
+|HTTP transport|Timeout/stall, truncated body, redirect, mixed DNS, dialed-IP, response-size, digest/cache and redaction tests|
+|Resolver|SemVer, constraints, transitive closure, backtracking, provider matching, cycle paths, stable conflict evidence, permutation and search-limit tests|
+|Collector|Temporary Git repositories prove full commit verification, detached checkout, source-unit path layout, unsafe-tree rejection, process isolation and cancellation cleanup|
+|Workspace|Failure injection covers staged sources, Manifest/Report write+sync, cancellation, locks, destination races, cleanup and atomic no-replace publication|
+|Manifest|Canonical bytes, JCS vectors, schema/provenance/path verification and detached digest checks|
+|Replay|Saved Manifest drives exact-commit recollection without Resolver selection; output Manifest bytes must equal the input before publication|
+|Update discovery|Historical Manifest is verified before current Catalog loading; deterministic reason-coded audit report is schema-validated and historical files remain unchanged|
+|Metadata/Git caches|Verify-before-use, corruption refetch, pins, leases, bounded retention/eviction and fail-closed reference-snapshot GC|
+|Bounded Catalog loading|Four-worker maximum/default, configurable lower count, deterministic index-order processing, cancellation/join, no partial Catalog and byte/count limits|
+|Fuzzing|Required short seeded fuzz smoke campaigns cover parser, Catalog, Resolver, source path, credential and cache identity trust boundaries|
+|Race / platforms|Required race task plus native Workspace and all-package tests on Ubuntu, macOS and Windows|
+|Performance / budgets|One-iteration Catalog, Resolver, source-copy and cache-GC benchmark smoke; deterministic resource ceilings are hard gates|
+|End-to-end clean-room flow|`TestRegistryCleanRoomPrepareVerifyReplay` uses real schemas, local Catalog bytes and a temporary Git repository to exercise Product Definition → Catalog → Resolver → Prepare → Verify → Replay and compare canonical Manifest/source bytes|
 
-## Remaining qualifications and work
+## Deliberate non-guarantees
 
-- Longer sustained fuzz campaigns, full large-graph performance trend baselines and production workload sizing remain future work.
-- Broader update-versus-replay/GC interleavings and concurrent cache mutation stress remain open. Catalog metadata concurrency is bounded and tested; it is not generalized to Git collection or source copying.
-- End-to-end clean-room preparation from a Product Definition plus one or more production Catalogs remains a separate completion gate.
-- Parent-directory fsync and uniform crash/power-loss durability are not implemented or claimed.
-- Deployment-wide Git DNS/IP egress enforcement remains the deployment firewall's responsibility.
+- No parent-directory fsync or uniform crash/power-loss durability guarantee.
+- No publisher signing, signature verification, cryptographic attestation or SBOM.
+- No vulnerability scan or license/policy assessment of downloaded components.
+- No component build sandbox, runtime isolation or component-code execution.
+- No Registry-enforced deployment firewall or egress policy.
+- No Git submodule or LFS object retrieval.
+- Git source fetching and Source Unit copying remain sequential; bounded concurrency applies only to Catalog metadata.
+- Longer sustained fuzz campaigns, workload-sized performance baselines and broader concurrent update/replay/GC stress remain additional operational hardening.
 
-CI evidence applies only to commands/platforms actually run. The first Resolver
-slice does not prove Collector, Workspace, Manifest serialization or full
-REG-001–REG-027 conformance.
+CI applies only to its exact branch head and executed jobs. The Phase 9 PR
+workflows are the acceptance evidence for these documentation and test changes;
+previous green results on develop are not substituted for them.

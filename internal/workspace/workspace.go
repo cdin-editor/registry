@@ -83,9 +83,11 @@ type Prepared struct {
 	Sources        []collector.Source
 }
 
-// Prepare collects a successful resolver graph, builds and validates both
-// public output documents, then atomically publishes the complete workspace.
-// It returns no Prepared value unless the final rename succeeds.
+// Prepare collects a successful Resolver graph, builds and validates both
+// public output documents, then atomically publishes the complete Workspace.
+// It returns no Prepared value unless the final rename succeeds (REG-017/020–024).
+// Spec: https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#6-source-collection-and-workspace
+// Design: https://github.com/cdin-editor/registry/blob/main/docs/implementation/workspace.md.
 func Prepare(ctx context.Context, resolution resolver.Result, options Options) (Prepared, error) {
 	return prepare(ctx, resolution, options, prepareHooks{})
 }
