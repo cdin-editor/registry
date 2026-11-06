@@ -193,7 +193,7 @@ def sync_schemas(mode: str) -> None:
             )
             downloaded = temp / name
             fetch_schema(url, downloaded)
-            run(["python", "-m", "json.tool", str(downloaded)])
+            run([sys.executable, "-m", "json.tool", str(downloaded)])
             if mode == "--update":
                 shutil.copyfile(downloaded, destination / name)
                 shutil.copyfile(downloaded, embedded / name)
@@ -238,7 +238,8 @@ def release_build() -> None:
         ).strip()
     output_dir = ROOT / "dist"
     output_dir.mkdir(exist_ok=True)
-    binary = output_dir / f"registry-{goos}-{goarch}" + (Path(".exe") if goos == "windows" else Path(""))
+    binary_name = f"registry-{goos}-{goarch}" + (".exe" if goos == "windows" else "")
+    binary = output_dir / binary_name
     env = os.environ.copy()
     env.update({"CGO_ENABLED": "0", "GOOS": goos, "GOARCH": goarch})
     print(f"Building Registry {version} for {goos}/{goarch}", flush=True)
