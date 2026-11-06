@@ -3,6 +3,8 @@ package manifest
 import (
 	"bytes"
 	"encoding/json"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -206,5 +208,338 @@ func TestREG025FailureCannotBuildManifest(t *testing.T) {
 	graph = nil
 	if _, err := Build(graph, sources, "1.2.3"); err == nil {
 		t.Fatal("failed resolution must not produce a manifest")
+	}
+}
+
+
+// TestREG024RFC8785PropertyOrderingVector uses the Unicode property-name
+// ordering vector published in RFC 8785 section 3.2.3. UTF-16 ordering differs
+// from Unicode scalar-value ordering for the supplementary emoji key.
+func TestREG024RFC8785PropertyOrderingVector(t *testing.T) {
+	input := map[string]any{
+		"\u20ac": "Euro Sign",
+		"\r": "Carriage Return",
+		"\ufb33": "Hebrew Letter Dalet With Dagesh",
+		"1": "One",
+		"\U0001F600": "Emoji: Grinning Face",
+		"\u0080": "Control",
+		"\u00f6": "Latin Small Letter O With Diaeresis",
+	}
+	got, err := MarshalCanonical(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u0080\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+	if string(got) != want {
+		t.Fatalf("RFC 8785 property-order vector mismatch\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// TestREG024RFC8785NumberAppendixVectors checks the IEEE-754 bit-pattern
+// examples in RFC 8785 Appendix B, including subnormals, exponent boundaries,
+// values around 1e-6/1e21 and round-to-even behavior.
+func TestREG024RFC8785NumberAppendixVectors(t *testing.T) {
+	cases := []struct {
+		bits uint64
+		want string
+	}{
+		{0x0000000000000000, "0"},
+		{0x8000000000000000, "0"},
+		{0x0000000000000001, "5e-324"},
+		{0x8000000000000001, "-5e-324"},
+		{0x7fefffffffffffff, "1.7976931348623157e+308"},
+		{0xffefffffffffffff, "-1.7976931348623157e+308"},
+		{0x4340000000000000, "9007199254740992"},
+		{0xc340000000000000, "-9007199254740992"},
+		{0x4430000000000000, "295147905179352830000"},
+		{0x44b52d02c7e14af5, "9.999999999999997e+22"},
+		{0x44b52d02c7e14af6, "1e+23"},
+		{0x44b52d02c7e14af7, "1.0000000000000001e+23"},
+		{0x444b1ae4d6e2ef4e, "999999999999999700000"},
+		{0x444b1ae4d6e2ef4f, "999999999999999900000"},
+		{0x444b1ae4d6e2ef50, "1e+21"},
+		{0x3eb0c6f7a0b5ed8c, "9.999999999999997e-7"},
+		{0x3eb0c6f7a0b5ed8d, "0.000001"},
+		{0x41b3de4355555553, "333333333.3333332"},
+		{0x41b3de4355555554, "333333333.33333325"},
+		{0x41b3de4355555555, "333333333.3333333"},
+		{0x41b3de4355555556, "333333333.3333334"},
+		{0x41b3de4355555557, "333333333.33333343"},
+		{0xbecbf647612f3696, "-0.0000033333333333333333"},
+		{0x43143ff3c1cb0959, "1424953923781206.2"},
+	}
+	for _, testCase := range cases {
+		value := math.Float64frombits(testCase.bits)
+		input := strconv.FormatFloat(value, 'g', -1, 64)
+		got, err := canonicalNumber(input)
+		if err != nil {
+			t.Fatalf("bits %016x (%s): %v", testCase.bits, input, err)
+		}
+		if got != testCase.want {
+			t.Errorf("bits %016x: got %s, want %s", testCase.bits, got, testCase.want)
+		}
+	}
+	for _, input := range []string{"NaN", "Infinity", "-Infinity", "1e400"} {
+		if _, err := canonicalNumber(input); err == nil {
+			t.Errorf("canonicalNumber(%q) unexpectedly accepted a non-finite value", input)
+		}
+	}
+}
+
+// TestREG024RejectsInvalidUTF8AndUnpairedSurrogates prevents lossy Unicode
+// replacement from changing bytes before a digest is computed.
+func TestREG024RejectsInvalidUTF8AndUnpairedSurrogates(t *testing.T) {
+	invalid := string([]byte{0xff, 0xfe})
+	if _, err := MarshalCanonical(map[string]any{"value": invalid}); err == nil {
+		t.Fatal("invalid UTF-8 JSON string was silently replaced")
+	}
+	if _, err := MarshalCanonical(map[string]any{invalid: "value"}); err == nil {
+		t.Fatal("invalid UTF-8 JSON object key was silently replaced")
+	}
+	for _, input := range []string{
+		"{\"value\":\"\\ud800\"}",
+		"{\"value\":\"\\udc00\"}",
+		"{\"value\":\"\\ud800\\u0061\"}",
+	} {
+		if err := ParseCanonicalStringOnly([]byte(input)); err == nil {
+			t.Errorf("unpaired surrogate input %q unexpectedly passed canonical verification", input)
+		}
+	}
+	// JCS does not normalize Unicode: precomposed and decomposed forms remain
+	// distinct byte sequences rather than being folded into one representation.
+	precomposed, err := MarshalCanonical(map[string]any{"value": "é"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decomposed, err := MarshalCanonical(map[string]any{"value": "e\u0301"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(precomposed, decomposed) {
+		t.Fatal("canonicalization normalized distinct Unicode code-point sequences")
+	}
+}
+
+// TestREG024ManifestGoldenBytesAndDetachedDigest pins the complete public
+// Manifest bytes and the detached SHA-256 independently of repeated runs.
+func TestREG024ManifestGoldenBytesAndDetachedDigest(t *testing.T) {
+	graph, sources := resolvedFixture()
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"catalogs":[{"catalog_id":"stable","metadata_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","metadata_uri":"https://catalog.example.invalid/index.json"}],"components":[{"component_id":"engine","contracts":{"provides":[],"requires":[]},"dependencies":[],"release_metadata_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","release_metadata_uri":"https://catalog.example.invalid/releases/engine-1.0.0.json","source_units":[{"repository_uri":"https://github.com/example/engine.git","revision":"0123456789abcdef0123456789abcdef01234567","source_unit_id":"source","workspace_path":"components/engine/default/sources/source"}],"variant":"default","version":"1.0.0"}],"registry_version":"1.2.3","resolution_order":[{"component_id":"engine","variant":"default","version":"1.0.0"}],"roots":[{"component_id":"engine","variant":"default","version":"1.0.0"}],"schema_version":"1.0.0"}`
+	if string(encoded) != want {
+		t.Fatalf("Manifest golden bytes changed\n got: %s\nwant: %s", encoded, want)
+	}
+	if got := Digest(encoded); got != "54ce1efe106adbd4f8ac951d47a849477838b0bf006f774abbba2bf849a3386b" {
+		t.Fatalf("Manifest detached digest = %s", got)
+	}
+}
+
+// TestREG024ReportGoldenBytesAndDetachedDigest pins the Resolution Report
+// bytes and verifies that the detached digest is calculated over those bytes.
+func TestREG024ReportGoldenBytesAndDetachedDigest(t *testing.T) {
+	report := resolver.Report{
+		SchemaVersion: "1.1.0",
+		Result:        "success",
+		Selected: []resolver.SelectedCandidate{{
+			ComponentID: "engine",
+			Variant:     "default",
+			Version:     "1.0.0",
+		}},
+		AppliedConstraints: []resolver.AppliedConstraint{{
+			ComponentID:       "engine",
+			Variant:           "default",
+			VersionConstraint: "=1.0.0",
+			Source: resolver.ConstraintSource{
+				Type: resolver.ConstraintSourceRoot,
+			},
+		}},
+	}
+	encoded, err := MarshalReport(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"applied_constraints":[{"component_id":"engine","source":{"type":"root"},"variant":"default","version_constraint":"=1.0.0"}],"conflicts":[],"rejected_candidates":[],"result":"success","schema_version":"1.1.0","selected":[{"component_id":"engine","variant":"default","version":"1.0.0"}],"warnings":[]}`
+	if string(encoded) != want {
+		t.Fatalf("Report golden bytes changed\n got: %s\nwant: %s", encoded, want)
+	}
+	if got := Digest(encoded); got != "4226d72d0c89fb2c61e7cbdad5f8d53f1dfe3ad75cfe43ad8107d7edb6b49c92" {
+		t.Fatalf("Report detached digest = %s", got)
+	}
+}
+
+// TestREG024ManifestAndReportDeterministicAcrossInputPermutations verifies
+// repeated builds and equivalent set-like input orderings produce identical
+// canonical bytes and detached digests. Topological ResolutionOrder is kept
+// fixed because its order is semantic rather than set-like.
+func TestREG024ManifestAndReportDeterministicAcrossInputPermutations(t *testing.T) {
+	graph, sources := resolvedFixture()
+	graph.Catalogs = append(graph.Catalogs, resolver.CatalogReference{
+		CatalogID: "archive", MetadataURI: "https://archive.example.invalid/index.json", MetadataSHA: testDigest,
+	})
+	graph.Roots = append(graph.Roots, resolver.Requirement{
+		ComponentID: "addon", Variant: "default", VersionConstraint: "=2.0.0",
+	})
+	addon := graph.Components[0]
+	addon.ComponentID = "addon"
+	addon.Version = "2.0.0"
+	addon.ReleaseMetadataURI = "https://catalog.example.invalid/releases/addon-2.0.0.json"
+	addon.SourceUnits = []catalogModel.SourceUnit{{
+		ID: "core", RepositoryURI: "https://github.com/example/addon.git", Revision: testRevision,
+	}}
+	addon.Dependencies = []resolver.ResolvedDependency{}
+	addon.Contracts = catalogModel.Contracts{
+		Provides: []catalogModel.ContractProvider{{ContractID: "z.contract", Version: "2.0.0"}, {ContractID: "a.contract", Version: "1.0.0"}},
+		Requires: []catalogModel.ContractRequirement{{ContractID: "z.required", VersionConstraint: ">=2.0.0"}, {ContractID: "a.required", VersionConstraint: "^1.0.0"}},
+	}
+	graph.Components[0].Dependencies = []resolver.ResolvedDependency{
+		{ComponentID: "addon", Variant: "default", Version: "2.0.0"},
+	}
+	graph.Components[0].SourceUnits = append(graph.Components[0].SourceUnits, catalogModel.SourceUnit{
+		ID: "extra", RepositoryURI: "https://github.com/example/engine-extra.git", Revision: testRevision,
+	})
+	graph.Components = append(graph.Components, addon)
+	graph.ResolutionOrder = []resolver.Node{
+		{ComponentID: "addon", Variant: "default", Version: "2.0.0"},
+		{ComponentID: "engine", Variant: "default", Version: "1.0.0"},
+	}
+	sources = append(sources,
+		collector.Source{ComponentID: "engine", Variant: "default", SourceUnitID: "extra", Revision: testRevision, WorkspacePath: "components/engine/default/sources/extra"},
+		collector.Source{ComponentID: "addon", Variant: "default", SourceUnitID: "core", Revision: testRevision, WorkspacePath: "components/addon/default/sources/core"},
+	)
+
+	firstDocument, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstManifest, err := MarshalCanonical(firstDocument)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstManifestDigest := Digest(firstManifest)
+
+	permuted := *graph
+	permuted.Catalogs = reverseCatalogReferences(graph.Catalogs)
+	permuted.Roots = append([]resolver.Requirement(nil), graph.Roots...)
+	reverseRequirements(permuted.Roots)
+	permuted.Components = append([]resolver.ResolvedComponent(nil), graph.Components...)
+	reverseResolvedComponents(permuted.Components)
+	permutedSources := append([]collector.Source(nil), sources...)
+	reverseCollectorSources(permutedSources)
+
+	secondDocument, err := Build(&permuted, permutedSources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondManifest, err := MarshalCanonical(secondDocument)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(firstManifest, secondManifest) || firstManifestDigest != Digest(secondManifest) {
+		t.Fatalf("Manifest bytes/digest changed after equivalent input permutation\nfirst: %s\nsecond: %s", firstManifest, secondManifest)
+	}
+	for run := 0; run < 3; run++ {
+		repeated, err := MarshalCanonical(firstDocument)
+		if err != nil || !bytes.Equal(firstManifest, repeated) || Digest(repeated) != firstManifestDigest {
+			t.Fatalf("Manifest changed on repeated run %d: err=%v", run, err)
+		}
+	}
+
+	report := resolver.Report{
+		SchemaVersion: "1.1.0",
+		Result:        "success",
+		Selected: []resolver.SelectedCandidate{
+			{ComponentID: "engine", Variant: "default", Version: "1.0.0"},
+			{ComponentID: "addon", Variant: "default", Version: "2.0.0"},
+		},
+		AppliedConstraints: []resolver.AppliedConstraint{
+			{ComponentID: "engine", Variant: "default", VersionConstraint: "=1.0.0", Source: resolver.ConstraintSource{Type: resolver.ConstraintSourceRoot}},
+			{ComponentID: "addon", Variant: "default", VersionConstraint: "=2.0.0", Source: resolver.ConstraintSource{Type: resolver.ConstraintSourceDependency, ComponentID: "engine", Variant: "default", Version: "1.0.0"}},
+		},
+		Warnings: []resolver.Warning{{Code: "Z_LAST", Message: "last"}, {Code: "A_FIRST", Message: "first"}},
+	}
+	firstReport, err := MarshalReport(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	permutedReport := report
+	permutedReport.Selected = append([]resolver.SelectedCandidate(nil), report.Selected...)
+	permutedReport.AppliedConstraints = append([]resolver.AppliedConstraint(nil), report.AppliedConstraints...)
+	permutedReport.Warnings = append([]resolver.Warning(nil), report.Warnings...)
+	for left, right := 0, len(permutedReport.Selected)-1; left < right; left, right = left+1, right-1 {
+		permutedReport.Selected[left], permutedReport.Selected[right] = permutedReport.Selected[right], permutedReport.Selected[left]
+	}
+	for left, right := 0, len(permutedReport.AppliedConstraints)-1; left < right; left, right = left+1, right-1 {
+		permutedReport.AppliedConstraints[left], permutedReport.AppliedConstraints[right] = permutedReport.AppliedConstraints[right], permutedReport.AppliedConstraints[left]
+	}
+	for left, right := 0, len(permutedReport.Warnings)-1; left < right; left, right = left+1, right-1 {
+		permutedReport.Warnings[left], permutedReport.Warnings[right] = permutedReport.Warnings[right], permutedReport.Warnings[left]
+	}
+	secondReport, err := MarshalReport(permutedReport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(firstReport, secondReport) || Digest(firstReport) != Digest(secondReport) {
+		t.Fatalf("Report bytes/digest changed after equivalent input permutation\nfirst: %s\nsecond: %s", firstReport, secondReport)
+	}
+}
+
+func reverseCatalogReferences(values []resolver.CatalogReference) []resolver.CatalogReference {
+	out := append([]resolver.CatalogReference(nil), values...)
+	for left, right := 0, len(out)-1; left < right; left, right = left+1, right-1 {
+		out[left], out[right] = out[right], out[left]
+	}
+	return out
+}
+
+func reverseRequirements(values []resolver.Requirement) {
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
+	}
+}
+
+func reverseResolvedComponents(values []resolver.ResolvedComponent) {
+	for i := range values {
+		values[i].SourceUnits = append([]catalogModel.SourceUnit(nil), values[i].SourceUnits...)
+		values[i].Dependencies = append([]resolver.ResolvedDependency(nil), values[i].Dependencies...)
+		values[i].Contracts.Provides = append([]catalogModel.ContractProvider(nil), values[i].Contracts.Provides...)
+		values[i].Contracts.Requires = append([]catalogModel.ContractRequirement(nil), values[i].Contracts.Requires...)
+		reverseSourceUnits(values[i].SourceUnits)
+		reverseDependencies(values[i].Dependencies)
+		reverseContractProviders(values[i].Contracts.Provides)
+		reverseContractRequirements(values[i].Contracts.Requires)
+	}
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
+	}
+}
+
+func reverseSourceUnits(values []catalogModel.SourceUnit) {
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
+	}
+}
+
+func reverseDependencies(values []resolver.ResolvedDependency) {
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
+	}
+}
+
+func reverseContractProviders(values []catalogModel.ContractProvider) {
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
+	}
+}
+
+func reverseContractRequirements(values []catalogModel.ContractRequirement) {
+	for left, right := 0, len(values)-1; left < right; left, right = left+1, right-1 {
+		values[left], values[right] = values[right], values[left]
 	}
 }
