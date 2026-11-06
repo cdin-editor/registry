@@ -50,11 +50,12 @@ See [Resolver implementation](../implementation/resolver.md) for algorithm detai
 - [ ] Reproduction tests from a saved Manifest without re-running version selection.
 - [ ] Failure injection proves no partial workspace or successful Manifest is published.
 
-## Phase 6 — CLI, updates and release hardening
+## Phase 6 — CLI operations, diagnostics and cancellation
 
-- [ ] Compose validation → catalog load → resolve → collect → workspace publish in a `prepare` command.
-- [ ] Add dry-run resolution, manifest verification and replay commands with documented exit codes.
-- [ ] Discover new releases without mutating existing workspaces/manifests.
-- [ ] Security withdrawal behavior and audit records.
-- [ ] Cache lifecycle/garbage collection, bounded concurrency and performance budgets.
-- [ ] Fuzz, race and Linux/macOS/Windows integration coverage.
+- [x] Compose validation → catalog load → resolve → collect → workspace publish in a `prepare` command.
+- [x] Preserve dry-run `resolve` and add Manifest verification and replay commands with documented inputs/outputs and stable exit codes.
+- [x] Define stable machine-readable errors and diagnostics that do not expose credentials, raw remote errors or machine-specific temporary paths.
+- [x] Connect Ctrl+C and Unix SIGTERM to command-context cancellation; preserve Workspace staging/lock cleanup.
+- [x] Document command arguments, stdout/stderr contracts, exit codes, cancellation and failure cleanup in [Manifest CLI operations](../implementation/cli.md).
+
+Update discovery, withdrawal audit records, cache lifecycle/garbage collection, bounded concurrency and performance budgets belong to Phase 7. Fuzz targets and broader platform/security coverage remain Phase 8.

@@ -105,3 +105,14 @@ pinned replay operation. Its `MANIFEST_REPLAY_PINNED` warning makes clear that
 the original version constraints/report evidence are not embedded in the
 Resolved Manifest and were not re-evaluated. Replay does not execute collected
 component code or promise publisher authenticity, signatures or attestations.
+
+## CLI integration
+
+The `registry manifest verify` command delegates to `manifest.Verify` and is
+read-only. The `registry manifest replay` command delegates to
+`workspace.Replay`, requires an explicit source-host allow-list, and publishes
+through the same transactional Workspace boundary as `prepare`. It accepts
+an optional detached SHA-256 receipt and supports offline metadata replay by
+default plus opt-in strict revalidation of the exact recorded Catalog/Release
+metadata. CLI receipts and stable error codes are documented in
+[Manifest CLI operations](cli.md).

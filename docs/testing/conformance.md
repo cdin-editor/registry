@@ -23,18 +23,19 @@ without executable behavior and tests.
 | Selection policy | Prerelease/withdrawn policy and catalog permutation invariance are tested. |
 | Contracts | Component/environment providers, missing providers and ambiguity are tested. |
 | Graph | Cycle path, deterministic dependency-first output and failure-without-graph are tested. |
+| Manifest verification | Canonical byte equality, embedded public schema, optional detached digest, semantic provenance, safe paths and dependency-first ordering are verified. |
+| Manifest replay | Reconstructs the saved graph without Resolver/version selection, retrieves exact full commits, checks byte-identical Manifest output before Workspace publication and does not execute component code. |
+| Manifest CLI | File/stdin verification, JSON receipts, stable error codes, offline/strict replay, source failure, cancellation, destination collision and usage errors are tested. |
+| Native Workspace publication | Ubuntu, macOS and Windows native jobs exercise no-replace publication, cleanup and permissions; crash/power-loss durability is not claimed. |
 | Repository boundaries | Pipeline invokes PSX and package/consumer-independence boundary checks. |
 
-## Not yet verified or implemented
+## Remaining qualifications and work
 
-- Production HTTP Catalog transport, allow-list/redirect/SSRF enforcement, response bounds and cache integrity.
-- Complete adversarial Resolver conformance matrix, fuzz vectors and large-graph performance bounds.
-- Actual Git commit object retrieval and verification.
-- Source subdirectory/symlink path confinement and no-execution guarantees over real source trees.
-- Transactional workspace staging, atomic publication and failure cleanup.
-- Serialized Resolved Manifest and Resolution Report against v1 schemas.
-- RFC 8785 canonical JSON, manifest replay and update discovery.
-- End-to-end clean-room preparation across Catalog → Resolver → Collector → Workspace.
+- Fuzz targets, complete REG-001–REG-026 traceability and large-graph performance/resource budgets remain future work.
+- Update discovery, Git-object cache lifecycle/garbage collection, retained-Manifest pins and retrieval/withdrawal audit records remain Phase 7.
+- End-to-end clean-room preparation from a Product Definition plus one or more production Catalogs remains a separate completion gate.
+- Parent-directory fsync and uniform crash/power-loss durability are not implemented or claimed.
+- Deployment-wide Git DNS/IP egress enforcement remains the deployment firewall's responsibility.
 
 CI evidence applies only to commands/platforms actually run. The first Resolver
 slice does not prove Collector, Workspace, Manifest serialization or full

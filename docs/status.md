@@ -24,6 +24,8 @@ cross-platform requirement.
 | Product Definition YAML normalization and strict YAML rejection rules | Implemented |
 | resolve command: explicit Product Definition, Catalogs and host policy; report only | Implemented; command composition and core packages tested |
 | prepare command: resolve, collect, validate outputs and publish | Implemented; underlying workspace integration tested with temporary Git repositories |
+| manifest verify command | Implemented; canonical bytes, public schema, provenance and optional external SHA-256; file/stdin tests |
+| manifest replay command | Implemented; exact pinned Git commits, offline/strict metadata modes, transactional publication and stable error codes |
 | Catalog Index loading and schema validation | Implemented; all-or-nothing loader |
 | Production HTTPS metadata transport | Implemented; explicit exact-host allow-list, redirect revalidation, DNS/public-address checks and bounded reads |
 | Metadata cache | Implemented; URI+expected-digest identity, byte verification, restrictive files and corrupt-entry refetch |
@@ -37,10 +39,10 @@ cross-platform requirement.
 | Transactional workspace staging and publication | Implemented; same-filesystem staging, lock, no-overwrite checks, cleanup and integration tests |
 | Resolved Manifest and Resolution Report serialization | Implemented; embedded-schema validation in Workspace |
 | RFC 8785-style canonical serialization and canonical-input verification | Implemented; ordering, escaping, number and rejection tests |
-| Manifest replay from a persisted Manifest | Not implemented |
+| Manifest replay from a persisted Manifest | Implemented; never re-runs Resolver or executes collected code |
 | Git-object cache/eviction and update discovery | Not implemented |
 | Deployment firewall enforcement for Git transport | External deployment responsibility; HTTPS host allow-list is not an egress firewall |
-| Cross-platform Linux/macOS/Windows integration matrix and crash-durability proof | Not yet established |
+| Native Linux/macOS/Windows Workspace integration | Tested in native CI; parent-directory fsync and uniform crash/power-loss durability are not claimed |
 
 ## Security and portability qualifications
 
@@ -49,7 +51,7 @@ cross-platform requirement.
 - Source symlinks and special files are rejected rather than followed or materialized. Submodules, Git LFS object retrieval and component build execution are not supported.
 - Workspace locking coordinates Registry instances that follow the same lock protocol. An unrelated process that ignores the lock can still race to create the destination.
 - Same-filesystem directory rename provides the publication boundary used here, but uniform crash-durability and rename semantics across Linux, macOS and Windows still require a cross-platform test matrix.
-- The canonical-input verifier verifies byte-level JCS representation; it is not a Manifest replay implementation.
+- Manifest verification checks canonical bytes, embedded schema and semantic provenance. Replay verifies the saved Manifest, recollects the exact recorded commits, compares rebuilt canonical bytes before publication, and never invokes the Resolver.
 
 A successful resolve reports a valid selection graph but does not collect source.
 A successful prepare is returned only after Collector, Manifest/Report schema
