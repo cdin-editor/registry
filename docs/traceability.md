@@ -32,13 +32,16 @@ roadmap entry alone is not counted as runtime implementation.
 | REG-024 | Set-like collections are sorted; canonical serializer implements UTF-16 key ordering, required string escapes and ECMAScript number formatting; strict verifier rejects non-canonical bytes. | TestREG024CanonicalJSONOrdersKeysByUTF16; TestREG024CanonicalJSONNumbersUseECMAScriptFormatting; TestREG024CanonicalInputVerifierRejectsNonCanonicalBytes; Resolver Catalog-permutation tests |
 | REG-025 | Resolver emits a schema 1.1.0 report with sourced constraints, typed reason codes and branch-isolated failure evidence; no graph is returned on failure. | TestREG025FailureCannotBuildManifest; TestREG025SiblingBranchEvidenceIsolation; TestREG022RejectsFailedResolution; TestREG022CollectionFailureDoesNotPublishDestination |
 | REG-026 | JSON/YAML is treated as data; Git uses argument vectors, a minimal environment and an optional validated non-interactive credential provider. Ambient config/askpass/SSH/proxy state is excluded; hooks, filters and submodules are disabled; stderr and provider errors are redacted; child cancellation and partial-copy cleanup are tested. Git DNS/IP egress policy remains a deployment responsibility. | internal/validation; internal/catalog/httpfetcher.go; internal/collector/collector.go; TestREG026GitEnvironmentExcludesAmbientCredentialState; TestGitProcessEnvironmentAcceptsOnlyExplicitCredentialBoundary; TestGitProcessEnvironmentRejectsUnscopedInjectedValues; TestCommandGitRedactsChildStderrAndCredentialValues; TestCommandGitCancellationTerminatesActualGitChildProcess; TestREG026CollectUsesOnlyExplicitCredentialProvider; TestREG026AmbientGlobalHooksAndFiltersAreIgnored; TestREG026SubmodulesAreNotFetchedOrMaterialized; TestREG026CancellationDuringFetchCleansCollectorArtifacts; TestREG026CancellationDuringCopyCleansPartialSourceTree; TestCommandGitCancellationKillsDescendantProcesses |
+| REG-027 | Update discovery verifies the historical Manifest before current Catalog loading, uses the generic Resolver, binds deterministic reason-coded output to historical/Product Definition/Catalog digests, schema-validates the report and does not collect or publish sources. | `internal/cli/discovery.go`; `internal/manifest/discovery.go`; `TestManifestDiscoverReportsUnchangedAndWritesImmutableAuditFile`; `TestManifestDiscoverRecordsAvailableUpdateAndCandidateReasons`; `TestManifestDiscoverPreservesWithdrawalDecisionWhenMetadataDigestChanges`; `TestManifestDiscoverDoesNotMutateManifestOrChangePinnedReplay`; `TestManifestDiscoverRejectsInvalidInputsBeforeCatalogFetch`; `TestValidateUpdateDiscoveryReportAndCrossSchemaReference`; `TestValidateUpdateDiscoveryReportAllowsNewlySelectedComponent` |
 
 ## Evidence boundaries
 
-Metadata-cache retention/eviction policy is defined in
-`docs/implementation/catalog-transport.md`, but GC, retained-Manifest pins and
-active-replay leases remain Phase 7 implementation work. Manifest replay,
-update discovery, Git-object caching/eviction and fuzz coverage are still open.
+Metadata-cache retention/eviction, retained-Manifest pins, fetch/replay leases
+and explicit GC are implemented in the Phase 7 branch. Update discovery now
+has a separate schema-validated audit report and tests for unchanged state,
+new versions, withdrawal identity changes, historical immutability and replay
+parity. Broader update-versus-replay/cache concurrency evidence, bounded
+concurrency and fuzz/performance coverage remain open.
 The native Workspace matrix is wired in
 `.github/workflows/workspace-platforms.yml`. Linux, macOS and Windows use
 native no-replace publication primitives; other operating systems fail closed.
