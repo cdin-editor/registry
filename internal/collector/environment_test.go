@@ -142,7 +142,7 @@ func TestCommandGitRedactsChildStderrAndCredentialValues(t *testing.T) {
 	}
 	root := t.TempDir()
 	binary := filepath.Join(root, "fake-git")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$REGISTRY_GIT_CREDENTIAL_TOKEN\" \"$1\" >&2\nexit 19\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$REGISTRY_GIT_CREDENTIAL_TOKEN\" \"$@\" >&2\nexit 19\n"
 	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
