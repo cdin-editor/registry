@@ -11,6 +11,7 @@ import (
 
 	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/catalog"
+	"github.com/cdin-editor/registry/internal/resolver"
 )
 
 type failNthFetchGit struct {
@@ -29,7 +30,7 @@ func (g *failNthFetchGit) Run(ctx context.Context, dir string, env []string, arg
 	return g.delegate.Run(ctx, dir, env, args...)
 }
 
-func resolutionWithTwoSourceUnits(repository, revision string) resolverResult {
+func resolutionWithTwoSourceUnits(repository, revision string) resolver.Result {
 	result := successfulResolution(repository, revision)
 	component := &result.Graph.Components[0]
 	component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
@@ -40,11 +41,6 @@ func resolutionWithTwoSourceUnits(repository, revision string) resolverResult {
 	return result
 }
 
-// resolverResult is an alias kept local to make the helper's return type clear.
-type resolverResult = struct {
-	Graph  *resolver.Graph
-	Report resolver.Report
-}
 
 func assertPrepareFailureLeavesNoArtifacts(t *testing.T, destination string) {
 	t.Helper()
