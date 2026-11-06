@@ -5,7 +5,7 @@
 The repository now has more than an in-memory Resolver: it includes strict
 Catalog transport, deterministic dependency and contract resolution, immutable
 Git source collection, transactional workspace staging/publication, canonical
-Manifest/Report serialization, and CLI resolve/prepare composition. These
+Manifest/Report serialization, CLI resolve/prepare composition and read-only update discovery. These
 packages remain generic and are composed at the Registry CLI boundary; collected
 component code is never executed.
 
@@ -13,7 +13,7 @@ The current implementation has passed the repository Pipeline quality gate,
 including formatting, go vet, all Go tests, governance, build, module
 boundaries, schema synchronization, PSX structure checks, release checks,
 race tests and git diff --check. This is evidence for the code on the tested
-feature-branch head, not proof of every REG-001–REG-026 deployment or
+feature-branch head, not proof of every REG-001–REG-027 deployment or
 cross-platform requirement.
 
 | Capability | Status |
@@ -41,7 +41,7 @@ cross-platform requirement.
 | RFC 8785-style canonical serialization and canonical-input verification | Implemented; ordering, escaping, number and rejection tests |
 | Manifest replay from a persisted Manifest | Implemented; never re-runs Resolver or executes collected code |
 | Git-object cache | Implemented; full commit-ID bare object stores, commit hash + object-graph verification, corruption refetch, Manifest pins, replay leases and fail-closed age/budget GC |
-| Update discovery and audit decisions | Not implemented |
+| Update discovery and audit decisions | Implemented in the Phase 7 branch; verifies historical Manifest first, records immutable digest-bound decisions, validates its dedicated schema and does not collect/publish source |
 | Deployment firewall enforcement for Git transport | External deployment responsibility; HTTPS host allow-list is not an egress firewall |
 | Native Linux/macOS/Windows Workspace integration | Tested in native CI; parent-directory fsync and uniform crash/power-loss durability are not claimed |
 
