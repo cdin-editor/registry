@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/cdin-editor/registry/internal/validation"
 )
@@ -16,6 +17,8 @@ import (
 // Fetcher retrieves release metadata bytes for a Catalog Index entry. REG-019
 // requires digest verification before parsing; transport policy is deliberately
 // injected so catalog parsing does not acquire network or credential authority.
+// Load and LoadWithOptions may call Fetch concurrently up to four workers.
+// Implementations must be safe for concurrent calls and honor context cancellation.
 // See https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#4-catalog-index-and-component-release-metadata
 // and https://github.com/cdin-editor/registry/blob/main/docs/implementation/catalog-ingestion.md.
 type Fetcher interface {
@@ -154,7 +157,56 @@ type identity struct {
 // The returned Catalog is all-or-nothing: consumers never observe partial input.
 // See REG-004/005/019 and
 // https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md#4-catalog-index-and-component-release-metadata.
+const (
+	maxConcurrentReleaseMetadataFetches = 4
+	defaultReleaseMetadataFetches       = maxConcurrentReleaseMetadataFetches
+	maxCatalogIndexBytes                = 8 << 20
+	maxCatalogEntries                   = 4096
+	maxReleaseMetadataBytes             = 8 << 20
+	maxCatalogMetadataBytes             = 256 << 20
+)
+
+type releaseMetadataSizeError struct {
+	size int
+}
+
+// LoadOptions controls bounded Catalog metadata retrieval. Zero selects the
+// safe serial default during qualification. Values above the hard maximum are
+// rejected rather than silently clamped.
+type LoadOptions struct {
+	MaxConcurrentMetadataFetches int
+}
+
+func (e *releaseMetadataSizeError) Error() string {
+	return fmt.Sprintf("catalog: Release Metadata exceeds the %d-byte entry limit (got %d bytes)", maxReleaseMetadataBytes, e.size)
+}
+
+type releaseFetchResult struct {
+	index   int
+	payload []byte
+	err     error
+}
+
+// Load validates a Catalog Index and retrieves its immutable Release Metadata
+// with the default bounded worker pool. Results are still verified and processed
+// in original index order. It never returns a partial Catalog after any fetch or
+// validation failure. The Validator is called serially; Fetcher implementations
+// must be safe for concurrent calls and honor context cancellation.
 func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Validator) (*Catalog, error) {
+	return LoadWithOptions(ctx, indexBytes, fetcher, validator, LoadOptions{})
+}
+
+// LoadWithOptions validates and loads a Catalog with an explicit bounded worker
+// count. A value of zero selects the qualified default (four workers). Values
+// above the hard maximum are rejected rather than silently clamped.
+func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Validator, options LoadOptions) (*Catalog, error) {
+	concurrency := options.MaxConcurrentMetadataFetches
+	if concurrency == 0 {
+		concurrency = defaultReleaseMetadataFetches
+	}
+	if concurrency < 1 || concurrency > maxConcurrentReleaseMetadataFetches {
+		return nil, fmt.Errorf("catalog: metadata fetch concurrency must be between 1 and %d", maxConcurrentReleaseMetadataFetches)
+	}
 	if ctx == nil {
 		return nil, fmt.Errorf("catalog: context is nil")
 	}
@@ -163,6 +215,9 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if len(indexBytes) > maxCatalogIndexBytes {
+		return nil, fmt.Errorf("catalog: Catalog Index exceeds the %d-byte input limit", maxCatalogIndexBytes)
 	}
 	if err := validator.Validate(validation.CatalogIndex, indexBytes, "catalog-index.json"); err != nil {
 		return nil, fmt.Errorf("catalog: validate index: %w", err)
@@ -175,13 +230,20 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 	if strings.TrimSpace(index.CatalogID) == "" {
 		return nil, fmt.Errorf("catalog: empty catalog_id")
 	}
+	if len(index.Entries) > maxCatalogEntries {
+		return nil, fmt.Errorf("catalog: Catalog entry count exceeds the limit of %d (got %d)", maxCatalogEntries, len(index.Entries))
+	}
 
 	out := &Catalog{ID: index.CatalogID}
 	seen := make(map[identity]Release, len(index.Entries))
-	for i, entry := range index.Entries {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	var totalMetadataBytes int64
+	err := fetchAndProcessEntries(ctx, index.Entries, fetcher, concurrency, func(i int, payload []byte) error {
+		nextTotal, sizeErr := accountCatalogMetadataBytes(totalMetadataBytes, int64(len(payload)))
+		if sizeErr != nil {
+			return sizeErr
 		}
+		totalMetadataBytes = nextTotal
+		entry := index.Entries[i]
 		variant := entry.Variant
 		if variant == "" {
 			variant = "default"
@@ -189,47 +251,25 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 		key := identity{entry.ComponentID, variant, entry.Version}
 
 		expected := strings.ToLower(entry.MetadataSHA)
-		var payload []byte
-		var err error
-		if digestFetcher, ok := fetcher.(DigestFetcher); ok {
-			payload, err = digestFetcher.FetchWithDigest(ctx, entry.MetadataURI, expected)
-		} else {
-			payload, err = fetcher.Fetch(ctx, entry.MetadataURI)
-		}
-		if err != nil {
-			// Preserve caller cancellation and the local redirect-policy error type.
-			// Arbitrary Fetcher errors are untrusted and may echo URLs or credentials.
-			if errors.Is(err, context.Canceled) {
-				return nil, context.Canceled
-			}
-			if errors.Is(err, context.DeadlineExceeded) {
-				return nil, context.DeadlineExceeded
-			}
-			var policyError *safePolicyError
-			if errors.As(err, &policyError) {
-				return nil, fmt.Errorf("catalog: fetch entry %d metadata: %w", i, policyError)
-			}
-			return nil, fmt.Errorf("catalog: fetch entry %d metadata: transport failure", i)
-		}
 		sum := sha256.Sum256(payload)
 		actual := hex.EncodeToString(sum[:])
 		if actual != expected {
-			return nil, fmt.Errorf("catalog: metadata digest mismatch for %s/%s@%s: expected %s, got %s",
+			return fmt.Errorf("catalog: metadata digest mismatch for %s/%s@%s: expected %s, got %s",
 				key.component, key.variant, key.version, expected, actual)
 		}
 
 		if err := validator.Validate(validation.ComponentRelease, payload, "component-release.json"); err != nil {
-			return nil, fmt.Errorf("catalog: validate release %s/%s@%s: %w", key.component, key.variant, key.version, err)
+			return fmt.Errorf("catalog: validate release %s/%s@%s: %w", key.component, key.variant, key.version, err)
 		}
 		var release Release
 		if err := json.Unmarshal(payload, &release); err != nil {
-			return nil, fmt.Errorf("catalog: decode release %s/%s@%s: %w", key.component, key.variant, key.version, err)
+			return fmt.Errorf("catalog: decode release %s/%s@%s: %w", key.component, key.variant, key.version, err)
 		}
 		if release.Variant == "" {
 			release.Variant = "default"
 		}
 		if release.ComponentID != key.component || release.Variant != key.variant || release.Version != key.version {
-			return nil, fmt.Errorf("catalog: index identity does not match release metadata for %s/%s@%s", key.component, key.variant, key.version)
+			return fmt.Errorf("catalog: index identity does not match release metadata for %s/%s@%s", key.component, key.variant, key.version)
 		}
 		release.Raw = append([]byte(nil), payload...)
 		release.MetadataURI = entry.MetadataURI
@@ -237,12 +277,164 @@ func Load(ctx context.Context, indexBytes []byte, fetcher Fetcher, validator Val
 
 		if prior, ok := seen[key]; ok {
 			if prior.MetadataSHA != release.MetadataSHA {
-				return nil, fmt.Errorf("catalog: conflicting metadata identities for %s/%s@%s", key.component, key.variant, key.version)
+				return fmt.Errorf("catalog: conflicting metadata identities for %s/%s@%s", key.component, key.variant, key.version)
 			}
-			continue
+			return nil
 		}
 		seen[key] = release
 		out.Releases = append(out.Releases, release)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
+}
+
+func accountCatalogMetadataBytes(currentTotal, nextEntry int64) (int64, error) {
+	if nextEntry < 0 || nextEntry > maxReleaseMetadataBytes {
+		return currentTotal, fmt.Errorf("catalog: Release Metadata exceeds the %d-byte entry limit", maxReleaseMetadataBytes)
+	}
+	if currentTotal < 0 || nextEntry > maxCatalogMetadataBytes-currentTotal {
+		return currentTotal, fmt.Errorf("catalog: Release Metadata exceeds the %d-byte Catalog budget", maxCatalogMetadataBytes)
+	}
+	return currentTotal + nextEntry, nil
+}
+
+// fetchAndProcessEntries keeps at most the configured bounded number of metadata
+// requests in flight. Results
+// may complete out of order, but the callback always runs in Catalog Index order.
+// A failure cancels the remaining window and drains every worker before return,
+// so callers never observe background requests after Load has failed.
+func fetchAndProcessEntries(
+	ctx context.Context,
+	entries []Entry,
+	fetcher Fetcher,
+	concurrency int,
+	process func(index int, payload []byte) error,
+) error {
+	if len(entries) == 0 {
+		return ctx.Err()
+	}
+	workerCount := concurrency
+	if len(entries) < workerCount {
+		workerCount = len(entries)
+	}
+	workerCtx, cancel := context.WithCancel(ctx)
+	jobs := make(chan int)
+	results := make(chan releaseFetchResult, workerCount)
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for worker := 0; worker < workerCount; worker++ {
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				result := releaseFetchResult{index: index}
+				if err := workerCtx.Err(); err != nil {
+					result.err = err
+				} else {
+					entry := entries[index]
+					if digestFetcher, ok := fetcher.(DigestFetcher); ok {
+						result.payload, result.err = digestFetcher.FetchWithDigest(workerCtx, entry.MetadataURI, strings.ToLower(entry.MetadataSHA))
+					} else {
+						result.payload, result.err = fetcher.Fetch(workerCtx, entry.MetadataURI)
+					}
+					if result.err == nil && len(result.payload) > maxReleaseMetadataBytes {
+						result.err = &releaseMetadataSizeError{size: len(result.payload)}
+						result.payload = nil
+					}
+				}
+				results <- result
+			}
+		}()
+	}
+	go func() {
+		workers.Wait()
+		close(results)
+	}()
+
+	stopWorkers := func() {
+		cancel()
+		close(jobs)
+		for range results {
+			// Drain bounded in-flight results before returning. Fetchers are
+			// required to honor context cancellation.
+		}
+	}
+	defer cancel()
+
+	nextToSubmit := 0
+	for nextToSubmit < workerCount {
+		select {
+		case jobs <- nextToSubmit:
+			nextToSubmit++
+		case <-ctx.Done():
+			stopWorkers()
+			return ctx.Err()
+		}
+	}
+
+	pending := make(map[int]releaseFetchResult, workerCount)
+	for nextToProcess := 0; nextToProcess < len(entries); {
+		if err := ctx.Err(); err != nil {
+			stopWorkers()
+			return err
+		}
+		result, ok := pending[nextToProcess]
+		if !ok {
+			select {
+			case received, open := <-results:
+				if !open {
+					return fmt.Errorf("catalog: metadata fetch workers stopped before completing the index")
+				}
+				pending[received.index] = received
+				continue
+			case <-ctx.Done():
+				stopWorkers()
+				return ctx.Err()
+			}
+		}
+		delete(pending, nextToProcess)
+		if result.err != nil {
+			stopWorkers()
+			if errors.Is(result.err, context.Canceled) {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return context.Canceled
+			}
+			if errors.Is(result.err, context.DeadlineExceeded) {
+				return context.DeadlineExceeded
+			}
+			var sizeError *releaseMetadataSizeError
+			if errors.As(result.err, &sizeError) {
+				return fmt.Errorf("catalog: fetch entry %d metadata: %w", nextToProcess, sizeError)
+			}
+			var policyError *safePolicyError
+			if errors.As(result.err, &policyError) {
+				return fmt.Errorf("catalog: fetch entry %d metadata: %w", nextToProcess, policyError)
+			}
+			return fmt.Errorf("catalog: fetch entry %d metadata: transport failure", nextToProcess)
+		}
+		if err := process(nextToProcess, result.payload); err != nil {
+			stopWorkers()
+			return err
+		}
+		nextToProcess++
+		if nextToSubmit < len(entries) {
+			select {
+			case jobs <- nextToSubmit:
+				nextToSubmit++
+			case <-ctx.Done():
+				stopWorkers()
+				return ctx.Err()
+			}
+		}
+	}
+	close(jobs)
+	for range results {
+		// All entries have been processed in input order. This also joins the
+		// worker set and guarantees Load returns after all fetch activity ends.
+	}
+	return ctx.Err()
 }

@@ -33,6 +33,48 @@ import (
 	"github.com/cdin-editor/registry/internal/resolver"
 )
 
+const (
+	maxSourceUnitFiles = 100000
+	maxSourceUnitBytes = int64(1 << 30)
+	maxWorkspaceFiles  = 500000
+	maxWorkspaceBytes  = int64(8 << 30)
+)
+
+type sourceCopyBudget struct {
+	unitFiles  int
+	unitBytes  int64
+	totalFiles int
+	totalBytes int64
+}
+
+func (b *sourceCopyBudget) beginUnit() {
+	b.unitFiles = 0
+	b.unitBytes = 0
+}
+
+func (b *sourceCopyBudget) accountRegularFile(size int64) error {
+	if size < 0 {
+		return fmt.Errorf("collector: source file has a negative size")
+	}
+	if b.unitFiles >= maxSourceUnitFiles {
+		return fmt.Errorf("collector: source unit exceeds the %d-file limit", maxSourceUnitFiles)
+	}
+	if b.totalFiles >= maxWorkspaceFiles {
+		return fmt.Errorf("collector: workspace sources exceed the %d-file limit", maxWorkspaceFiles)
+	}
+	if size > maxSourceUnitBytes-b.unitBytes {
+		return fmt.Errorf("collector: source unit exceeds the %d-byte limit", maxSourceUnitBytes)
+	}
+	if size > maxWorkspaceBytes-b.totalBytes {
+		return fmt.Errorf("collector: workspace sources exceed the %d-byte total limit", maxWorkspaceBytes)
+	}
+	b.unitFiles++
+	b.unitBytes += size
+	b.totalFiles++
+	b.totalBytes += size
+	return nil
+}
+
 // GitRunner runs Git with an argument vector (never a shell command string).
 // Implementations must honor context cancellation and must not invoke a shell.
 type GitRunner interface {
@@ -194,6 +236,7 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 	seen := make(map[string]bool)
 	createdTargets := make([]string, 0)
 	collectionComplete := false
+	copyBudget := &sourceCopyBudget{}
 	defer func() {
 		if collectionComplete {
 			return
@@ -249,7 +292,8 @@ func Collect(ctx context.Context, graph *resolver.Graph, destination string, opt
 			if err := ensureNoSymlinkAncestors(filepath.Dir(target)); err != nil {
 				return nil, fmt.Errorf("collector: unsafe source parent: %w", err)
 			}
-			materialized, err := collectOne(ctx, options, hooksDir, credentialEnv, unit.RepositoryURI, unit.Revision, unit.Subdirectory, target)
+			copyBudget.beginUnit()
+			materialized, err := collectOne(ctx, options, hooksDir, credentialEnv, unit.RepositoryURI, unit.Revision, unit.Subdirectory, target, copyBudget)
 			if err != nil {
 				return nil, fmt.Errorf("collector: %s/%s: %w", component.ComponentID, unit.ID, err)
 			}
@@ -300,9 +344,9 @@ func parseRepositoryURI(value string) (repositoryURI, error) {
 // collectOne performs a no-checkout fetch of the exact object, verifies it is
 // a commit with the requested full object ID, then checks it out detached.
 // Hook paths and prompting are disabled for every Git invocation (REG-018/026).
-func collectOne(ctx context.Context, options Options, hooksDir string, credentialEnv []string, repository, revision, subdirectory, target string) (string, error) {
+func collectOne(ctx context.Context, options Options, hooksDir string, credentialEnv []string, repository, revision, subdirectory, target string, budget *sourceCopyBudget) (string, error) {
 	if options.GitCache != nil {
-		return collectOneWithGitCache(ctx, options, hooksDir, repository, revision, subdirectory, target)
+		return collectOneWithGitCache(ctx, options, hooksDir, repository, revision, subdirectory, target, budget)
 	}
 	targetComplete := false
 	defer func() {
@@ -316,7 +360,7 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	}
 	defer os.RemoveAll(repoDir)
 	run := func(args ...string) ([]byte, error) {
-		withConfig := []string{"-c", "core.hooksPath=" + hooksDir, "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
+		withConfig := []string{"-c", "core.hooksPath=" + hooksDir, "-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false", "-c", "core.symlinks=true", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "gc.autoDetach=false"}
 		output, runErr := options.Git.Run(ctx, repoDir, credentialEnv, append(withConfig, args...)...)
 		if runErr != nil {
 			if ctx.Err() != nil {
@@ -366,7 +410,7 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	if err != nil {
 		return "", err
 	}
-	if err := copyTree(ctx, sourceRoot, target); err != nil {
+	if err := copyTreeWithBudget(ctx, sourceRoot, target, budget); err != nil {
 		return "", fmt.Errorf("copy checked-out source: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -376,7 +420,7 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	return strings.ToLower(revision), nil
 }
 
-func collectOneWithGitCache(ctx context.Context, options Options, hooksDir string, repository, revision, subdirectory, target string) (string, error) {
+func collectOneWithGitCache(ctx context.Context, options Options, hooksDir string, repository, revision, subdirectory, target string, budget *sourceCopyBudget) (string, error) {
 	revision = strings.ToLower(revision)
 	targetComplete := false
 	defer func() {
@@ -395,6 +439,7 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 		"-c", "filter.lfs.smudge=",
 		"-c", "filter.lfs.process=",
 		"-c", "filter.lfs.required=false",
+		"-c", "core.symlinks=true", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "gc.autoDetach=false",
 	}
 	runCached := func(gitDir string, args ...string) ([]byte, error) {
 		command := append([]string{}, withConfig...)
@@ -487,7 +532,7 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 		if err != nil {
 			return err
 		}
-		if err := copyTree(ctx, sourceRoot, target); err != nil {
+		if err := copyTreeWithBudget(ctx, sourceRoot, target, budget); err != nil {
 			return fmt.Errorf("collector: copy cached source tree: %w", err)
 		}
 		if err := ctx.Err(); err != nil {
@@ -504,15 +549,27 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 
 // sourceDirectory validates the subdirectory as a clean relative POSIX path
 // before translating it to the host filesystem. REG-020 forbids traversal.
-func sourceDirectory(repository, subdirectory string) (string, error) {
+func validateSourceSubdirectory(subdirectory string) error {
 	if subdirectory == "" {
-		return repository, nil
+		return nil
 	}
 	drivePrefix := len(subdirectory) >= 2 &&
 		((subdirectory[0] >= 'a' && subdirectory[0] <= 'z') || (subdirectory[0] >= 'A' && subdirectory[0] <= 'Z')) &&
 		subdirectory[1] == ':'
 	if drivePrefix || strings.Contains(subdirectory, "\\") || !fs.ValidPath(subdirectory) || path.Clean(subdirectory) != subdirectory || strings.HasPrefix(subdirectory, "../") {
-		return "", fmt.Errorf("collector: unsafe source subdirectory %q", subdirectory)
+		return fmt.Errorf("collector: unsafe source subdirectory %q", subdirectory)
+	}
+	return nil
+}
+
+// sourceDirectory validates a clean relative POSIX path, then checks every
+// component without following symlinks.
+func sourceDirectory(repository, subdirectory string) (string, error) {
+	if subdirectory == "" {
+		return repository, nil
+	}
+	if err := validateSourceSubdirectory(subdirectory); err != nil {
+		return "", err
 	}
 	candidate := repository
 	parts := strings.Split(subdirectory, "/")
@@ -542,6 +599,13 @@ func sourceDirectory(repository, subdirectory string) (string, error) {
 // files. Rejecting all symlinks is conservative but makes the REG-020 root
 // containment guarantee independent of platform-specific link resolution.
 func copyTree(ctx context.Context, source, destination string) error {
+	return copyTreeWithBudget(ctx, source, destination, &sourceCopyBudget{})
+}
+
+func copyTreeWithBudget(ctx context.Context, source, destination string, budget *sourceCopyBudget) error {
+	if budget == nil {
+		return fmt.Errorf("collector: source copy budget is required")
+	}
 	if err := os.MkdirAll(destination, 0o755); err != nil {
 		return err
 	}
@@ -582,6 +646,9 @@ func copyTree(ctx context.Context, source, destination string) error {
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("source tree contains unsupported special file %q", relative)
 		}
+		if err := budget.accountRegularFile(info.Size()); err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
@@ -595,7 +662,10 @@ func copyTree(ctx context.Context, source, destination string) error {
 			_ = in.Close()
 			return err
 		}
-		_, copyErr := copyWithContext(ctx, out, in)
+		copiedBytes, copyErr := copyWithContext(ctx, out, io.LimitReader(in, info.Size()+1))
+		if copyErr == nil && copiedBytes > info.Size() {
+			copyErr = fmt.Errorf("source file %q grew beyond its inspected size", relative)
+		}
 		inputCloseErr := in.Close()
 		outputCloseErr := out.Close()
 		if copyErr != nil {

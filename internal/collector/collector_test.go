@@ -184,6 +184,9 @@ func TestREG020RejectsSymlinkSourceTrees(t *testing.T) {
 	if err := os.Symlink(outside, link); err != nil {
 		t.Skipf("symlink creation is unavailable on this host: %v", err)
 	}
+	if output, err := exec.Command("git", "-C", repository, "config", "core.symlinks", "true").CombinedOutput(); err != nil {
+		t.Fatalf("enable symlink-aware Git checkout: %v: %s", err, output)
+	}
 	cmd := exec.Command("git", "-C", repository, "add", "escape")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("stage symlink: %v: %s", err, output)
