@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Apply protected Windows workspace/lock DACLs for Owner Rights, LocalSystem and Administrators; verify ACE identities, rights and inheritance on native Windows.
+
 - Pin complete Manifest/Report canonical bytes and detached digests across repeated runs and equivalent input permutations; expand RFC 8785 Unicode/IEEE-754 vectors and reject invalid UTF-8 before serialization.
 
 - Publish prepared Workspaces through OS-native atomic no-replace directory rename on Linux, macOS and Windows; fail closed on unsupported operating systems.
