@@ -26,8 +26,8 @@ roadmap entry alone is not counted as runtime implementation.
 | REG-018 | Collector fetches only full 40/64-character commit IDs, verifies the commit object and detached HEAD, and removes temporary/partial output on missing, malformed or cancelled retrieval. | internal/collector/collector.go; TestREG017CollectsMultipleDeclaredSourceUnits; TestREG018RejectsNonObjectRevision; TestREG018MissingCommitAndMalformedRepositoryFailClosed; TestREG026CancellationDuringFetchCleansCollectorArtifacts; TestCommandGitCancellationTerminatesActualGitChildProcess; TestCommandGitCancellationKillsDescendantProcesses |
 | REG-019 | HTTP metadata bytes are digest-checked before cache write; Catalog independently re-hashes before schema validation and JSON decoding. | internal/catalog/httpfetcher.go; internal/catalog/catalog.go:Load; TestLoadRejectsDigestMismatchBeforeParsing; HTTPFetcher digest/cache tests |
 | REG-020 | Source subdirectories are checked component-by-component; symlinks, special files and workspace path escapes are rejected; partial source trees are rolled back on failure. | TestREG020RejectsParentTraversal; TestREG020RejectsSymlinkSourceTrees; TestREG020RejectsSpecialFiles; internal/workspace/workspace.go |
-| REG-021 | Workspace uses the canonical components/{component}/{variant}/sources/{source-unit} layout and writes the Manifest and Report. | TestREG021REG022PublishesCompleteWorkspace; internal/workspace/workspace.go |
-| REG-022 | Workspace stages beside the destination, validates all sources/documents, uses an exclusive sibling lock, refuses existing destinations, cleans failures and renames the complete stage. | TestREG021REG022PublishesCompleteWorkspace; TestREG022CollectionFailureDoesNotPublishDestination; TestREG022NeverOverwritesAnExistingDestination; TestREG022RejectsFailedResolution |
+| REG-021 | Workspace preserves canonical, distinct component/variant/source-unit paths when several logical releases reuse one repository and immutable commit. | TestREG021REG022PublishesCompleteWorkspace; TestREG021WorkspaceSharedRepositoryPreservesComponentAndVariantPaths; internal/workspace/workspace.go |
+| REG-022 | Workspace stages privately; injects source, Manifest/Report write+sync, cancellation and pre-publication failures; retains foreign/stale locks; cleans owned stage/lock; rejects a competing non-empty destination. | TestREG022FailureAfterFirstSourceUnitWasStaged; TestREG022FailureAfterAllSourcesBeforeManifest; TestREG022ManifestAndReportWriteAndSyncFailures; TestREG022CancellationAtWorkspaceBoundaries; TestREG022FailureImmediatelyBeforeRename; TestREG022LockContentionAndStaleLockFailClosed; TestREG022OwnedLockIsRemovedOnFailure; TestREG022ConcurrentDestinationCreationIsNotOverwritten; TestREG022WorkspacePermissionsAndSymlinkedParent; TestREG022CollectionFailureDoesNotPublishDestination; TestREG022NeverOverwritesAnExistingDestination; TestREG022RejectsFailedResolution |
 | REG-023 | Manifest records Catalog/release identities, selected components, source revisions/paths, dependency and contract data; Workspace validates it against the embedded v1 schema. | internal/manifest/manifest.go; TestREG023BuildManifestMatchesPublicContract; TestREG021REG022PublishesCompleteWorkspace |
 | REG-024 | Set-like collections are sorted; canonical serializer implements UTF-16 key ordering, required string escapes and ECMAScript number formatting; strict verifier rejects non-canonical bytes. | TestREG024CanonicalJSONOrdersKeysByUTF16; TestREG024CanonicalJSONNumbersUseECMAScriptFormatting; TestREG024CanonicalInputVerifierRejectsNonCanonicalBytes; Resolver Catalog-permutation tests |
 | REG-025 | Resolver emits a schema 1.1.0 report with sourced constraints, typed reason codes and branch-isolated failure evidence; no graph is returned on failure. | TestREG025FailureCannotBuildManifest; TestREG025SiblingBranchEvidenceIsolation; TestREG022RejectsFailedResolution; TestREG022CollectionFailureDoesNotPublishDestination |
@@ -35,8 +35,14 @@ roadmap entry alone is not counted as runtime implementation.
 
 ## Evidence boundaries
 
-Manifest replay, update discovery, Git-object caching/eviction, fuzz coverage and
-a Linux/macOS/Windows integration matrix are not yet implemented or established.
-The Collector host allow-list is not a substitute for deployment egress
-controls. Workspace's lock coordinates cooperating Registry processes only;
-platform-specific crash-durability still needs dedicated tests.
+Metadata-cache retention/eviction policy is defined in
+`docs/implementation/catalog-transport.md`, but GC, retained-Manifest pins and
+active-replay leases remain Phase 7 implementation work. Manifest replay,
+update discovery, Git-object caching/eviction and fuzz coverage are still open.
+The native Workspace matrix is wired in
+`.github/workflows/workspace-platforms.yml`; its platform checks must pass
+before cross-platform guarantees are claimed. The Collector host allow-list is
+not a substitute for deployment egress controls. Workspace's lock coordinates
+cooperating Registry processes only, and the final existence check does not
+provide an OS-level atomic no-replace guarantee against a competing empty
+directory. Directory/parent crash durability is not claimed.
