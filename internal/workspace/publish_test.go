@@ -181,7 +181,6 @@ func TestRenameDirectoryNoReplaceDoesNotFollowDestinationSymlink(t *testing.T) {
 	}
 }
 
-
 func TestREG022StagingSymlinkSwapBeforePublicationFailsClosed(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	parent := t.TempDir()
