@@ -79,7 +79,36 @@ func testFileRepositoryURI(repository string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
+	// MSYS2 Git interprets /D:/... as a POSIX path, not a Windows drive
+	// path. When tests run inside an MSYS2 shell, map D:\\... to /d/...
+	// before constructing the file URI. Native Windows Git keeps /D:/....
+	if os.Getenv("MSYSTEM") != "" {
+		volume := filepath.VolumeName(repository)
+		if len(volume) == 2 && volume[1] == ':' {
+			remainder := strings.TrimLeft(
+				strings.TrimPrefix(strings.TrimLeft(path, "/"), volume), "/")
+			path = "/" + strings.ToLower(volume[:1]) + "/" + remainder
+		}
+	}
 	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
+// TestMSYS2FileURIUsesDriveMountPath keeps local Git fixtures usable when the
+// Windows tests run under an MSYS2 shell rather than native cmd.exe.
+func TestMSYS2FileURIUsesDriveMountPath(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows path conversion regression test")
+	}
+	t.Setenv("MSYSTEM", "UCRT64")
+	got := testFileRepositoryURI(`D:\work\source`)
+	if got != "file:///d/work/source" {
+		t.Fatalf("MSYS2 local repository URI = %q, want file:///d/work/source", got)
+	}
+	t.Setenv("MSYSTEM", "")
+	got = testFileRepositoryURI(`D:\work\source`)
+	if got != "file:///D:/work/source" {
+		t.Fatalf("native Windows local repository URI = %q, want file:///D:/work/source", got)
+	}
 }
 
 func graphForSources(revision, repository string, units ...catalog.SourceUnit) *resolver.Graph {
