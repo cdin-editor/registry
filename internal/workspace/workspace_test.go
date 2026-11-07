@@ -2,9 +2,9 @@ package workspace
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"os/exec"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
