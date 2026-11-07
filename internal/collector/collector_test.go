@@ -3,9 +3,9 @@ package collector
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
-	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
