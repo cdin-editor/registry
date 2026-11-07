@@ -44,8 +44,8 @@ type VerificationStage string
 
 const (
 	VerificationStageCanonicalBytes VerificationStage = "canonical-bytes"
-	VerificationStagePublicSchema    VerificationStage = "public-schema"
-	VerificationStageProvenance      VerificationStage = "provenance"
+	VerificationStagePublicSchema   VerificationStage = "public-schema"
+	VerificationStageProvenance     VerificationStage = "provenance"
 )
 
 // VerificationError exposes only the failed verification stage. Its underlying
