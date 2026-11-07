@@ -296,6 +296,11 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 
 	run := func(directory string, args ...string) {
 		t.Helper()
+		if _, err := runOutput(directory, args...); err != nil {
+			t.Fatalf("isolated Git command failed: %v", err)
+		}
+	}
+	runOutput := func(directory string, args ...string) ([]byte, error) {
 		config := []string{
 			"-c", "core.hooksPath=" + hooks,
 			"-c", "filter.lfs.smudge=",
@@ -306,18 +311,7 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 			"-c", "gc.auto=0",
 			"-c", "gc.autoDetach=false",
 		}
-		output, err := git.Run(context.Background(), directory, nil, append(config, args...)...)
-		if err != nil {
-			// Re-run only the failing fixture command with the same isolated
-			// environment so CI retains the local Git diagnostic (no secrets or
-			// remote credentials are present in this local-only test).
-			command := exec.Command("git", append(config, args...)...)
-			command.Dir = directory
-			command.Env, _ = gitProcessEnvironment(os.Environ(), nil)
-			raw, rawErr := command.CombinedOutput()
-			t.Fatalf("isolated Git command failed: %v; diagnostic=%q; rerun=%v", err, string(raw), rawErr)
-		}
-		_ = output
+		return git.Run(context.Background(), directory, nil, append(config, args...)...)
 	}
 	repositoryPath := filepath.Join(destination, "source")
 	if err := os.MkdirAll(repositoryPath, 0o755); err != nil {
@@ -326,60 +320,16 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 	run(repositoryPath, "init", "--quiet")
 	run(repositoryPath, "remote", "add", "origin", testFileRepositoryURI(repository))
 	run(repositoryPath, "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision)
-	object, err := git.Run(context.Background(), repositoryPath, nil, "rev-parse", "--verify", revision+"^{commit}")
-	if err != nil || strings.TrimSpace(string(object)) != revision {
-		t.Fatalf("isolated Git did not fetch declared commit: %v", err)
+	verifyRun := func(args ...string) ([]byte, error) {
+		return runOutput(repositoryPath, args...)
 	}
-}
-
-// TestCommandGitVerifiesFetchedCommitWithoutRevisionPeeling exercises the
-// production fetch/checkout verification sequence under Windows Git. It avoids
-// the <revision>^{commit} revision-peeling expression and checks the canonical
-// object hash for both the fetched commit and detached HEAD.
-func TestCommandGitVerifiesFetchedCommitWithoutRevisionPeeling(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows Git revision verification regression test")
+	if err := verifyGitCommit(verifyRun, revision, revision); err != nil {
+		kind, _ := runOutput(repositoryPath, "cat-file", "-t", revision)
+		object, _ := runOutput(repositoryPath, "cat-file", "commit", revision)
+		t.Fatalf("isolated Git did not fetch declared commit: %v; object_type=%q; object_bytes=%d", err, strings.TrimSpace(string(kind)), len(object))
 	}
-	repository, revision := initTestRepository(t, map[string]string{"source.txt": "fixture"})
-	root := t.TempDir()
-	worktree := filepath.Join(root, "worktree")
-	if err := os.MkdirAll(worktree, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	hooks := filepath.Join(root, "hooks")
-	if err := os.MkdirAll(hooks, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	git := CommandGit{}
-	run := func(args ...string) ([]byte, error) {
-		config := []string{
-			"-c", "core.hooksPath=" + hooks,
-			"-c", "filter.lfs.smudge=",
-			"-c", "filter.lfs.process=",
-			"-c", "filter.lfs.required=false",
-			"-c", "core.symlinks=true",
-			"-c", "maintenance.auto=false",
-			"-c", "gc.auto=0",
-			"-c", "gc.autoDetach=false",
-		}
-		return git.Run(context.Background(), worktree, nil, append(config, args...)...)
-	}
-	if _, err := run("init", "--quiet"); err != nil {
-		t.Fatalf("initialize temporary Git repository: %v", err)
-	}
-	if _, err := run("remote", "add", "origin", testFileRepositoryURI(repository)); err != nil {
-		t.Fatalf("add local test source: %v", err)
-	}
-	if _, err := run("fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision); err != nil {
-		t.Fatalf("fetch exact local test commit: %v", err)
-	}
-	if err := verifyGitCommit(run, revision, revision); err != nil {
-		t.Fatalf("verify fetched source commit: %v", err)
-	}
-	if _, err := run("checkout", "--quiet", "--detach", "--no-recurse-submodules", revision); err != nil {
-		t.Fatalf("checkout exact local test commit: %v", err)
-	}
-	if err := verifyGitCommit(run, "HEAD", revision); err != nil {
-		t.Fatalf("verify detached checkout: %v", err)
+	run(repositoryPath, "checkout", "--quiet", "--detach", "--no-recurse-submodules", revision)
+	if err := verifyGitCommit(verifyRun, "HEAD", revision); err != nil {
+		t.Fatalf("isolated Git checkout identity mismatch: %v", err)
 	}
 }
