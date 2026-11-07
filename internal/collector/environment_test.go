@@ -281,7 +281,6 @@ func TestCommandGitCancellationKillsDescendantProcesses(t *testing.T) {
 	}
 }
 
-
 // TestCommandGitRunsWithIsolatedEnvironment verifies the production Git
 // environment can initialize a temporary repository and fetch a local immutable
 // source on Windows. This exercises the same PATH-selected Git executable as
