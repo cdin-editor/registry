@@ -1,9 +1,9 @@
 package manifest
 
 import (
-	"errors"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"math"
 	"strconv"
 	"strings"
