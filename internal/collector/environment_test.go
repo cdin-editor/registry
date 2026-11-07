@@ -331,3 +331,56 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 		t.Fatalf("isolated Git did not fetch declared commit: %v", err)
 	}
 }
+
+// TestCommandGitVerifiesFetchedCommitWithoutRevisionPeeling exercises the
+// production fetch/checkout verification sequence under Windows Git. It avoids
+// the <revision>^{commit} revision-peeling expression and checks the canonical
+// object hash for both the fetched commit and detached HEAD.
+func TestCommandGitVerifiesFetchedCommitWithoutRevisionPeeling(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows Git revision verification regression test")
+	}
+	repository, revision := initTestRepository(t, map[string]string{"source.txt": "fixture"})
+	root := t.TempDir()
+	worktree := filepath.Join(root, "worktree")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hooks := filepath.Join(root, "hooks")
+	if err := os.MkdirAll(hooks, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	git := CommandGit{}
+	run := func(args ...string) ([]byte, error) {
+		config := []string{
+			"-c", "core.hooksPath=" + hooks,
+			"-c", "filter.lfs.smudge=",
+			"-c", "filter.lfs.process=",
+			"-c", "filter.lfs.required=false",
+			"-c", "core.symlinks=true",
+			"-c", "maintenance.auto=false",
+			"-c", "gc.auto=0",
+			"-c", "gc.autoDetach=false",
+		}
+		return git.Run(context.Background(), worktree, nil, append(config, args...)...)
+	}
+	if _, err := run("init", "--quiet"); err != nil {
+		t.Fatalf("initialize temporary Git repository: %v", err)
+	}
+	if _, err := run("remote", "add", "origin", testFileRepositoryURI(repository)); err != nil {
+		t.Fatalf("add local test source: %v", err)
+	}
+	if _, err := run("fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision); err != nil {
+		t.Fatalf("fetch exact local test commit: %v", err)
+	}
+	if err := verifyGitCommit(run, revision, revision); err != nil {
+		t.Fatalf("verify fetched source commit: %v", err)
+	}
+	if _, err := run("checkout", "--quiet", "--detach", "--no-recurse-submodules", revision); err != nil {
+		t.Fatalf("checkout exact local test commit: %v", err)
+	}
+	if err := verifyGitCommit(run, "HEAD", revision); err != nil {
+		t.Fatalf("verify detached checkout: %v", err)
+	}
+}
+

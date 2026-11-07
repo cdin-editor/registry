@@ -346,6 +346,25 @@ func parseRepositoryURI(value string) (repositoryURI, error) {
 // collectOne performs a no-checkout fetch of the exact object, verifies it is
 // a commit with the requested full object ID, then checks it out detached.
 // Hook paths and prompting are disabled for every Git invocation (REG-018/026).
+func verifyGitCommit(run func(args ...string) ([]byte, error), ref, expectedOID string) error {
+	kind, err := run("cat-file", "-t", ref)
+	if err != nil {
+		return fmt.Errorf("collector: inspect Git object type failed")
+	}
+	if strings.TrimSpace(string(kind)) != "commit" {
+		return fmt.Errorf("collector: Git object is not a commit")
+	}
+	object, err := run("cat-file", "commit", ref)
+	if err != nil {
+		return fmt.Errorf("collector: read Git commit object failed")
+	}
+	expected := strings.ToLower(expectedOID)
+	if !isFullObjectID(expected) || gitObjectHash(expected, object) != expected {
+		return fmt.Errorf("collector: Git commit object ID mismatch")
+	}
+	return nil
+}
+
 func collectOne(ctx context.Context, options Options, hooksDir string, credentialEnv []string, repository, revision, subdirectory, target string, budget *sourceCopyBudget) (string, error) {
 	if options.GitCache != nil {
 		return collectOneWithGitCache(ctx, options, hooksDir, repository, revision, subdirectory, target, budget)
@@ -388,25 +407,14 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	if _, err := run("fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision); err != nil {
 		return "", fmt.Errorf("fetch declared commit: %w", err)
 	}
-	object, err := run("rev-parse", "--verify", revision+"^{commit}")
-	if err != nil {
+	if err := verifyGitCommit(run, revision, revision); err != nil {
 		return "", fmt.Errorf("declared object is not a commit: %w", err)
-	}
-	actual := strings.ToLower(strings.TrimSpace(string(object)))
-	if !isFullObjectID(actual) || actual != strings.ToLower(revision) {
-		// The runner's stdout is an untrusted boundary too. Do not echo it in
-		// identity diagnostics, even when a custom runner returns arbitrary text.
-		return "", fmt.Errorf("collector: declared commit identity mismatch")
 	}
 	if _, err := run("checkout", "--quiet", "--detach", "--no-recurse-submodules", revision); err != nil {
 		return "", fmt.Errorf("checkout immutable commit: %w", err)
 	}
-	head, err := run("rev-parse", "--verify", "HEAD^{commit}")
-	if err != nil {
+	if err := verifyGitCommit(run, "HEAD", revision); err != nil {
 		return "", fmt.Errorf("verify checked-out commit: %w", err)
-	}
-	if strings.ToLower(strings.TrimSpace(string(head))) != strings.ToLower(revision) {
-		return "", fmt.Errorf("checked-out commit differs from requested revision")
 	}
 	sourceRoot, err := sourceDirectory(repoDir, subdirectory)
 	if err != nil {
@@ -526,8 +534,9 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 			}
 			return errors.New("collector: checkout verified Git-object cache entry failed")
 		}
-		head, err := runCached(gitDir, "rev-parse", "--verify", "HEAD^{commit}")
-		if err != nil || strings.ToLower(strings.TrimSpace(string(head))) != revision {
+		if err := verifyGitCommit(func(args ...string) ([]byte, error) {
+			return runCached(gitDir, args...)
+		}, "HEAD", revision); err != nil {
 			return fmt.Errorf("collector: cached checkout commit identity mismatch")
 		}
 		sourceRoot, err := sourceDirectory(checkoutDir, subdirectory)
