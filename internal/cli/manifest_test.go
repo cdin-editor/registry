@@ -256,7 +256,7 @@ func TestManifestCLIVerifyUsesStableInvalidAndIntegrityCodes(t *testing.T) {
 		digest   string
 		wantCode string
 	}{
-		{name: "invalid canonical bytes", input: append(append([]byte(nil), payload...), ' '), wantCode: "MANIFEST_INVALID"},
+		{name: "invalid canonical bytes", input: append(append([]byte(nil), payload...), ' '), wantCode: "MANIFEST_CANONICAL_INVALID"},
 		{name: "digest mismatch", input: payload, digest: strings.Repeat("0", 64), wantCode: "MANIFEST_DIGEST_MISMATCH"},
 		{name: "invalid digest format", input: payload, digest: "SHA256:" + digest, wantCode: "MANIFEST_DIGEST_INVALID"},
 	}
@@ -456,7 +456,7 @@ func TestManifestCLIReplayRejectsInvalidInputBeforeGitOrPublication(t *testing.T
 	code := runCLIManifestReplay(context.Background(), []string{
 		"replay", "--input", invalidInput, "--output", destination, "--allow-host", "source.example.invalid",
 	}, nil, git, &stdout, &stderr)
-	if code != exitInvalid || !strings.Contains(stderr.String(), "error[MANIFEST_INVALID]") {
+	if code != exitInvalid || !strings.Contains(stderr.String(), "error[MANIFEST_CANONICAL_INVALID]") {
 		t.Fatalf("invalid replay exit=%d stderr=%s", code, stderr.String())
 	}
 	if git.calls != 0 {
