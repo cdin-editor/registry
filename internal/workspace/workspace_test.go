@@ -72,9 +72,14 @@ func TestMSYS2FileRepositoryURIUsesDriveMountPath(t *testing.T) {
 		t.Skip("Windows path conversion regression test")
 	}
 	t.Setenv("MSYSTEM", "UCRT64")
-	got := fileRepositoryURI(`D:\\work\\source`)
+	got := fileRepositoryURI(`D:\work\source`)
 	if got != "file:///d/work/source" {
 		t.Fatalf("MSYS2 file repository URI = %q, want file:///d/work/source", got)
+	}
+	t.Setenv("MSYSTEM", "")
+	got = fileRepositoryURI(`D:\work\source`)
+	if got != "file:///D:/work/source" {
+		t.Fatalf("native Windows file repository URI = %q, want file:///D:/work/source", got)
 	}
 }
 
