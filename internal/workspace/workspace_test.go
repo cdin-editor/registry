@@ -58,7 +58,8 @@ func fileRepositoryURI(repository string) string {
 	if os.Getenv("MSYSTEM") != "" {
 		volume := filepath.VolumeName(repository)
 		if len(volume) == 2 && volume[1] == ':' {
-			remainder := strings.TrimLeft(strings.TrimPrefix(path, volume), "/")
+			remainder := strings.TrimLeft(
+				strings.TrimPrefix(strings.TrimLeft(path, "/"), volume), "/")
 			path = "/" + strings.ToLower(volume[:1]) + "/" + remainder
 		}
 	}
