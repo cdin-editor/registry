@@ -80,7 +80,6 @@ func writeCLIIndexFixture(t *testing.T, directory, catalogID, component string, 
 	return path, metadataURI
 }
 
-
 func TestLocalFileURIEncodesWindowsDriveAsPathNotAuthority(t *testing.T) {
 	uri, err := localFileURI("D:/a/cdin/catalog-index.json")
 	if err != nil {
