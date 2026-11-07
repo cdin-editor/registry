@@ -294,12 +294,6 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 	hooks := t.TempDir()
 	git := CommandGit{}
 
-	run := func(directory string, args ...string) {
-		t.Helper()
-		if _, err := runOutput(directory, args...); err != nil {
-			t.Fatalf("isolated Git command failed: %v", err)
-		}
-	}
 	runOutput := func(directory string, args ...string) ([]byte, error) {
 		config := []string{
 			"-c", "core.hooksPath=" + hooks,
@@ -312,6 +306,12 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 			"-c", "gc.autoDetach=false",
 		}
 		return git.Run(context.Background(), directory, nil, append(config, args...)...)
+	}
+	run := func(directory string, args ...string) {
+		t.Helper()
+		if _, err := runOutput(directory, args...); err != nil {
+			t.Fatalf("isolated Git command failed: %v", err)
+		}
 	}
 	repositoryPath := filepath.Join(destination, "source")
 	if err := os.MkdirAll(repositoryPath, 0o755); err != nil {
