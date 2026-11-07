@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,42 @@ func writeCLIIndexFixture(t *testing.T, directory, catalogID, component string, 
 		t.Fatal(err)
 	}
 	return path, metadataURI
+}
+
+
+func TestLocalFileURIEncodesWindowsDriveAsPathNotAuthority(t *testing.T) {
+	uri, err := localFileURI("D:/a/cdin/catalog-index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Scheme != "file" || parsed.Host != "" || parsed.Path != "/D:/a/cdin/catalog-index.json" {
+		t.Fatalf("Windows local path produced non-portable file URI %q (host=%q path=%q)", uri, parsed.Host, parsed.Path)
+	}
+}
+
+func TestLocalFileURIKeepsPOSIXAbsolutePath(t *testing.T) {
+	uri, err := localFileURI("/home/runner/cdin/catalog-index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Scheme != "file" || parsed.Host != "" || parsed.Path != "/home/runner/cdin/catalog-index.json" {
+		t.Fatalf("POSIX local path produced invalid file URI %q", uri)
+	}
+}
+
+func TestFileURIPathRestoresWindowsDriveLetter(t *testing.T) {
+	got := fileURIPathToLocalPath("/D:/a/cdin/catalog-index.json", true)
+	if normalized := filepath.ToSlash(got); normalized != "D:/a/cdin/catalog-index.json" {
+		t.Fatalf("Windows file URI path normalized to %q, want D:/a/cdin/catalog-index.json", normalized)
+	}
 }
 
 // TestREG019ResolveComposesMultipleLocalFixtureCatalogsOffline exercises the
