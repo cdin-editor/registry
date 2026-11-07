@@ -355,7 +355,7 @@ func readCatalogInput(ctx context.Context, input string, fetcher catalog.Fetcher
 		if err != nil || parsed.Host != "" || parsed.Path == "" {
 			return nil, "", fmt.Errorf("Catalog Index file URI must be local and absolute")
 		}
-		path := fileURIPathToLocalPath(parsed.Path, os.PathSeparator == '\\\\')
+		path := fileURIPathToLocalPath(parsed.Path, os.PathSeparator == '\\')
 		if !filepath.IsAbs(path) {
 			return nil, "", fmt.Errorf("Catalog Index file URI must contain an absolute local path")
 		}
