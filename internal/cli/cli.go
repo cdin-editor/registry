@@ -355,7 +355,10 @@ func readCatalogInput(ctx context.Context, input string, fetcher catalog.Fetcher
 		if err != nil || parsed.Host != "" || parsed.Path == "" {
 			return nil, "", fmt.Errorf("Catalog Index file URI must be local and absolute")
 		}
-		path := filepath.FromSlash(parsed.Path)
+		path := fileURIPathToLocalPath(parsed.Path, os.PathSeparator == '\\\\')
+		if !filepath.IsAbs(path) {
+			return nil, "", fmt.Errorf("Catalog Index file URI must contain an absolute local path")
+		}
 		absolute, err := filepath.Abs(path)
 		if err != nil {
 			return nil, "", fmt.Errorf("resolve Catalog Index path: %w", err)
@@ -364,7 +367,11 @@ func readCatalogInput(ctx context.Context, input string, fetcher catalog.Fetcher
 		if err != nil {
 			return nil, "", err
 		}
-		return data, (&url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}).String(), nil
+		indexURI, err := localFileURI(absolute)
+		if err != nil {
+			return nil, "", err
+		}
+		return data, indexURI, nil
 	}
 	// Treat the input as a path by default. This deliberately avoids parsing
 	// Windows drive letters (for example C:\\repo\\catalog.json) as URI schemes.
@@ -376,8 +383,43 @@ func readCatalogInput(ctx context.Context, input string, fetcher catalog.Fetcher
 	if err != nil {
 		return nil, "", err
 	}
-	indexURI := (&url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}).String()
+	indexURI, err := localFileURI(absolute)
+	if err != nil {
+		return nil, "", err
+	}
 	return data, indexURI, nil
+}
+
+// localFileURI returns a canonical local file URI for an absolute filesystem
+// path. Windows drive paths need a leading slash in the URI path (file:///C:/...);
+// omitting it makes net/url interpret the drive letter as an authority/host.
+func localFileURI(absolutePath string) (string, error) {
+	slashPath := filepath.ToSlash(absolutePath)
+	if strings.HasPrefix(slashPath, "//") {
+		return "", fmt.Errorf("Catalog Index UNC paths are not supported as local file URIs")
+	}
+	if isWindowsDriveAbsolutePath(slashPath) {
+		slashPath = "/" + slashPath
+	}
+	if !strings.HasPrefix(slashPath, "/") {
+		return "", fmt.Errorf("Catalog Index path must be absolute")
+	}
+	return (&url.URL{Scheme: "file", Path: slashPath}).String(), nil
+}
+
+// fileURIPathToLocalPath restores the drive-letter form used by Windows from
+// the leading slash required by a canonical file:///C:/... URI.
+func fileURIPathToLocalPath(uriPath string, windows bool) string {
+	if windows && strings.HasPrefix(uriPath, "/") && isWindowsDriveAbsolutePath(uriPath[1:]) {
+		uriPath = uriPath[1:]
+	}
+	return filepath.FromSlash(uriPath)
+}
+
+func isWindowsDriveAbsolutePath(path string) bool {
+	return len(path) >= 3 &&
+		((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) &&
+		path[1] == ':' && path[2] == '/'
 }
 
 // catalogRepositoryPolicy applies the same exact allow-list to source repository
