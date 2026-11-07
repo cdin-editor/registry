@@ -383,4 +383,3 @@ func TestCommandGitVerifiesFetchedCommitWithoutRevisionPeeling(t *testing.T) {
 		t.Fatalf("verify detached checkout: %v", err)
 	}
 }
-
