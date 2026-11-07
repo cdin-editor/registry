@@ -294,8 +294,7 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 	hooks := t.TempDir()
 	git := CommandGit{}
 
-	run := func(directory string, args ...string) {
-		t.Helper()
+	runOutput := func(directory string, args ...string) ([]byte, error) {
 		config := []string{
 			"-c", "core.hooksPath=" + hooks,
 			"-c", "filter.lfs.smudge=",
@@ -306,18 +305,13 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 			"-c", "gc.auto=0",
 			"-c", "gc.autoDetach=false",
 		}
-		output, err := git.Run(context.Background(), directory, nil, append(config, args...)...)
-		if err != nil {
-			// Re-run only the failing fixture command with the same isolated
-			// environment so CI retains the local Git diagnostic (no secrets or
-			// remote credentials are present in this local-only test).
-			command := exec.Command("git", append(config, args...)...)
-			command.Dir = directory
-			command.Env, _ = gitProcessEnvironment(os.Environ(), nil)
-			raw, rawErr := command.CombinedOutput()
-			t.Fatalf("isolated Git command failed: %v; diagnostic=%q; rerun=%v", err, string(raw), rawErr)
+		return git.Run(context.Background(), directory, nil, append(config, args...)...)
+	}
+	run := func(directory string, args ...string) {
+		t.Helper()
+		if _, err := runOutput(directory, args...); err != nil {
+			t.Fatalf("isolated Git command failed: %v", err)
 		}
-		_ = output
 	}
 	repositoryPath := filepath.Join(destination, "source")
 	if err := os.MkdirAll(repositoryPath, 0o755); err != nil {
@@ -326,8 +320,16 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 	run(repositoryPath, "init", "--quiet")
 	run(repositoryPath, "remote", "add", "origin", testFileRepositoryURI(repository))
 	run(repositoryPath, "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision)
-	object, err := git.Run(context.Background(), repositoryPath, nil, "rev-parse", "--verify", revision+"^{commit}")
-	if err != nil || strings.TrimSpace(string(object)) != revision {
-		t.Fatalf("isolated Git did not fetch declared commit: %v", err)
+	verifyRun := func(args ...string) ([]byte, error) {
+		return runOutput(repositoryPath, args...)
+	}
+	if err := verifyGitCommit(verifyRun, revision, revision); err != nil {
+		kind, _ := runOutput(repositoryPath, "cat-file", "-t", revision)
+		object, _ := runOutput(repositoryPath, "cat-file", "commit", revision)
+		t.Fatalf("isolated Git did not fetch declared commit: %v; object_type=%q; object_bytes=%d", err, strings.TrimSpace(string(kind)), len(object))
+	}
+	run(repositoryPath, "checkout", "--quiet", "--detach", "--no-recurse-submodules", revision)
+	if err := verifyGitCommit(verifyRun, "HEAD", revision); err != nil {
+		t.Fatalf("isolated Git checkout identity mismatch: %v", err)
 	}
 }

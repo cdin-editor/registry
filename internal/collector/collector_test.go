@@ -270,11 +270,13 @@ func (p *fixedCredentialProvider) GitEnvironment(_ context.Context, repositoryUR
 }
 
 type cancelDuringGit struct {
-	delegate CommandGit
-	cancel   context.CancelFunc
-	trigger  string
-	dirs     []string
-	hooks    []string
+	delegate          CommandGit
+	cancel            context.CancelFunc
+	trigger           string
+	triggerOccurrence int
+	triggerSeen       int
+	dirs              []string
+	hooks             []string
 }
 
 func (g *cancelDuringGit) Run(ctx context.Context, dir string, env []string, args ...string) ([]byte, error) {
@@ -284,18 +286,30 @@ func (g *cancelDuringGit) Run(ctx context.Context, dir string, env []string, arg
 			g.hooks = append(g.hooks, strings.TrimPrefix(arg, "core.hooksPath="))
 		}
 	}
+	triggerOccurrence := g.triggerOccurrence
+	if triggerOccurrence <= 0 {
+		triggerOccurrence = 1
+	}
+	triggered := false
 	for _, arg := range args {
 		if arg == g.trigger {
-			if g.trigger == "fetch" {
-				g.cancel()
-				return nil, context.Canceled
+			g.triggerSeen++
+			if g.triggerSeen == triggerOccurrence {
+				triggered = true
+				break
 			}
-			output, err := g.delegate.Run(ctx, dir, env, args...)
-			if err == nil {
-				g.cancel()
-			}
-			return output, err
 		}
+	}
+	if triggered {
+		if g.trigger == "fetch" {
+			g.cancel()
+			return nil, context.Canceled
+		}
+		output, err := g.delegate.Run(ctx, dir, env, args...)
+		if err == nil {
+			g.cancel()
+		}
+		return output, err
 	}
 	return g.delegate.Run(ctx, dir, env, args...)
 }
@@ -429,7 +443,7 @@ func TestREG026CancellationDuringCopyCleansPartialSourceTree(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "prepared")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	git := &cancelDuringGit{cancel: cancel, trigger: "HEAD^{commit}"}
+	git := &cancelDuringGit{cancel: cancel, trigger: "cat-file", triggerOccurrence: 4}
 	_, err := Collect(ctx, graphForSources(revision, repository, catalog.SourceUnit{ID: "source"}), destination,
 		Options{Git: git, Policy: allowTestRepository{}, TempDir: tempRoot})
 	if !errors.Is(err, context.Canceled) {
@@ -613,8 +627,14 @@ type markerOutputGit struct {
 }
 
 func (g markerOutputGit) Run(_ context.Context, _ string, _ []string, args ...string) ([]byte, error) {
-	for _, arg := range args {
-		if arg == "rev-parse" {
+	for index, arg := range args {
+		if arg != "cat-file" || index+2 >= len(args) {
+			continue
+		}
+		switch args[index+1] {
+		case "-t":
+			return []byte("commit\n"), nil
+		case "commit":
 			return []byte(g.marker + "\n"), nil
 		}
 	}
@@ -632,7 +652,7 @@ func TestREG026CollectorRedactsUntrustedGitStdout(t *testing.T) {
 	_, err := Collect(context.Background(), graph, destination, Options{
 		Git: markerOutputGit{marker: marker}, Policy: allowTestRepository{}, TempDir: tempRoot,
 	})
-	if err == nil || !strings.Contains(err.Error(), "declared commit identity mismatch") {
+	if err == nil || !strings.Contains(err.Error(), "Git commit object ID mismatch") {
 		t.Fatalf("expected safe commit-identity failure, got %v", err)
 	}
 	if strings.Contains(err.Error(), marker) {

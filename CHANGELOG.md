@@ -41,6 +41,8 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Improved
 
+- Verify fetched and checked-out Git commits with `cat-file` type/content and canonical object hashes instead of platform-sensitive revision-peeling expressions, including the shared Git-object cache path.
+
 - Make Registry user documentation consumer-independent and clarify the separation between component-owned Release Metadata, Catalog Index publication, and generic Registry resolution.
 
 - Require explicit host allow-lists for remote Catalog, metadata, and Git
