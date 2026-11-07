@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -52,7 +53,29 @@ func fileRepositoryURI(repository string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
+	// Match MSYS2's /d/... drive mount when Registry tests run in a UCRT64
+	// shell. Native Windows Git uses the standard /D:/... file URI form.
+	if os.Getenv("MSYSTEM") != "" {
+		volume := filepath.VolumeName(repository)
+		if len(volume) == 2 && volume[1] == ':' {
+			remainder := strings.TrimLeft(strings.TrimPrefix(path, volume), "/")
+			path = "/" + strings.ToLower(volume[:1]) + "/" + remainder
+		}
+	}
 	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
+// TestMSYS2FileRepositoryURIUsesDriveMountPath verifies local source fixtures
+// use the MSYS2 drive mount spelling under the UCRT64 test shell.
+func TestMSYS2FileRepositoryURIUsesDriveMountPath(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows path conversion regression test")
+	}
+	t.Setenv("MSYSTEM", "UCRT64")
+	got := fileRepositoryURI(`D:\\work\\source`)
+	if got != "file:///d/work/source" {
+		t.Fatalf("MSYS2 file repository URI = %q, want file:///d/work/source", got)
+	}
 }
 
 func successfulResolution(repository, revision string) resolver.Result {
