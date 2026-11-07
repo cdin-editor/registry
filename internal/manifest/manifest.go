@@ -40,6 +40,30 @@ import (
 	"github.com/cdin-editor/registry/internal/validation"
 )
 
+type VerificationStage string
+
+const (
+	VerificationStageCanonicalBytes VerificationStage = "canonical-bytes"
+	VerificationStagePublicSchema    VerificationStage = "public-schema"
+	VerificationStageProvenance      VerificationStage = "provenance"
+)
+
+// VerificationError exposes only the failed verification stage. Its underlying
+// cause remains available to internal callers through errors.Is/As, but the
+// default message does not echo untrusted Manifest values or schema fragments.
+type VerificationError struct {
+	Stage VerificationStage
+	cause error
+}
+
+func (e *VerificationError) Error() string {
+	return fmt.Sprintf("manifest: %s verification failed", e.Stage)
+}
+
+func (e *VerificationError) Unwrap() error {
+	return e.cause
+}
+
 const schemaVersion = "1.0.0"
 
 // Document is the public Resolved Manifest v1 data model. It is a
@@ -369,7 +393,7 @@ func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.
 		return fmt.Errorf("manifest: input is empty")
 	}
 	if err := ParseCanonicalStringOnly(canonicalBytes); err != nil {
-		return fmt.Errorf("manifest: canonical byte verification failed: %w", err)
+		return &VerificationError{Stage: VerificationStageCanonicalBytes, cause: err}
 	}
 	if expectedSHA256 != "" {
 		if !validSHA256(expectedSHA256) || expectedSHA256 != strings.ToLower(expectedSHA256) {
@@ -387,14 +411,14 @@ func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.
 		}
 	}
 	if err := validator.Validate(validation.ResolvedManifest, canonicalBytes, "registry-manifest.json"); err != nil {
-		return fmt.Errorf("manifest: public schema validation failed: %w", err)
+		return &VerificationError{Stage: VerificationStagePublicSchema, cause: err}
 	}
 	var document Document
 	if err := json.Unmarshal(canonicalBytes, &document); err != nil {
 		return fmt.Errorf("manifest: decode verified document: %w", err)
 	}
 	if err := validateDocument(document); err != nil {
-		return fmt.Errorf("manifest: semantic verification failed: %w", err)
+		return &VerificationError{Stage: VerificationStageProvenance, cause: err}
 	}
 	return nil
 }

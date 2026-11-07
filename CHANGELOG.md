@@ -41,6 +41,8 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Improved
 
+- Classify persisted Manifest verification failures by canonical-byte, public-schema or semantic-provenance stage without echoing untrusted Manifest content in CLI diagnostics.
+
 - Reject Git mode-120000 entries from the selected immutable source subtree before checkout, independent of host-specific symlink materialization. Apply the same check to Git-object cache hits.
 
 - Verify fetched and checked-out Git commits with `cat-file` type/content and canonical object hashes instead of platform-sensitive revision-peeling expressions, including the shared Git-object cache path.

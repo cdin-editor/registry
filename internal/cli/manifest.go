@@ -99,6 +99,17 @@ func runManifestWithDependencies(
 		case errors.Is(err, errManifestDigestMismatch):
 			return writeManifestError(stderr, "MANIFEST_DIGEST_MISMATCH", "Manifest bytes do not match the supplied SHA-256 digest")
 		default:
+			var verificationError *manifest.VerificationError
+			if errors.As(err, &verificationError) {
+				switch verificationError.Stage {
+				case manifest.VerificationStageCanonicalBytes:
+					return writeManifestError(stderr, "MANIFEST_CANONICAL_INVALID", "Manifest bytes are not RFC 8785 canonical JSON")
+				case manifest.VerificationStagePublicSchema:
+					return writeManifestError(stderr, "MANIFEST_SCHEMA_INVALID", "Manifest does not match the public Resolved Manifest schema")
+				case manifest.VerificationStageProvenance:
+					return writeManifestError(stderr, "MANIFEST_PROVENANCE_INVALID", "Manifest release, source, or resolution provenance is inconsistent")
+				}
+			}
 			return writeManifestError(stderr, "MANIFEST_INVALID", "Manifest failed canonical-byte, public-schema, or provenance verification")
 		}
 	}
