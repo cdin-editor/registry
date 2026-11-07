@@ -25,7 +25,7 @@ func (g replayGitRunner) Run(ctx context.Context, dir string, env []string, args
 	mapped := append([]string(nil), args...)
 	for i := range mapped {
 		if mapped[i] == g.repositoryURI {
-			mapped[i] = g.localPath
+			mapped[i] = fileRepositoryURI(g.localPath)
 		}
 	}
 	return (collector.CommandGit{}).Run(ctx, dir, env, mapped...)

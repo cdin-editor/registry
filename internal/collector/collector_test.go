@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -73,9 +74,18 @@ func initTestRepository(t *testing.T, files map[string]string) (string, string) 
 	return repository, revision
 }
 
+func testFileRepositoryURI(repository string) string {
+	path := filepath.ToSlash(repository)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
 func graphForSources(revision, repository string, units ...catalog.SourceUnit) *resolver.Graph {
+	repositoryURI := testFileRepositoryURI(repository)
 	for i := range units {
-		units[i].RepositoryURI = repository
+		units[i].RepositoryURI = repositoryURI
 		units[i].Revision = revision
 	}
 	return &resolver.Graph{Components: []resolver.ResolvedComponent{{
@@ -287,7 +297,7 @@ func assertCollectorTemporaryPathsRemoved(t *testing.T, tempRoot string, git *ca
 func TestREG017SharedRepositoryAcrossComponentsAndVariants(t *testing.T) {
 	repository, revision := initTestRepository(t, map[string]string{"shared.txt": "shared source"})
 	components := []resolver.ResolvedComponent{
-		{ComponentID: "engine", Variant: "default", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: repository, Revision: revision}}},
+		{ComponentID: "engine", Variant: "default", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: testFileRepositoryURI(repository), Revision: revision}}},
 		{ComponentID: "engine", Variant: "optimized", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: repository, Revision: revision}}},
 		{ComponentID: "tools", Variant: "default", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: repository, Revision: revision}}},
 	}
@@ -343,7 +353,7 @@ func TestREG026CollectUsesOnlyExplicitCredentialProvider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if provider.calls != 1 || provider.lastURI != repository {
+	if provider.calls != 1 || provider.lastURI != testFileRepositoryURI(repository) {
 		t.Fatalf("credential provider calls/URI = %d/%q", provider.calls, provider.lastURI)
 	}
 	var received []string

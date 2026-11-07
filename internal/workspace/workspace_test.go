@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,7 +52,7 @@ func fileRepositoryURI(repository string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	return "file://" + path
+	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 
 func successfulResolution(repository, revision string) resolver.Result {
