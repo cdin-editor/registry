@@ -17,6 +17,7 @@
 package collector
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -365,6 +366,43 @@ func verifyGitCommit(run func(args ...string) ([]byte, error), ref, expectedOID 
 	return nil
 }
 
+// verifyGitSourceTreeNoSymlinks checks the immutable Git tree before checkout.
+// This makes REG-020 independent of whether the host Git can materialize a
+// mode-120000 entry as an OS symlink (notably native Windows vs MSYS2).
+func verifyGitSourceTreeNoSymlinks(run func(args ...string) ([]byte, error), revision, subdirectory string) error {
+	if err := validateSourceSubdirectory(subdirectory); err != nil {
+		return err
+	}
+	args := []string{"ls-tree", "-r", "-z", "--full-tree", revision}
+	if subdirectory != "" {
+		args = append(args, "--", ":(literal)"+subdirectory)
+	}
+	output, err := run(args...)
+	if err != nil {
+		return fmt.Errorf("collector: inspect immutable Git source tree failed")
+	}
+	for len(output) > 0 {
+		end := bytes.IndexByte(output, 0)
+		if end < 0 {
+			return fmt.Errorf("collector: malformed Git tree listing")
+		}
+		record := output[:end]
+		output = output[end+1:]
+		separator := bytes.IndexByte(record, '\t')
+		if separator < 0 {
+			return fmt.Errorf("collector: malformed Git tree entry")
+		}
+		fields := strings.Fields(string(record[:separator]))
+		if len(fields) != 3 {
+			return fmt.Errorf("collector: malformed Git tree entry")
+		}
+		if fields[0] == "120000" {
+			return fmt.Errorf("collector: source tree contains symlink")
+		}
+	}
+	return nil
+}
+
 func collectOne(ctx context.Context, options Options, hooksDir string, credentialEnv []string, repository, revision, subdirectory, target string, budget *sourceCopyBudget) (string, error) {
 	if options.GitCache != nil {
 		return collectOneWithGitCache(ctx, options, hooksDir, repository, revision, subdirectory, target, budget)
@@ -409,6 +447,9 @@ func collectOne(ctx context.Context, options Options, hooksDir string, credentia
 	}
 	if err := verifyGitCommit(run, revision, revision); err != nil {
 		return "", fmt.Errorf("declared object is not a commit: %w", err)
+	}
+	if err := verifyGitSourceTreeNoSymlinks(run, revision, subdirectory); err != nil {
+		return "", err
 	}
 	if _, err := run("checkout", "--quiet", "--detach", "--no-recurse-submodules", revision); err != nil {
 		return "", fmt.Errorf("checkout immutable commit: %w", err)
@@ -481,6 +522,11 @@ func collectOneWithGitCache(ctx context.Context, options Options, hooksDir strin
 		}
 		if _, err := runCached(gitDir, "fsck", "--full", "--strict", "--no-reflogs", revision); err != nil {
 			return fmt.Errorf("collector: cached Git object graph failed integrity verification")
+		}
+		if err := verifyGitSourceTreeNoSymlinks(func(args ...string) ([]byte, error) {
+			return runCached(gitDir, args...)
+		}, revision, subdirectory); err != nil {
+			return err
 		}
 		return nil
 	}
