@@ -1,42 +1,40 @@
-# CDIN Registry
+# Component Registry
 
-CDIN Registry prepares the exact set of CDIN components that a product build needs.
+Registry is a generic, consumer-independent component delivery engine. It turns declarative product requirements and one or more Catalog Indexes into a reproducible source Workspace, a Resolved Manifest, and a Resolution Report.
 
-CDIN is made from separately maintained components. Each component can publish its own releases, and those releases may depend on compatible versions of other components. When CDIN is built, someone has to answer three questions:
+A product supplies **what it needs**. Component publishers supply immutable **release metadata**. A Catalog Index makes those releases discoverable. Registry validates the inputs, resolves versions and contracts, collects the exact declared source revisions, and prepares the Workspace.
 
-1. Which component releases should be used together?
-2. Which exact source revisions belong to those releases?
-3. How can the same selected set be prepared again later?
+Registry does not infer component identity from repository names, inspect a consumer's source tree, or contain product-specific component lists and workflows. Component and repository topology is described only by the published Release Metadata data. The same engine can serve unrelated products without product-specific code.
 
-Registry answers those questions. It reads a **Product Definition** and one or more **Catalogs**, selects compatible releases, downloads the declared source revisions, and writes a prepared **Workspace** with a **Resolved Manifest** and a **Resolution Report**.
+## Responsibilities
 
-Registry is used while preparing a build. It is not linked into the running editor, and it does not compile or execute component code.
+- **Component publishers** own component source, package versions, tests, and immutable Component Release Metadata.
+- **Catalog publishers** maintain Catalog Index data that references immutable Release Metadata by URI and SHA-256 digest.
+- **Consumers** provide Product Definitions and own integration, builds, product tests, packaging, and launch.
+- **Registry** owns Catalog ingestion, metadata validation, dependency and contract resolution, update discovery, immutable source collection, Workspace preparation, and Manifest/report generation.
 
-## What Registry does for CDIN
+Registry is a build-time delivery-plane tool. It does not compile or execute collected source, and it is not a runtime dependency of a product or component.
 
-When the CDIN product is assembled, its Product Definition can request components such as:
+## Catalog data in this repository
 
-- Kernel — the document and text engine.
-- Runtime — editor behavior and extensions.
-- Backend — the native host that connects the product services.
-- Frontend — the terminal, desktop, or headless user interface.
+Version-controlled Catalog Index snapshots may be stored under:
 
-The names above explain the intended CDIN use. A component is usable only after its maintainer has published valid release metadata and the release is available through a Catalog. Listing a component here does not claim that every CDIN component release has already been published.
+`catalogs/<catalog-id>/catalog-index.json`
 
-Registry checks the requested versions and their declared dependencies and contracts. It then collects the exact Git commits named by the selected releases. CDIN can use the resulting Workspace as input to its own build, integration tests, packaging, and release process.
+For example, this repository carries the `cdin-components` Catalog at `catalogs/cdin-components/catalog-index.json`. It is data consumed by the generic Registry engine, not a CDIN-specific code path. A consumer can pin a Registry commit and pass the Catalog path from that exact checkout to the CLI. That makes both the engine and the catalog snapshot reproducible without copying repository URLs or release metadata references into the consumer's Composition Root.
 
-## The usual workflow
+The Catalog Index contains only component identity, variant, package version, immutable Release Metadata URI, and metadata digest. Source repository URIs and full Git commit IDs remain in component-owned Release Metadata.
 
-1. A component maintainer publishes a version and its release metadata.
-2. A Catalog Index makes that release discoverable and records the metadata digest.
-3. CDIN declares the components and acceptable versions in a Product Definition.
-4. Registry resolves the request and reports the selected releases.
-5. Registry prepares a Workspace and records exactly what was selected.
-6. CDIN builds and tests that Workspace.
+## Typical workflow
 
-Registry does not choose what CDIN should contain. The Product Definition expresses that choice; Registry checks whether the request can be satisfied.
+1. A component maintainer publishes an immutable Release Metadata document for a release.
+2. The Catalog publisher adds a Catalog Index entry containing that metadata URI and its SHA-256 digest.
+3. A consumer supplies a Product Definition describing its root components and version constraints.
+4. Registry reads the Catalog Index, fetches and verifies Release Metadata, then resolves dependencies and contracts.
+5. Registry collects exact Git revisions and publishes a Workspace, Resolved Manifest, and Resolution Report.
+6. The consumer builds and tests the prepared Workspace.
 
-## Quick example
+## Quick start
 
 Build Registry and inspect its commands:
 
@@ -51,54 +49,50 @@ Validate a Product Definition:
 ./build/registry validate product-definition ./product-definition.yaml
 ```
 
-See which releases satisfy it:
+Resolve against a Catalog:
 
 ```sh
 ./build/registry resolve \
   --product ./product-definition.yaml \
-  --catalog https://catalog.example/index.json \
-  --allow-host catalog.example \
+  --catalog ./catalogs/cdin-components/catalog-index.json \
+  --allow-host raw.githubusercontent.com \
   --allow-host github.com
 ```
 
-Prepare the selected source in a new directory:
+Prepare a Workspace:
 
 ```sh
 ./build/registry prepare \
   --product ./product-definition.yaml \
-  --catalog https://catalog.example/index.json \
-  --allow-host catalog.example \
+  --catalog ./catalogs/cdin-components/catalog-index.json \
+  --allow-host raw.githubusercontent.com \
   --allow-host github.com \
-  --output ./build/cdin-workspace
+  --output ./build/prepared
 ```
 
-The host names and Catalog URL above are examples. Replace them with the hosts used by your Catalog, release metadata, and source repositories. The output directory must not already exist.
+The example Catalog path is a local file. Registry itself performs the remote metadata and Git retrieval. Explicit `--allow-host` entries are transport security policy; they are not component mappings or product configuration. The output directory must not already exist.
 
 ## Learn Registry
 
-- [Getting started](docs/getting-started.md) — build Registry and understand the first run.
-- [Concepts](docs/concepts.md) — Product Definitions, Catalogs, releases, and Manifests explained.
-- [Using Registry](docs/using-registry.md) — the complete resolve and prepare workflow.
-- [Product Definition](docs/product-definition.md) — declare the components a product needs.
-- [Catalogs and releases](docs/catalogs.md) — publish and describe component releases.
-- [Commands](docs/commands.md) — command reference.
-- [Outputs](docs/outputs.md) — understand the Workspace, Manifest, and reports.
-- [Examples](docs/examples.md) — copyable examples and a CDIN-shaped Product Definition.
-- [Limitations and security](docs/limitations.md) — what Registry guarantees and what it does not.
-- [Development](docs/development.md) — build and test Registry from source.
+- [Getting started](docs/getting-started.md)
+- [Concepts](docs/concepts.md)
+- [Using Registry](docs/using-registry.md)
+- [Product Definitions](docs/product-definition.md)
+- [Catalogs and releases](docs/catalogs.md)
+- [Commands](docs/commands.md)
+- [Outputs](docs/outputs.md)
+- [Examples](docs/examples.md)
+- [Limitations and security](docs/limitations.md)
+- [Development](docs/development.md)
 
 ## Build Registry
 
 Requirements: Go 1.27.3, Python 3.11 or newer, GNU Make, Git, and curl.
 
-Install the Pipeline version used by this repository, then build:
-
 ```sh
 python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16"
-
 git clone https://github.com/cdin-editor/registry.git
 cd registry
-
 make build
 make check
 ```

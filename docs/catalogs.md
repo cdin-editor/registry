@@ -1,21 +1,17 @@
 # Catalogs and component releases
 
-A Catalog makes published component releases visible to Registry. It is a
-small JSON index; it does not contain the component source code.
+A Catalog makes published component releases discoverable to Registry. A Catalog Index is a small JSON data document; it does not contain component source code or define resolver behavior.
 
-A Catalog has two kinds of documents:
+A Catalog has two document types:
 
-1. A **Catalog Index** lists releases and points to their metadata documents.
-2. **Component Release Metadata** describes one exact release, including the
-   Git commit or commits from which Registry can collect source.
+1. A **Catalog Index** lists logical component releases and points to immutable metadata documents.
+2. **Component Release Metadata** describes one exact release, including the source repositories and full Git commit IDs from which Registry can collect source.
 
-The index stores the SHA-256 digest of each metadata document. Registry checks
-that digest before it trusts or parses the metadata.
+The index stores the SHA-256 digest of each metadata document. Registry checks that digest against the exact fetched bytes before it parses or trusts the metadata.
 
 ## 1. Component Release Metadata
 
-A release metadata document describes one component version. Here is an
-illustrative example:
+A release metadata document describes one component version. Here is an illustrative example:
 
 ```json
 {
@@ -39,25 +35,15 @@ illustrative example:
 }
 ```
 
-Replace the example component, repository, version, and commit with the values
-for a real release. The revision must be a full Git commit ID: 40 hexadecimal
-characters for SHA-1 or 64 for SHA-256. A branch name, tag name, or shortened
-commit ID is not sufficient.
+Component maintainers publish this document from their own release process. The revision must be a full Git commit ID: 40 hexadecimal characters for SHA-1 or 64 for SHA-256. Branch names, tag names, and shortened commit IDs are not valid source identities.
 
-A release may declare:
-
-- `dependencies`: other components and the version constraints they require;
-- `contracts.provides`: versioned contracts the release provides;
-- `contracts.requires`: versioned contracts that must be provided by another
-  selected component or by the target environment;
-- multiple `source_units`: when one release needs source from more than one
-  repository or subdirectory.
+A release may declare dependencies, provided/required contracts, and multiple source units when one logical component uses more than one repository or subdirectory. Repository topology belongs in this metadata, not in a Product Definition or consumer build script.
 
 A release with `status: "withdrawn"` is excluded from normal selection.
 
 ## 2. Catalog Index
 
-A Catalog Index points to release metadata. For example:
+A Catalog Index points to Release Metadata and records its integrity digest:
 
 ```json
 {
@@ -75,52 +61,46 @@ A Catalog Index points to release metadata. For example:
 }
 ```
 
-The digest placeholder must be replaced with the lowercase SHA-256 digest of
-the exact metadata file bytes. The example is not valid for resolution until
-you replace it with a real digest and publish the metadata at the stated URI.
+The digest must be the lowercase SHA-256 digest of the exact metadata bytes. If a published metadata document changes by even one byte, publish a new immutable metadata identity and update the Catalog entry. Never silently retarget a published metadata URI while retaining its old digest.
 
-Calculate the digest after the metadata file is final:
+## 3. Version-controlled Catalog snapshots
 
-```sh
-sha256sum example-component-1.2.3.json
+Catalog Indexes are data, separate from Registry engine code. A Catalog publisher may maintain version-controlled snapshots in this repository under:
+
+```text
+catalogs/<catalog-id>/catalog-index.json
 ```
 
-On macOS, the equivalent command is:
+The current CDIN component Catalog is stored at:
 
-```sh
-shasum -a 256 example-component-1.2.3.json
+```text
+catalogs/cdin-components/catalog-index.json
 ```
 
-If you change even one byte in a published metadata document, publish a new
-immutable metadata document and update the Catalog entry's digest. Do not
-silently replace metadata while keeping the old digest.
+That file is a generic Catalog input. It contains logical component identities, immutable metadata URIs, and metadata digests; it does not add CDIN-specific behavior to Registry. Consumers that pin a Registry source commit can read the Catalog snapshot from that exact checkout, making the engine and catalog revision reproducible together.
 
-## 3. Make a release discoverable
+This location is a repository distribution convention, not a special resolver rule. The CLI still accepts any local Catalog Index path or remote Catalog URI through the same `--catalog` option.
+
+## 4. Publish a release and update a Catalog
 
 A typical publication sequence is:
 
-1. Choose a stable `component_id` and variant. Keep them unchanged across
-   releases of the same component.
-2. Create a release with a semantic version such as `1.2.3`.
-3. Record the exact full Git commit ID for every source unit.
-4. Write and validate the Component Release Metadata.
-5. Publish the metadata at an immutable HTTPS URL.
-6. Calculate its SHA-256 digest.
-7. Add or update the matching entry in a Catalog Index.
-8. Publish the updated Catalog Index.
+1. Choose a stable `component_id` and variant. Keep them unchanged across releases of the same logical component.
+2. Create a package release with a semantic version such as `1.2.3`.
+3. Record the exact full Git commit ID for every source unit in the component-owned Release Metadata.
+4. Validate and publish the metadata at an immutable HTTPS URI.
+5. Calculate SHA-256 over the exact published metadata bytes.
+6. Add the matching component ID, variant, version, metadata URI, and digest to the appropriate Catalog Index.
+7. Validate the Catalog Index and commit the updated Catalog snapshot.
+8. Consumers select the updated snapshot by pinning the Registry/catalog revision they build against.
 
-Registry reads Catalogs; it does not publish component releases, upload
-metadata, or host a Catalog for you. Those publication steps belong to the
-component release process or Catalog publisher.
+The component maintainer remains authoritative for source and Release Metadata. The Catalog publisher maintains the index that makes immutable releases discoverable. Registry's generic engine reads the index, verifies metadata, and performs resolution/collection; it does not infer repositories by scanning source hosts or hardcode component names.
 
-## 4. Validate the documents
+## 5. Validate and consume the documents
 
 ```sh
 ./build/registry validate component-release ./release.json
-./build/registry validate catalog-index ./catalog-index.json
+./build/registry validate catalog-index ./catalogs/cdin-components/catalog-index.json
 ```
 
-The current production network fetcher supports public, unauthenticated HTTPS
-metadata. The Catalog Index may also be supplied to the CLI as a local file.
-All hosts used for remote Catalog, metadata, and source retrieval must be
-explicitly allowed with `--allow-host`.
+A Catalog Index may be supplied to the CLI as a local file or remote URI. The production network fetcher supports public, unauthenticated HTTPS metadata. Every host used for remote Catalog, metadata, and source retrieval must be explicitly allowed with `--allow-host`. These host allow-lists are security policy and do not define component-to-repository mappings.

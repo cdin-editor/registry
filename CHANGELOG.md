@@ -10,6 +10,8 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Added
 
+- Store the CDIN Catalog Index as version-controlled data under `catalogs/cdin-components/`, so consumers can pin the Registry commit and obtain the matching catalog snapshot without carrying component repository metadata in the Composition Root.
+
 - Add the Registry command-line application for validating documents,
   resolving product requirements, and preparing component Workspaces.
 - Define and embed the six public document formats: Product Definition,
@@ -38,6 +40,8 @@ Notable changes to CDIN Registry are recorded here. The format follows
   performance smoke checks, and native-platform tests to the quality gates.
 
 ### Improved
+
+- Make Registry user documentation consumer-independent and clarify the separation between component-owned Release Metadata, Catalog Index publication, and generic Registry resolution.
 
 - Require explicit host allow-lists for remote Catalog, metadata, and Git
   source retrieval.
