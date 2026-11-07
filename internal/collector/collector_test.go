@@ -218,17 +218,19 @@ func TestREG020RejectsSymlinkSourceTrees(t *testing.T) {
 	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	repository, revision := initTestRepository(t, nil)
-	link := filepath.Join(repository, "escape")
-	if err := os.Symlink(outside, link); err != nil {
-		t.Skipf("symlink creation is unavailable on this host: %v", err)
+	repository, _ := initTestRepository(t, map[string]string{"safe/inside.txt": "safe"})
+	// Stage a Git mode-120000 entry through plumbing instead of relying on
+	// host filesystem symlink creation or checkout representation.
+	blobCommand := exec.Command("git", "-C", repository, "hash-object", "-w", "--stdin")
+	blobCommand.Stdin = strings.NewReader(filepath.ToSlash(outside))
+	blobOutput, err := blobCommand.Output()
+	if err != nil {
+		t.Fatalf("write symlink target blob: %v", err)
 	}
-	if output, err := exec.Command("git", "-C", repository, "config", "core.symlinks", "true").CombinedOutput(); err != nil {
-		t.Fatalf("enable symlink-aware Git checkout: %v: %s", err, output)
-	}
-	cmd := exec.Command("git", "-C", repository, "add", "escape")
+	targetOID := strings.TrimSpace(string(blobOutput))
+	cmd := exec.Command("git", "-C", repository, "update-index", "--add", "--cacheinfo", "120000,"+targetOID+",escape")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("stage symlink: %v: %s", err, output)
+		t.Fatalf("stage Git symlink entry: %v: %s", err, output)
 	}
 	cmd = exec.Command("git", "-C", repository, "commit", "--quiet", "-m", "add symlink")
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Registry Test", "GIT_AUTHOR_EMAIL=registry-test@example.invalid", "GIT_COMMITTER_NAME=Registry Test", "GIT_COMMITTER_EMAIL=registry-test@example.invalid")
@@ -240,12 +242,23 @@ func TestREG020RejectsSymlinkSourceTrees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revision = strings.TrimSpace(string(output))
+	revision := strings.TrimSpace(string(output))
+	listing, err := exec.Command("git", "-C", repository, "ls-tree", "HEAD", "escape").Output()
+	if err != nil || !strings.HasPrefix(string(listing), "120000 blob ") {
+		t.Fatalf("fixture does not contain a Git symlink entry: %q (%v)", listing, err)
+	}
 	destination := filepath.Join(t.TempDir(), "prepared")
 	graph := graphForSources(revision, repository, catalog.SourceUnit{ID: "source"})
 	_, err = Collect(context.Background(), graph, destination, Options{Git: CommandGit{}, Policy: allowTestRepository{}})
-	if err == nil || !strings.Contains(err.Error(), "contains symlink") {
-		t.Fatalf("expected symlink rejection, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "source tree contains symlink") {
+		t.Fatalf("expected Git-tree symlink rejection, got %v", err)
+	}
+	// A symlink outside the selected source subdirectory is not part of that
+	// source unit and must not block collection of an unrelated safe subtree.
+	safeDestination := filepath.Join(t.TempDir(), "safe-prepared")
+	safeGraph := graphForSources(revision, repository, catalog.SourceUnit{ID: "safe", Subdirectory: "safe"})
+	if _, err := Collect(context.Background(), safeGraph, safeDestination, Options{Git: CommandGit{}, Policy: allowTestRepository{}}); err != nil {
+		t.Fatalf("symlink outside selected source subdirectory blocked collection: %v", err)
 	}
 	partialTarget := filepath.Join(destination, "components", "engine", "default", "sources", "source")
 	if _, partialErr := os.Lstat(partialTarget); !os.IsNotExist(partialErr) {
