@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"errors"
 	"bytes"
 	"encoding/json"
 	"math"
@@ -737,6 +738,51 @@ func TestREG024VerifyManifestRejectsUnsafeOrMissingProvenance(t *testing.T) {
 			}
 		})
 	}
+}
+
+
+// TestREG024VerifyManifestReportsSafeFailureStages keeps canonical-byte,
+// public-schema and semantic provenance failures distinguishable to consumers
+// without echoing untrusted Manifest content in the public error message.
+func TestREG024VerifyManifestReportsSafeFailureStages(t *testing.T) {
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertStage := func(name string, input []byte, want VerificationStage, secret string) {
+		t.Helper()
+		err := Verify(input, "", validator)
+		var verificationError *VerificationError
+		if !errors.As(err, &verificationError) || verificationError.Stage != want {
+			t.Fatalf("%s stage = %#v, want %q (error: %v)", name, verificationError, want, err)
+		}
+		if secret != "" && strings.Contains(err.Error(), secret) {
+			t.Fatalf("%s error leaked untrusted content: %v", name, err)
+		}
+	}
+	assertStage("canonical", []byte("{ \"schema_version\": \"1.0.0\" }"), VerificationStageCanonicalBytes, "")
+
+	graph, sources := resolvedFixture()
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingRequired := cloneManifest(t, document)
+	missingRequired.Components = nil
+	missingBytes, err := MarshalCanonical(missingRequired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertStage("schema", missingBytes, VerificationStagePublicSchema, "")
+
+	invalidProvenance := cloneManifest(t, document)
+	invalidProvenance.Components[0].SourceUnits[0].RepositoryURI =
+		"https://secret-user:secret-token@example.invalid/private.git"
+	provenanceBytes, err := MarshalCanonical(invalidProvenance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertStage("provenance", provenanceBytes, VerificationStageProvenance, "secret-token")
 }
 
 func cloneManifest(t *testing.T, document Document) Document {
