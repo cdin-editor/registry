@@ -280,3 +280,55 @@ func TestCommandGitCancellationKillsDescendantProcesses(t *testing.T) {
 		t.Fatalf("orphaned helper process survived cancellation: %v", err)
 	}
 }
+
+
+// TestCommandGitRunsWithIsolatedEnvironment verifies the production Git
+// environment can initialize a temporary repository and fetch a local immutable
+// source on Windows. This exercises the same PATH-selected Git executable as
+// the embedding process (including MSYS2 Git used by some Windows build roots).
+func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows Git process environment regression test")
+	}
+	repository, revision := initTestRepository(t, map[string]string{"source.txt": "fixture"})
+	destination := t.TempDir()
+	hooks := t.TempDir()
+	git := CommandGit{}
+
+	run := func(directory string, args ...string) {
+		t.Helper()
+		config := []string{
+			"-c", "core.hooksPath=" + hooks,
+			"-c", "filter.lfs.smudge=",
+			"-c", "filter.lfs.process=",
+			"-c", "filter.lfs.required=false",
+			"-c", "core.symlinks=true",
+			"-c", "maintenance.auto=false",
+			"-c", "gc.auto=0",
+			"-c", "gc.autoDetach=false",
+		}
+		output, err := git.Run(context.Background(), directory, nil, append(config, args...)...)
+		if err != nil {
+			// Re-run only the failing fixture command with the same isolated
+			// environment so CI retains the local Git diagnostic (no secrets or
+			// remote credentials are present in this local-only test).
+			command := exec.Command("git", append(config, args...)...)
+			command.Dir = directory
+			command.Env, _ = gitProcessEnvironment(os.Environ(), nil)
+			raw, rawErr := command.CombinedOutput()
+			t.Fatalf("isolated Git command failed: %v; diagnostic=%q; rerun=%v", err, string(raw), rawErr)
+		}
+		_ = output
+	}
+	repositoryPath := filepath.Join(destination, "source")
+	if err := os.MkdirAll(repositoryPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(repositoryPath, "init", "--quiet")
+	run(repositoryPath, "remote", "add", "origin", testFileRepositoryURI(repository))
+	run(repositoryPath, "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision)
+	object, err := git.Run(context.Background(), repositoryPath, nil, "rev-parse", "--verify", revision+"^{commit}")
+	if err != nil || strings.TrimSpace(string(object)) != revision {
+		t.Fatalf("isolated Git did not fetch declared commit: %v", err)
+	}
+}
