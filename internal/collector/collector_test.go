@@ -298,8 +298,8 @@ func TestREG017SharedRepositoryAcrossComponentsAndVariants(t *testing.T) {
 	repository, revision := initTestRepository(t, map[string]string{"shared.txt": "shared source"})
 	components := []resolver.ResolvedComponent{
 		{ComponentID: "engine", Variant: "default", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: testFileRepositoryURI(repository), Revision: revision}}},
-		{ComponentID: "engine", Variant: "optimized", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: repository, Revision: revision}}},
-		{ComponentID: "tools", Variant: "default", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: repository, Revision: revision}}},
+		{ComponentID: "engine", Variant: "optimized", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: testFileRepositoryURI(repository), Revision: revision}}},
+		{ComponentID: "tools", Variant: "default", Version: "1.0.0", SourceUnits: []catalog.SourceUnit{{ID: "source", RepositoryURI: testFileRepositoryURI(repository), Revision: revision}}},
 	}
 	graph := &resolver.Graph{Components: components}
 	destination := filepath.Join(t.TempDir(), "prepared")
