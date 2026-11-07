@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -328,6 +329,19 @@ func TestCommandGitRunsWithIsolatedEnvironment(t *testing.T) {
 	run(repositoryPath, "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", revision)
 	object, err := git.Run(context.Background(), repositoryPath, nil, "rev-parse", "--verify", revision+"^{commit}")
 	if err != nil || strings.TrimSpace(string(object)) != revision {
-		t.Fatalf("isolated Git did not fetch declared commit: %v", err)
+		runDiagnostic := func(args ...string) string {
+			command := exec.Command("git", args...)
+			command.Dir = repositoryPath
+			command.Env, _ = gitProcessEnvironment(os.Environ(), nil)
+			output, commandErr := command.CombinedOutput()
+			return fmt.Sprintf("git %s => %q (%v)", strings.Join(args, " "), string(output), commandErr)
+		}
+		t.Fatalf(
+			"isolated Git did not fetch declared commit: %v; MSYSTEM=%q; repository=%q; URI=%q; %s; %s; %s",
+			err, os.Getenv("MSYSTEM"), repositoryPath, testFileRepositoryURI(repository),
+			runDiagnostic("remote", "get-url", "origin"),
+			runDiagnostic("cat-file", "-t", revision),
+			runDiagnostic("show-ref"),
+		)
 	}
 }
