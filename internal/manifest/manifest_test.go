@@ -740,7 +740,6 @@ func TestREG024VerifyManifestRejectsUnsafeOrMissingProvenance(t *testing.T) {
 	}
 }
 
-
 // TestREG024VerifyManifestReportsSafeFailureStages keeps canonical-byte,
 // public-schema and semantic provenance failures distinguishable to consumers
 // without echoing untrusted Manifest content in the public error message.
