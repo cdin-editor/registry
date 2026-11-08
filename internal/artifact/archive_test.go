@@ -458,7 +458,6 @@ func TestExtractRejectsHighCompressionArchiveBombs(t *testing.T) {
 	}
 }
 
-
 type fakeDigestFetcher struct {
 	data []byte
 }
