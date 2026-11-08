@@ -317,7 +317,6 @@ func TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON(t *testing.T) 
 	}
 }
 
-
 func TestProductDefinitionNormalizesCommonPlatformAliasesBeforeSchemaValidation(t *testing.T) {
 	validator := newTestValidator(t)
 	input := []byte(`{
