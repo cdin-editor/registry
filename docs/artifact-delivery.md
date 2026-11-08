@@ -157,8 +157,10 @@ may contain both forms when the Product Definition uses
 
 Registry never executes package files, install hooks, build scripts or tests.
 Extraction rejects path traversal, links and special files, unsafe Windows
-names, file/directory conflicts and path collisions. Configured limits cap
-compressed bytes, expanded bytes, entry count and path depth. A failed
+names, file/directory conflicts, path collisions and divergent archive path
+overrides (including TAR PAX/GNU effective paths and ZIP Unicode Path extra
+fields). TAR.GZ trailer checksums are verified before acceptance. Configured
+limits cap compressed bytes, expanded bytes, entry count and path depth. A failed
 materialization removes its private staging directory and does not publish a
 partial Workspace.
 
