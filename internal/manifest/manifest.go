@@ -69,13 +69,15 @@ const schemaVersion = "1.0.0"
 // Document is the public Resolved Manifest v1 data model. It is a
 // reproducibility record, not a mutable product configuration or lockfile.
 type Document struct {
-	SchemaVersion        string                "json:\"schema_version\""
-	RegistryVersion      string                "json:\"registry_version\""
-	Catalogs             []Catalog             "json:\"catalogs\""
-	Roots                []Root                "json:\"roots\""
-	EnvironmentContracts []EnvironmentContract "json:\"environment_contracts,omitempty\""
-	Components           []Component           "json:\"components\""
-	ResolutionOrder      []resolver.Node       "json:\"resolution_order\""
+	SchemaVersion        string                    `json:"schema_version"`
+	RegistryVersion      string                    `json:"registry_version"`
+	Resolution           *resolver.ResolutionPolicy `json:"resolution,omitempty"`
+	Catalogs             []Catalog                 `json:"catalogs"`
+	Roots                []Root                    `json:"roots"`
+	EnvironmentContracts []EnvironmentContract     `json:"environment_contracts,omitempty"`
+	Components           []Component               `json:"components"`
+	ResolutionOrder      []resolver.Node           `json:"resolution_order"`
+}
 }
 
 // Catalog records the exact Catalog Index source bytes used for resolution.
@@ -100,14 +102,40 @@ type EnvironmentContract struct {
 
 // Component records one selected immutable Component Release.
 type Component struct {
-	ComponentID        string            "json:\"component_id\""
-	Variant            string            "json:\"variant\""
-	Version            string            "json:\"version\""
-	ReleaseMetadataURI string            "json:\"release_metadata_uri\""
-	ReleaseMetadataSHA string            "json:\"release_metadata_sha256\""
-	SourceUnits        []SourceUnit      "json:\"source_units\""
-	Dependencies       []Dependency      "json:\"dependencies\""
-	Contracts          catalog.Contracts "json:\"contracts,omitempty\""
+	ComponentID        string            `json:"component_id"`
+	Variant            string            `json:"variant"`
+	Version            string            `json:"version"`
+	ReleaseMetadataURI string            `json:"release_metadata_uri"`
+	ReleaseMetadataSHA string            `json:"release_metadata_sha256"`
+	Delivery           string            `json:"delivery,omitempty"`
+	SelectedArtifact   *SelectedArtifact `json:"selected_artifact,omitempty"`
+	SourceUnits        []SourceUnit      `json:"source_units,omitempty"`
+	Dependencies       []Dependency      `json:"dependencies"`
+	Contracts          catalog.Contracts `json:"contracts,omitempty"`
+}
+
+// ArtifactPackage is the verified package directory staged by Workspace.
+type ArtifactPackage struct {
+	ComponentID   string
+	Variant       string
+	ArtifactID    string
+	WorkspacePath string
+}
+
+// SourceProvenance preserves immutable source identity without a source checkout.
+type SourceProvenance struct {
+	SourceUnitID  string `json:"source_unit_id"`
+	RepositoryURI string `json:"repository_uri"`
+	Revision      string `json:"revision"`
+	Subdirectory  string `json:"subdirectory,omitempty"`
+}
+
+// SelectedArtifact is the immutable release asset plus its staged workspace path.
+type SelectedArtifact struct {
+	catalog.Artifact
+	WorkspacePath   string             `json:"workspace_path"`
+	SourceProvenance []SourceProvenance `json:"source_provenance"`
+}
 }
 
 // SourceUnit records the verified full Git commit and deterministic workspace path.
@@ -129,6 +157,12 @@ type Dependency struct {
 // Build creates a Manifest only when every selected source unit has a matching
 // Collector result and each Catalog has immutable URI/digest provenance.
 func Build(graph *resolver.Graph, collected []collector.Source, registryVersion string) (Document, error) {
+	return BuildWithArtifacts(graph, collected, nil, registryVersion)
+}
+
+// BuildWithArtifacts creates a canonical Manifest only when each selected
+// component has exactly the verified source or package materialization required.
+func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, packages []ArtifactPackage, registryVersion string) (Document, error) {
 	if graph == nil {
 		return Document{}, fmt.Errorf("manifest: a complete resolved graph is required")
 	}
@@ -150,6 +184,17 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		}
 		collectedByKey[key] = source
 	}
+	packageByKey := make(map[string]ArtifactPackage, len(packages))
+	for _, item := range packages {
+		key := componentKey(item.ComponentID, item.Variant)
+		if _, exists := packageByKey[key]; exists {
+			return Document{}, fmt.Errorf("manifest: duplicate artifact package materialization for %s", key)
+		}
+		if item.ArtifactID == "" || !safeWorkspacePath(item.WorkspacePath) {
+			return Document{}, fmt.Errorf("manifest: artifact materialization identity or path is invalid")
+		}
+		packageByKey[key] = item
+	}
 
 	environmentContracts := make([]EnvironmentContract, 0, len(graph.EnvironmentContracts))
 	for _, contract := range graph.EnvironmentContracts {
@@ -158,14 +203,23 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 			Version:    contract.Version,
 		})
 	}
+	documentSchema := graph.SchemaVersion
+	if documentSchema == "" {
+		documentSchema = schemaVersion
+	}
 	doc := Document{
-		SchemaVersion:        schemaVersion,
+		SchemaVersion:        documentSchema,
 		RegistryVersion:      registryVersion,
+		Resolution:           nil,
 		Catalogs:             make([]Catalog, 0, len(graph.Catalogs)),
 		Roots:                make([]Root, 0, len(graph.Roots)),
 		EnvironmentContracts: environmentContracts,
 		Components:           make([]Component, 0, len(graph.Components)),
 		ResolutionOrder:      append([]resolver.Node(nil), graph.ResolutionOrder...),
+	}
+	if graph.Resolution.DeliveryMode != "" {
+		resolution := graph.Resolution
+		doc.Resolution = &resolution
 	}
 
 	for _, source := range graph.Catalogs {
@@ -216,8 +270,15 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		if contracts.Requires == nil {
 			contracts.Requires = []catalog.ContractRequirement{}
 		}
-		if len(resolved.SourceUnits) == 0 {
-			return Document{}, fmt.Errorf("manifest: selected component %s/%s has no source units", resolved.ComponentID, resolved.Variant)
+		delivery := resolved.Delivery
+		if delivery == "" {
+			delivery = "source"
+		}
+		if delivery != "source" && delivery != "artifact" {
+			return Document{}, fmt.Errorf("manifest: component %s/%s has an invalid delivery mode", resolved.ComponentID, resolved.Variant)
+		}
+		if delivery == "source" && len(resolved.SourceUnits) == 0 {
+			return Document{}, fmt.Errorf("manifest: selected source component %s/%s has no source units", resolved.ComponentID, resolved.Variant)
 		}
 		component := Component{
 			ComponentID:        resolved.ComponentID,
@@ -225,9 +286,11 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 			Version:            resolved.Version,
 			ReleaseMetadataURI: resolved.ReleaseMetadataURI,
 			ReleaseMetadataSHA: strings.ToLower(resolved.ReleaseMetadataSHA),
-			SourceUnits:        make([]SourceUnit, 0, len(resolved.SourceUnits)),
 			Dependencies:       make([]Dependency, 0, len(resolved.Dependencies)),
 			Contracts:          contracts,
+		}
+		if documentSchema != schemaVersion {
+			component.Delivery = delivery
 		}
 		if component.ReleaseMetadataURI == "" || !validSHA256(component.ReleaseMetadataSHA) {
 			return Document{}, fmt.Errorf("manifest: release %s/%s@%s has no verified metadata identity", resolved.ComponentID, resolved.Variant, resolved.Version)
@@ -236,27 +299,71 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 			return Document{}, fmt.Errorf("manifest: release %s has invalid metadata URI", resolved.ComponentID)
 		}
 
-		for _, source := range resolved.SourceUnits {
-			key := sourceKey(resolved.ComponentID, resolved.Variant, source.ID)
-			collectedSource, ok := collectedByKey[key]
-			if !ok {
-				return Document{}, fmt.Errorf("manifest: source unit %s has no verified Collector result", key)
+		if delivery == "source" {
+			component.SourceUnits = make([]SourceUnit, 0, len(resolved.SourceUnits))
+			for _, source := range resolved.SourceUnits {
+				key := sourceKey(resolved.ComponentID, resolved.Variant, source.ID)
+				collectedSource, ok := collectedByKey[key]
+				if !ok {
+					return Document{}, fmt.Errorf("manifest: source unit %s has no verified Collector result", key)
+				}
+				if strings.ToLower(collectedSource.Revision) != strings.ToLower(source.Revision) {
+					return Document{}, fmt.Errorf("manifest: Collector revision mismatch for %s", key)
+				}
+				expectedPath := fmt.Sprintf("components/%s/%s/sources/%s", resolved.ComponentID, resolved.Variant, source.ID)
+				if collectedSource.WorkspacePath != expectedPath {
+					return Document{}, fmt.Errorf("manifest: non-canonical workspace path for %s: %q", key, collectedSource.WorkspacePath)
+				}
+				component.SourceUnits = append(component.SourceUnits, SourceUnit{
+					SourceUnitID: source.ID, RepositoryURI: source.RepositoryURI,
+					Revision: strings.ToLower(collectedSource.Revision),
+					Subdirectory: source.Subdirectory, WorkspacePath: expectedPath,
+				})
+				delete(collectedByKey, key)
 			}
-			if strings.ToLower(collectedSource.Revision) != strings.ToLower(source.Revision) {
-				return Document{}, fmt.Errorf("manifest: Collector revision mismatch for %s", key)
-			}
-			expectedPath := fmt.Sprintf("components/%s/%s/sources/%s", resolved.ComponentID, resolved.Variant, source.ID)
-			if collectedSource.WorkspacePath != expectedPath {
-				return Document{}, fmt.Errorf("manifest: non-canonical workspace path for %s: %q", key, collectedSource.WorkspacePath)
-			}
-			component.SourceUnits = append(component.SourceUnits, SourceUnit{
-				SourceUnitID:  source.ID,
-				RepositoryURI: source.RepositoryURI,
-				Revision:      strings.ToLower(collectedSource.Revision),
-				Subdirectory:  source.Subdirectory,
-				WorkspacePath: expectedPath,
+			sort.Slice(component.SourceUnits, func(i, j int) bool {
+				return component.SourceUnits[i].SourceUnitID < component.SourceUnits[j].SourceUnitID
 			})
-			delete(collectedByKey, key)
+		} else {
+			if resolved.SelectedArtifact == nil {
+				return Document{}, fmt.Errorf("manifest: artifact-delivered component %s/%s has no selected artifact", resolved.ComponentID, resolved.Variant)
+			}
+			key := componentKey(resolved.ComponentID, resolved.Variant)
+			materialized, ok := packageByKey[key]
+			if !ok || materialized.ArtifactID != resolved.SelectedArtifact.ID {
+				return Document{}, fmt.Errorf("manifest: selected artifact for %s/%s was not materialized", resolved.ComponentID, resolved.Variant)
+			}
+			expectedPath := fmt.Sprintf("components/%s/%s/package", resolved.ComponentID, resolved.Variant)
+			if materialized.WorkspacePath != expectedPath {
+				return Document{}, fmt.Errorf("manifest: non-canonical artifact workspace path for %s/%s", resolved.ComponentID, resolved.Variant)
+			}
+			sourceByID := make(map[string]catalog.SourceUnit, len(resolved.SourceUnits))
+			for _, source := range resolved.SourceUnits {
+				sourceByID[source.ID] = source
+			}
+			provenance := make([]SourceProvenance, 0, len(resolved.SelectedArtifact.SourceUnitIDs))
+			seenProvenance := make(map[string]bool)
+			for _, sourceID := range resolved.SelectedArtifact.SourceUnitIDs {
+				source, ok := sourceByID[sourceID]
+				if !ok || seenProvenance[sourceID] {
+					return Document{}, fmt.Errorf("manifest: artifact source provenance is inconsistent")
+				}
+				seenProvenance[sourceID] = true
+				provenance = append(provenance, SourceProvenance{
+					SourceUnitID: source.ID, RepositoryURI: source.RepositoryURI,
+					Revision: strings.ToLower(source.Revision), Subdirectory: source.Subdirectory,
+				})
+			}
+			if !seenProvenance[resolved.SelectedArtifact.Build.Recipe.SourceUnitID] {
+				return Document{}, fmt.Errorf("manifest: artifact build recipe source is not in provenance")
+			}
+			sort.Slice(provenance, func(i, j int) bool { return provenance[i].SourceUnitID < provenance[j].SourceUnitID })
+			component.SelectedArtifact = &SelectedArtifact{
+				Artifact: *resolved.SelectedArtifact,
+				WorkspacePath: expectedPath,
+				SourceProvenance: provenance,
+			}
+			delete(packageByKey, key)
 		}
 
 		for _, dependency := range resolved.Dependencies {
@@ -266,9 +373,6 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 				Version:     dependency.Version,
 			})
 		}
-		sort.Slice(component.SourceUnits, func(i, j int) bool {
-			return component.SourceUnits[i].SourceUnitID < component.SourceUnits[j].SourceUnitID
-		})
 		sort.Slice(component.Dependencies, func(i, j int) bool {
 			if component.Dependencies[i].ComponentID != component.Dependencies[j].ComponentID {
 				return component.Dependencies[i].ComponentID < component.Dependencies[j].ComponentID
@@ -290,6 +394,9 @@ func Build(graph *resolver.Graph, collected []collector.Source, registryVersion 
 		doc.Components = append(doc.Components, component)
 	}
 
+	if len(packageByKey) != 0 {
+		return Document{}, fmt.Errorf("manifest: unclaimed artifact package materializations remain")
+	}
 	if len(collectedByKey) != 0 {
 		extra := make([]string, 0, len(collectedByKey))
 		for key := range collectedByKey {
