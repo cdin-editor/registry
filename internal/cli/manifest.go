@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cdin-editor/registry/internal/artifact"
 	"github.com/cdin-editor/registry/internal/catalog"
 	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
@@ -180,23 +181,32 @@ func runManifestWithDependencies(
 		if newFetcher == nil {
 			return writeManifestError(stderr, "INTERNAL_ERROR", "artifact or metadata fetcher is not configured")
 		}
-		fetcher, err := newFetcher(catalog.HTTPFetcherOptions{
-			AllowedHosts: options.allowedHosts,
-			CacheDir:     options.cacheDir,
-			Offline:      options.offline,
-		})
-		if err != nil {
-			return writeManifestError(stderr, "REPLAY_FETCHER_CONFIG_FAILED", "cannot configure artifact or metadata retrieval; check --allow-host and --cache-dir")
-		}
 		if hasArtifact {
-			digestFetcher, ok := fetcher.(catalog.DigestFetcher)
+			artifactFetcher, err := newFetcher(catalog.HTTPFetcherOptions{
+				AllowedHosts: options.allowedHosts,
+				CacheDir:     options.cacheDir,
+				MaxBytes:     artifact.DefaultMaxCompressedBytes,
+				Offline:      options.offline,
+			})
+			if err != nil {
+				return writeManifestError(stderr, "REPLAY_ARTIFACT_FETCHER_CONFIG_FAILED", "cannot configure immutable package retrieval; check --allow-host and --cache-dir")
+			}
+			digestFetcher, ok := artifactFetcher.(catalog.DigestFetcher)
 			if !ok {
 				return writeManifestError(stderr, "REPLAY_ARTIFACT_FETCHER_UNAVAILABLE", "configured transport does not support digest-bound artifact retrieval")
 			}
 			replayOptions.Workspace.ArtifactFetcher = digestFetcher
 		}
 		if options.verifyRemoteMetadata {
-			replayOptions.MetadataFetcher = fetcher
+			metadataFetcher, err := newFetcher(catalog.HTTPFetcherOptions{
+				AllowedHosts: options.allowedHosts,
+				CacheDir:     options.cacheDir,
+				Offline:      options.offline,
+			})
+			if err != nil {
+				return writeManifestError(stderr, "REPLAY_METADATA_CONFIG_FAILED", "cannot configure strict metadata verification; check --allow-host and --cache-dir")
+			}
+			replayOptions.MetadataFetcher = metadataFetcher
 		}
 	}
 
