@@ -7,7 +7,7 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Fixed
 
-- Pin Registry v1 schemas to immutable Spec Git blob identities and retrieve
+- Pin Registry v1 schemas to an immutable Spec commit/tree and per-file Git blob identities; retrieve
   them through the Git Database API, verifying each downloaded Git object
   before schema comparison. This avoids raw-content ref lookup failures while
   preserving a reproducible Spec revision.
