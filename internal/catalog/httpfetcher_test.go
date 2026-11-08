@@ -545,7 +545,6 @@ func TestREG019HTTPFetcherConcurrentDigestCachePreservesIntegrity(t *testing.T) 
 	}
 }
 
-
 func TestHTTPFetcherOfflineModeRejectsUnpinnedFetch(t *testing.T) {
 	fetcher := &HTTPFetcher{offline: true}
 	if _, err := fetcher.Fetch(context.Background(), "https://catalog.example.invalid/index.json"); err == nil ||
