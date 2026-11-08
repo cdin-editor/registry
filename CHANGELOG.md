@@ -13,6 +13,7 @@ Notable changes to CDIN Registry are recorded here. The format follows
   preserving a reproducible Spec revision.
 - Validate the gzip checksum/trailer after TAR end markers and keep archive
   path-collision checks bounded by path depth rather than total entry count.
+- Reject ZIP Unicode Path extra fields that override the stored entry name or carry an invalid filename checksum; cover GNU long-name traversal in archive tests.
 - Pass an explicit target OS and architecture to every Pipeline release-matrix
   build. The previous matrix could inherit the runner's native GOARCH,
   producing mislabeled or duplicate ARM64/AMD64 assets instead of the requested
