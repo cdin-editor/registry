@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -138,6 +139,9 @@ func (x *extractor) extractTarGzip(data []byte) error {
 			// stream as well so its checksum and uncompressed-size trailer are
 			// verified before the package is accepted.
 			if _, err := io.Copy(io.Discard, contextReader{ctx: x.ctx, reader: gz}); err != nil {
+				if contextErr := x.ctx.Err(); contextErr != nil {
+					return contextErr
+				}
 				return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: invalid gzip checksum or trailer")
 			}
 			break
@@ -361,6 +365,15 @@ func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, decla
 		closeErr := file.Close()
 		if copyErr != nil || closeErr != nil {
 			_ = os.Remove(target)
+			if contextErr := x.ctx.Err(); contextErr != nil {
+				return contextErr
+			}
+			if copyErr != nil && errors.Is(copyErr, context.Canceled) {
+				return context.Canceled
+			}
+			if copyErr != nil && errors.Is(copyErr, context.DeadlineExceeded) {
+				return context.DeadlineExceeded
+			}
 			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: package file content mismatch")
 		}
 		x.expanded += declaredSize
