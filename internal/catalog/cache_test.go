@@ -216,8 +216,8 @@ func TestMetadataCachePinAndGCUseFullArtifactIdentity(t *testing.T) {
 
 	manifestBytes, err := json.Marshal(struct {
 		SchemaVersion string `json:"schema_version"`
-		Catalogs       []any  `json:"catalogs"`
-		Components     []struct {
+		Catalogs      []any  `json:"catalogs"`
+		Components    []struct {
 			ReleaseMetadataURI string   `json:"release_metadata_uri"`
 			ReleaseMetadataSHA string   `json:"release_metadata_sha256"`
 			SelectedArtifact   Artifact `json:"selected_artifact"`
