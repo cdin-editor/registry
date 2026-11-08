@@ -11,3 +11,13 @@ files = [
   "resolution-report.schema.json",
   "update-discovery-report.schema.json",
 ]
+
+# Each blob SHA pins the exact schema bytes independently of ref/raw URL resolution.
+schema_blobs = [
+  { name = "product-definition.schema.json", blob_sha = "c554c8f546328c4f52505f2e9d06485e7a67e3c0" },
+  { name = "catalog-index.schema.json", blob_sha = "29008460e708b1202031cce28d8f85971ffabd1a" },
+  { name = "component-release.schema.json", blob_sha = "91c2d02682ee78c2f55b5d5736cddf498998ee33" },
+  { name = "resolved-manifest.schema.json", blob_sha = "651a1c5c2eb6cc504c28c7e353a7ec3ed688388b" },
+  { name = "resolution-report.schema.json", blob_sha = "fcd9416a7aa3bedd74d1579fa08764c0ae118d5b" },
+  { name = "update-discovery-report.schema.json", blob_sha = "b1ec154817a0e3249f68ff38e13577b8781955f3" },
+]

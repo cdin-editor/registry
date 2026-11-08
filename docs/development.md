@@ -48,8 +48,10 @@ make race
 ```
 
 The full check includes unit and CLI tests, Go vet, formatting, race detection,
-schema synchronization against the pinned CDIN Spec revision, repository
-checks, bounded fuzz campaigns, and performance smoke tests.
+schema synchronization against the pinned CDIN Spec revision and per-file Git
+blob IDs, repository checks, bounded fuzz campaigns, and performance smoke
+tests. The blob pins make schema retrieval independent of mutable branch names
+and raw-content ref resolution.
 
 ## Before opening a change
 
