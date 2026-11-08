@@ -8,6 +8,8 @@ import (
 	"path"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/cdin-editor/registry/internal/platform"
 )
 
 // Target is an exact binary compatibility tuple. "any/any/none" is the only
@@ -20,6 +22,14 @@ type Target struct {
 
 func (t Target) IsUniversal() bool {
 	return t.OS == "any" && t.Architecture == "any" && t.ABI == "none"
+}
+
+// Normalize returns the canonical target spelling for common platform
+// aliases (for example AMD64/x64 and aarch64). ABI compatibility is never
+// inferred; only case/outer whitespace normalization is performed.
+func (t Target) Normalize() Target {
+	t.OS, t.Architecture, t.ABI = platform.NormalizeTargetAliases(t.OS, t.Architecture, t.ABI)
+	return t
 }
 
 func (t Target) Validate() error {
@@ -36,10 +46,26 @@ func (t Target) Validate() error {
 	default:
 		return fmt.Errorf("unsupported artifact architecture")
 	}
-	if t.ABI == "" || t.ABI == "none" || strings.ToLower(t.ABI) != t.ABI {
-		return fmt.Errorf("native artifact target requires a lower-case ABI identifier")
+	if !validABI(t.ABI) {
+		return fmt.Errorf("native artifact target requires a valid lower-case ABI identifier")
 	}
 	return nil
+}
+
+func validABI(value string) bool {
+	if len(value) == 0 || len(value) > 64 {
+		return false
+	}
+	for i, r := range value {
+		valid := r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
+		if i > 0 {
+			valid = valid || r == '.' || r == '_' || r == '+' || r == '-'
+		}
+		if !valid {
+			return false
+		}
+	}
+	return true
 }
 
 // ArtifactCacheKey returns the v1 cache identity required by the public
