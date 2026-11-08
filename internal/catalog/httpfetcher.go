@@ -47,6 +47,7 @@ type HTTPFetcherOptions struct {
 	MaxBytes     int64
 	MaxRedirects int
 	CacheDir     string
+	Offline      bool
 }
 
 // safePolicyError is produced only by local URL/redirect policy checks. It can
@@ -66,6 +67,7 @@ type HTTPFetcher struct {
 	maxBytes      int64
 	cacheDir      string
 	metadataCache *MetadataCache
+	offline       bool
 
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
@@ -115,6 +117,7 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		maxBytes:      maxBytes,
 		cacheDir:      cacheDir,
 		metadataCache: metadataCache,
+		offline:       options.Offline,
 		lookupIPAddr:  net.DefaultResolver.LookupIPAddr,
 		dialIP: (&net.Dialer{
 			Timeout:   8 * time.Second,
@@ -174,6 +177,9 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 		return nil, fmt.Errorf("catalog: expected metadata digest is not SHA-256")
 	}
 	if f.cacheDir == "" {
+		if f.offline {
+			return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: offline mode has no verified cache entry")
+		}
 		data, err := f.fetch(ctx, metadataURI)
 		if err != nil {
 			return nil, err
@@ -193,6 +199,9 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 	cachePath := f.cachePath(metadataURI, expectedSHA)
 	if data, ok := f.readCache(cachePath, expectedSHA); ok {
 		return data, nil
+	}
+	if f.offline {
+		return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: no verified cached bytes for the pinned URI and digest")
 	}
 	data, err := f.fetch(ctx, metadataURI)
 	if err != nil {
