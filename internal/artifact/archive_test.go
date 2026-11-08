@@ -209,7 +209,7 @@ func TestMaterializeChecksSizeAndDigestBeforeExtraction(t *testing.T) {
 		Format:    "zip",
 	}
 	root := t.TempDir()
-	if err := Materialize(context.Background(), fakeDigestFetcher{data: data}, descriptor, root, Limits{}); err != nil {
+	if err := Materialize(context.Background(), fakeDigestFetcher{data: data}, validReleaseMetadataSHA, descriptor, root, Limits{}); err != nil {
 		t.Fatalf("valid package failed: %v", err)
 	}
 
@@ -228,7 +228,7 @@ func TestMaterializeUsesDefaultCompressedSizeLimitBeforeFetch(t *testing.T) {
 		Format:    "zip",
 	}
 	fetcher := fakeDigestFetcher{data: []byte("should not be requested")}
-	err := Materialize(context.Background(), fetcher, descriptor, t.TempDir(), Limits{})
+	err := Materialize(context.Background(), fetcher, validReleaseMetadataSHA, descriptor, t.TempDir(), Limits{})
 	if err == nil {
 		t.Fatal("oversized descriptor was fetched")
 	}
