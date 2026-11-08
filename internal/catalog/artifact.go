@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const maxDeclaredArtifactBytes int64 = 2 << 30
+const MaxDeclaredArtifactBytes int64 = 2 << 30
 
 // Target is a platform compatibility identity. ABI is intentionally opaque
 // and compared exactly; Registry never infers compatibility from toolchain names.
@@ -154,7 +154,7 @@ func ValidateReleaseArtifacts(release Release) error {
 		if !validArtifactTarget(item.Target) {
 			return fmt.Errorf("catalog: artifact %q has an invalid target tuple", item.ID)
 		}
-		if item.SizeBytes < 1 || item.SizeBytes > maxDeclaredArtifactBytes {
+		if item.SizeBytes < 1 || item.SizeBytes > MaxDeclaredArtifactBytes {
 			return fmt.Errorf("catalog: artifact %q exceeds the declared package size limit", item.ID)
 		}
 		if item.Format != "tar.gz" && item.Format != "zip" {
