@@ -67,8 +67,8 @@ const (
 	ConflictContractProviderMissing      ConflictCode = "CONTRACT_PROVIDER_MISSING"
 	ConflictContractProviderAmbiguous    ConflictCode = "CONTRACT_PROVIDER_AMBIGUOUS"
 	ConflictInternalUnresolvedDependency ConflictCode = "INTERNAL_UNRESOLVED_DEPENDENCY"
-	ConflictArtifactNotFound              ConflictCode = "ARTIFACT_NOT_FOUND"
-	ConflictArtifactAmbiguous              ConflictCode = "ARTIFACT_AMBIGUOUS"
+	ConflictArtifactNotFound             ConflictCode = "ARTIFACT_NOT_FOUND"
+	ConflictArtifactAmbiguous            ConflictCode = "ARTIFACT_AMBIGUOUS"
 )
 
 // RejectionReasonCode is the closed Registry 1.1 candidate-rejection vocabulary.
@@ -118,7 +118,7 @@ type ProductDefinition struct {
 // ResolutionPolicy selects the delivery form for each already-resolved release.
 // An omitted policy preserves legacy source collection.
 type ResolutionPolicy struct {
-	DeliveryMode string         `json:"delivery_mode"`
+	DeliveryMode string          `json:"delivery_mode"`
 	Target       *catalog.Target `json:"target,omitempty"`
 }
 
