@@ -15,20 +15,23 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: m-mdy-m/pipeline/.github/workflows/release.yml@158fd580e9e577df789fa9ba9e9c4c7740e0f426
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@main
     with:
-      pipeline-ref: 158fd580e9e577df789fa9ba9e9c4c7740e0f426
+      pipeline-ref: main
       go-version: "1.27.3"
       test-command: "PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
       build-command: "python scripts/registry_checks.py release-build"
       artifact-path: "dist/*"
       changelog-path: "CHANGELOG.md"
       working-directory: "."
+      # Pipeline's release target inherits PIPELINE_TARGET_* from the command
+      # environment. The executable is pure Go (CGO_ENABLED=0), so each target
+      # can be cross-compiled from its runner without assuming host GOARCH.
       build-matrix-json: >-
         {"include":[
-          {"id":"linux-amd64","os":"ubuntu-24.04"},
-          {"id":"linux-arm64","os":"ubuntu-24.04"},
-          {"id":"darwin-amd64","os":"macos-15"},
-          {"id":"darwin-arm64","os":"macos-15"},
-          {"id":"windows-amd64","os":"windows-latest"}
+          {"id":"linux-amd64","os":"ubuntu-24.04","build_command":"PIPELINE_TARGET_OS=linux PIPELINE_TARGET_ARCH=x86_64 python scripts/registry_checks.py release-build"},
+          {"id":"linux-arm64","os":"ubuntu-24.04","build_command":"PIPELINE_TARGET_OS=linux PIPELINE_TARGET_ARCH=aarch64 python scripts/registry_checks.py release-build"},
+          {"id":"darwin-amd64","os":"macos-15","build_command":"PIPELINE_TARGET_OS=macos PIPELINE_TARGET_ARCH=x86_64 python scripts/registry_checks.py release-build"},
+          {"id":"darwin-arm64","os":"macos-15","build_command":"PIPELINE_TARGET_OS=macos PIPELINE_TARGET_ARCH=arm64 python scripts/registry_checks.py release-build"},
+          {"id":"windows-amd64","os":"windows-latest","build_command":"PIPELINE_TARGET_OS=windows PIPELINE_TARGET_ARCH=x86_64 python scripts/registry_checks.py release-build"}
         ]}
