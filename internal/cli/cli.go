@@ -146,6 +146,7 @@ type executionOptions struct {
 	allowedHosts []string
 	outputPath   string
 	cacheDir     string
+	offline      bool
 }
 
 // parseExecutionOptions accepts repeated --catalog and --allow-host flags.
@@ -154,6 +155,10 @@ type executionOptions struct {
 func parseExecutionOptions(args []string, preparing bool) (executionOptions, error) {
 	options := executionOptions{}
 	for i := 0; i < len(args); i++ {
+		if args[i] == "--offline" {
+			options.offline = true
+			continue
+		}
 		if i+1 >= len(args) {
 			return options, fmt.Errorf("flag %s requires a value", args[i])
 		}
@@ -257,6 +262,7 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 	fetcher, err := newFetcher(catalog.HTTPFetcherOptions{
 		AllowedHosts: options.allowedHosts,
 		CacheDir:     options.cacheDir,
+		Offline:      options.offline,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "registry: configure Catalog transport: %v\n", err)
@@ -310,9 +316,10 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 				AllowedHosts: options.allowedHosts,
 				CacheDir: options.cacheDir,
 				MaxBytes: artifact.DefaultMaxCompressedBytes,
+				Offline: options.offline,
 			})
 			if fetchErr != nil {
-				fmt.Fprintf(stderr, "registry: configure artifact transport: %v\\n", fetchErr)
+				fmt.Fprintf(stderr, "registry: configure artifact transport: %v\n", fetchErr)
 				return exitInvalid
 			}
 			artifactFetcher = packageFetcher
