@@ -41,12 +41,12 @@ const (
 )
 
 type extractor struct {
-	root        string
-	limits      Limits
-	entries     int
-	expanded    int64
-	seen        map[string]string
-	names       map[string]string
+	root     string
+	limits   Limits
+	entries  int
+	expanded int64
+	seen     map[string]string
+	names    map[string]string
 	kinds    map[string]entryKind
 }
 
@@ -82,10 +82,10 @@ func Extract(data []byte, format, destination string, limits Limits) error {
 	}
 
 	x := &extractor{
-		root:        destination,
-		limits:      limits,
-		seen:        make(map[string]string),
-		names:       make(map[string]string),
+		root:   destination,
+		limits: limits,
+		seen:   make(map[string]string),
+		names:  make(map[string]string),
 		kinds:  make(map[string]entryKind),
 	}
 	switch format {
