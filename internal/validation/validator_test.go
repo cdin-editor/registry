@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cdin-editor/registry/internal/platform"
 	"github.com/cdin-editor/registry/internal/schemas"
 )
 
@@ -365,6 +366,25 @@ func TestProductDefinitionStillRejectsPartialWildcardAfterNormalization(t *testi
 	}`)
 	if _, err := validator.Normalize(ProductDefinition, input, "product.json"); err == nil {
 		t.Fatal("partial wildcard target was accepted")
+	}
+}
+
+func TestComponentReleaseTargetNormalizerHandlesEveryArtifact(t *testing.T) {
+	document := map[string]any{
+		"artifacts": []any{
+			map[string]any{"target": map[string]any{"os": "MacOS", "architecture": "AMD64", "abi": "GNU"}},
+			map[string]any{"target": map[string]any{"os": "Linux", "architecture": "aarch64", "abi": "GNU-MUSL"}},
+		},
+	}
+	normalizeComponentReleaseTargetAliases(document)
+	artifacts := document["artifacts"].([]any)
+	first := artifacts[0].(map[string]any)["target"].(map[string]any)
+	second := artifacts[1].(map[string]any)["target"].(map[string]any)
+	if first["os"] != "darwin" || first["architecture"] != "x86_64" || first["abi"] != "gnu" {
+		t.Fatalf("first normalized target = %#v", first)
+	}
+	if second["os"] != "linux" || second["architecture"] != "arm64" || second["abi"] != "gnu-musl" {
+		t.Fatalf("second normalized target = %#v", second)
 	}
 }
 
