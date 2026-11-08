@@ -5,6 +5,10 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Add optional Spec 1.3.0 target-specific artifact delivery with explicit delivery policy/target selection, digest-verified package materialization, secure archive extraction, artifact provenance in Resolved Manifests, and exact selected-artifact replay. Source delivery remains the default for existing Product Definitions.
+
 ### Fixed
 
 - Pin Registry v1 schemas to an immutable Spec commit/tree and per-file Git blob identities; retrieve
