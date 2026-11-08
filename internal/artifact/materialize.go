@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,7 +73,7 @@ func Materialize(ctx context.Context, components []resolver.ResolvedComponent, w
 			return nil, fmt.Errorf("artifact: selected component %s/%s has no immutable artifact descriptor", component.ComponentID, component.Variant)
 		}
 		selected := *component.Artifact
-		if selected.SizeBytes < 1 || selected.SizeBytes > catalog.MaxDeclaredArtifactBytes() {
+		if selected.SizeBytes < 1 || selected.SizeBytes > catalog.MaxDeclaredArtifactBytes {
 			return nil, fmt.Errorf("artifact: selected artifact %q has an invalid declared size", selected.ID)
 		}
 		relative := filepath.ToSlash(filepath.Join("components", component.ComponentID, component.Variant, "package"))
@@ -223,6 +224,23 @@ func verifyFile(filePath string, expectedSize int64, expectedSHA string) (bool, 
 	return hex.EncodeToString(hash.Sum(nil)) == expectedSHA, nil
 }
 
-func ioCopy(destination interface{ Write([]byte) (int, error) }, source interface{ Read([]byte) (int, error) }) (int64, error) {
-	return copyStream(destination, source)
+func ioCopy(destination io.Writer, source io.Reader) (int64, error) {
+	return io.Copy(destination, source)
+}
+
+func secureDirectory(value string) error {
+	if err := os.MkdirAll(value, 0o700); err != nil {
+		return err
+	}
+	if err := ensureNoSymlinkAncestors(value); err != nil {
+		return err
+	}
+	info, err := os.Lstat(value)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("cache path is not a real directory")
+	}
+	return os.Chmod(value, 0o700)
 }
