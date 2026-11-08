@@ -70,7 +70,7 @@ def check_format() -> None:
         print("The following Go files need gofmt:", file=sys.stderr)
         for name in unformatted:
             print(name, file=sys.stderr)
-            subprocess.run(["gofmt", "-d", name], cwd=ROOT, check=True)
+            subprocess.run(["gofmt", "-d", name], cwd=ROOT, check=False)
         raise SystemExit(1)
     print("Go formatting: OK")
 
