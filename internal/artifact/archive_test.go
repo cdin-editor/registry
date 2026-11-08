@@ -7,7 +7,9 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"strings"
@@ -192,6 +194,115 @@ func TestExtractTarGzipRejectsPAXPathTraversal(t *testing.T) {
 
 	if err := Extract(buffer.Bytes(), "tar.gz", t.TempDir(), Limits{}); err == nil {
 		t.Fatal("PAX path traversal override was accepted")
+	}
+}
+
+func zipBytesWithUnicodePathExtra(t *testing.T, storedName, unicodeName, checksumName string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	payload := make([]byte, 5, 5+len(unicodeName))
+	payload[0] = 1
+	binary.LittleEndian.PutUint32(payload[1:5], crc32.ChecksumIEEE([]byte(checksumName)))
+	payload = append(payload, []byte(unicodeName)...)
+	extra := make([]byte, 4, 4+len(payload))
+	binary.LittleEndian.PutUint16(extra[0:2], zipUnicodePathExtraID)
+	binary.LittleEndian.PutUint16(extra[2:4], uint16(len(payload)))
+	extra = append(extra, payload...)
+
+	header := &zip.FileHeader{Name: storedName, Method: zip.Store}
+	header.Extra = extra
+	entry, err := writer.CreateHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("payload")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func TestExtractZipValidatesUnicodePathExtraField(t *testing.T) {
+	tests := []struct {
+		name         string
+		storedName   string
+		unicodeName  string
+		checksumName string
+		wantErr      bool
+	}{
+		{
+			name:         "matching Unicode path",
+			storedName:   "include/api.h",
+			unicodeName:  "include/api.h",
+			checksumName: "include/api.h",
+		},
+		{
+			name:         "path traversal override",
+			storedName:   "safe.txt",
+			unicodeName:  "../escape",
+			checksumName: "safe.txt",
+			wantErr:      true,
+		},
+		{
+			name:         "invalid filename checksum",
+			storedName:   "safe.txt",
+			unicodeName:  "../escape",
+			checksumName: "different.txt",
+			wantErr:      true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			destination := t.TempDir()
+			data := zipBytesWithUnicodePathExtra(t, test.storedName, test.unicodeName, test.checksumName)
+			err := Extract(data, "zip", destination, Limits{})
+			if test.wantErr {
+				if err == nil {
+					t.Fatal("unsafe Unicode path extra field was accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("valid matching Unicode path extra field was rejected: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(destination, filepath.FromSlash(test.storedName))); err != nil {
+				t.Fatalf("stored path was not extracted: %v", err)
+			}
+		})
+	}
+}
+
+func TestExtractTarGzipRejectsGNULongNameTraversal(t *testing.T) {
+	var buffer bytes.Buffer
+	gz := gzip.NewWriter(&buffer)
+	writer := tar.NewWriter(gz)
+	// Force a GNU long-name record whose effective path escapes the staging root.
+	effectivePath := "../" + strings.Repeat("g", 130) + "/" + strings.Repeat("n", 130) + ".txt"
+	header := &tar.Header{
+		Name:     effectivePath,
+		Typeflag: tar.TypeReg,
+		Mode:     0o644,
+		Size:     int64(len("payload")),
+		Format:   tar.FormatGNU,
+	}
+	if err := writer.WriteHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write([]byte("payload")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Extract(buffer.Bytes(), "tar.gz", t.TempDir(), Limits{}); err == nil {
+		t.Fatal("GNU long-name traversal override was accepted")
 	}
 }
 
