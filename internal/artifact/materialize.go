@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cdin-editor/registry/internal/catalog"
 )
@@ -33,7 +34,7 @@ func Materialize(ctx context.Context, fetcher DigestFetcher, descriptor catalog.
 		return fmt.Errorf("ARTIFACT_SIZE_MISMATCH: downloaded byte count differs from release metadata")
 	}
 	sum := sha256.Sum256(data)
-	if hex.EncodeToString(sum[:]) != descriptor.SHA256 {
+	if hex.EncodeToString(sum[:]) != strings.ToLower(descriptor.SHA256) {
 		return fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: downloaded bytes differ from release metadata")
 	}
 	info, err := os.Lstat(destination)
