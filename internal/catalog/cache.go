@@ -481,12 +481,16 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 		Components []struct {
 			ReleaseMetadataURI string `json:"release_metadata_uri"`
 			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
+			SelectedArtifact *struct {
+				URI string `json:"uri"`
+				SHA256 string `json:"sha256"`
+			} `json:"selected_artifact"`
 		} `json:"components"`
 	}
 	if err := json.Unmarshal(data, &document); err != nil {
 		return nil, fmt.Errorf("catalog: decode Manifest metadata references: %w", err)
 	}
-	keys := make([]string, 0, len(document.Catalogs)+len(document.Components))
+	keys := make([]string, 0, len(document.Catalogs)+2*len(document.Components))
 	for _, item := range document.Catalogs {
 		key, err := metadataReferenceKey(item.MetadataURI, item.MetadataSHA)
 		if err != nil {
@@ -500,6 +504,11 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 			return nil, err
 		}
 		keys = append(keys, key)
+		if item.SelectedArtifact != nil {
+			artifactKey, artifactErr := metadataReferenceKey(item.SelectedArtifact.URI, item.SelectedArtifact.SHA256)
+			if artifactErr != nil { return nil, artifactErr }
+			keys = append(keys, artifactKey)
+		}
 	}
 	return uniqueSortedKeys(keys), nil
 }
