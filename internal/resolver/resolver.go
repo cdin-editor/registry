@@ -261,6 +261,7 @@ type ResolvedComponent struct {
 	SourceUnits        []catalog.SourceUnit `json:"source_units"`
 	Dependencies       []ResolvedDependency `json:"dependencies"`
 	Contracts          catalog.Contracts    `json:"contracts"`
+	AvailableArtifacts []catalog.Artifact   `json:"-"`
 	Delivery           string               `json:"delivery,omitempty"`
 	Artifact           *catalog.Artifact    `json:"artifact,omitempty"`
 }
