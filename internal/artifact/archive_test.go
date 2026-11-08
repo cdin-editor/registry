@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cdin-editor/registry/internal/catalog"
@@ -166,13 +167,15 @@ func TestExtractTarGzipRejectsPAXPathTraversal(t *testing.T) {
 	var buffer bytes.Buffer
 	gz := gzip.NewWriter(&buffer)
 	writer := tar.NewWriter(gz)
+	// Force archive/tar to emit an extended PAX path record by exceeding
+	// the legacy USTAR path limit. The effective path escapes the staging root.
+	effectivePath := "../" + strings.Repeat("a", 130) + "/" + strings.Repeat("b", 130) + ".txt"
 	header := &tar.Header{
-		Name:       "safe.txt",
-		Typeflag:   tar.TypeReg,
-		Mode:       0o644,
-		Size:       int64(len("payload")),
-		Format:     tar.FormatPAX,
-		PAXRecords: map[string]string{"path": "../escape"},
+		Name:     effectivePath,
+		Typeflag: tar.TypeReg,
+		Mode:     0o644,
+		Size:     int64(len("payload")),
+		Format:   tar.FormatPAX,
 	}
 	if err := writer.WriteHeader(header); err != nil {
 		t.Fatal(err)
@@ -206,6 +209,7 @@ func TestExtractRejectsTraversalAndCollisions(t *testing.T) {
 		{"reserved name", []string{"bin/CON"}},
 		{"alternate stream", []string{"bin/tool.exe:stream"}},
 		{"file parent", []string{"lib/item", "lib/item/child"}},
+		{"file parent after implicit directory", []string{"lib/item/child", "lib/item"}},
 		{"implicit parent case collision", []string{"Lib/A.h", "lib/B.h"}},
 	}
 	for _, test := range tests {

@@ -7,6 +7,21 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Fixed
 
+- Pin Registry v1 schemas to immutable Spec Git blob identities and retrieve
+  them through the Git Database API, verifying each downloaded Git object
+  before schema comparison. This avoids raw-content ref lookup failures while
+  preserving a reproducible Spec revision.
+- Validate the gzip checksum/trailer after TAR end markers and keep archive
+  path-collision checks bounded by path depth rather than total entry count.
+
+### Tests
+
+- Cover PAX path traversal overrides and corrupted gzip trailers in TAR.GZ
+  package extraction.
+
+
+### Fixed
+
 - Pass an explicit target OS and architecture to every Pipeline release-matrix build. The previous matrix could inherit the runner's native `GOARCH`, producing mislabeled or duplicate ARM64/AMD64 assets instead of the requested cross-compiled binaries.
 
 ## [0.1.0-dev.1] - 2026-11-08
