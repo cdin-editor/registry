@@ -60,11 +60,14 @@ Required options:
 - `--allow-host`: allowed network host. Repeat it for each host, or provide
   comma-separated host names.
 
-Optional:
-
-- `--cache-dir`: directory for verified metadata and Git-object caches.
+- `--cache-dir`: directory for integrity-checked metadata, package and
+  Git-object caches.
+- `--offline`: refuse network access for Catalog/release metadata and
+  digest-pinned package downloads. The Catalog Index itself must be a local
+  file; release metadata must already be cached by URI and SHA-256.
 
 Resolve prints a JSON Resolution Report. It does not collect Git source.
+
 
 ## Prepare
 
@@ -74,18 +77,24 @@ Resolve prints a JSON Resolution Report. It does not collect Git source.
   --catalog <file-or-https-url>... \
   --allow-host <host>... \
   --output <new-directory> \
-  [--cache-dir <directory>]
+  [--cache-dir <directory>] \
+  [--offline]
 ```
 
 The options are the same as `resolve`, with two differences:
 
 - `--output` is required and must name a destination that does not already
   exist.
-- A successful command collects the selected source revisions and publishes a
-  complete Workspace.
+- A successful command publishes a complete Workspace. It may contain
+  collected source units, verified package archives, or both.
+
+When `--offline` is used, every selected component must have a compatible,
+already-cached immutable artifact. Source fallback is rejected; use a local
+Catalog Index and warm the cache during an earlier online prepare.
 
 It prints a JSON receipt with paths and digests for the Workspace, Manifest,
 and Report.
+
 
 ## Manifest commands
 
