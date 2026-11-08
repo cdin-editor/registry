@@ -504,7 +504,7 @@ Usage:
   registry resolve --product <file> --catalog <file|https-uri>... --allow-host <host>... [--cache-dir <dir>] [--offline]
   registry prepare --product <file> --catalog <file|https-uri>... --allow-host <host>... --output <dir> [--cache-dir <dir>] [--offline]
   registry manifest verify --input <file|-> [--sha256 <hex>]
-  registry manifest replay --input <file|-> --output <dir> --allow-host <host>... [--sha256 <hex>] [--verify-remote-metadata] [--cache-dir <dir>]
+  registry manifest replay --input <file|-> --output <dir> --allow-host <host>... [--sha256 <hex>] [--verify-remote-metadata] [--cache-dir <dir>] [--offline]
   registry manifest discover --input <file|-> --product <file> --catalog <file|https-uri>... --allow-host <host>... [--sha256 <hex>] [--cache-dir <dir>] [--report <file>]
   registry cache pin --manifest <file|-> --cache-dir <dir>
   registry cache unpin --manifest-sha256 <hex> --cache-dir <dir>
@@ -531,7 +531,7 @@ Notes:
   Replay makes no Catalog metadata requests by default; --verify-remote-metadata enables strict checks.
   Replay requires explicit source/metadata host policy through --allow-host.
   Network Catalog and source hosts must be explicitly allow-listed.
-  --cache-dir enables integrity-checked metadata and content-addressed Git-object caches.\n  --offline forbids network fetches and requires verified cache entries for pinned URIs and digests.
+  --cache-dir enables integrity-checked metadata and content-addressed Git-object caches.\n  --offline forbids unpinned metadata fetches and requires verified digest-addressed entries.\n  Offline prepare/replay is artifact-only; source components require Git retrieval.
   cache pin/unpin retains or releases metadata and source commit identities from a verified Manifest.
   cache gc evicts only entries outside retained Manifest pins and active replay leases.`))
 }
