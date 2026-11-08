@@ -119,16 +119,24 @@ canonical-byte, or provenance checks.
   --allow-host github.com \
   [--sha256 <lowercase-sha256>] \
   [--verify-remote-metadata] \
-  [--cache-dir <directory>]
+  [--cache-dir <directory>] \
+  [--offline]
 ```
 
-Replay uses the exact full Git commit IDs recorded in the Manifest. It does
-not select current versions again. The output directory must not exist.
+Replay uses the exact full Git commit IDs and immutable artifact descriptors
+recorded in the Manifest. It does not select current versions or artifacts
+again. The output directory must not exist.
 
 By default, replay does not contact Catalog metadata. Add
-`--verify-remote-metadata` to fetch and verify the exact Catalog and release
-metadata bytes recorded in the Manifest. Source repository hosts must always
-be allowed.
+`--verify-remote-metadata` to re-fetch and verify the exact Catalog and release
+metadata bytes recorded in the Manifest. Artifact bytes are always checked
+against the saved URI, size and SHA-256 before extraction.
+
+`--cache-dir` enables package/metadata and Git-object caches. `--offline`
+requires `--cache-dir` and an artifact-only Manifest whose exact packages are
+already cached; source-delivered components require Git retrieval and are
+rejected in this mode.
+
 
 ### Discover available updates
 
