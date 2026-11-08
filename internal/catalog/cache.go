@@ -194,7 +194,16 @@ func (c *MetadataCache) beginEntryLease(ctx context.Context, metadataURI, expect
 	if metadataURI == "" || !isSHA256(expectedSHA) {
 		return nil, fmt.Errorf("catalog: invalid metadata cache lease identity")
 	}
-	return c.beginLease(ctx, []string{metadataCacheKey(metadataURI, expectedSHA)})
+	return c.beginKeyLease(ctx, metadataCacheKey(metadataURI, expectedSHA))
+}
+
+// beginKeyLease also protects domain-separated artifact identities. The caller
+// must derive the key from a verified Manifest or a fully validated descriptor.
+func (c *MetadataCache) beginKeyLease(ctx context.Context, key string) (func(), error) {
+	if !isSHA256(key) {
+		return nil, fmt.Errorf("catalog: invalid cache lease key")
+	}
+	return c.beginLease(ctx, []string{key})
 }
 
 func (c *MetadataCache) beginLease(ctx context.Context, keys []string) (func(), error) {
@@ -482,6 +491,8 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 			ReleaseMetadataURI string `json:"release_metadata_uri"`
 			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
 			SelectedArtifact   *struct {
+				ID     string `json:"artifact_id"`
+				Target Target `json:"target"`
 				URI    string `json:"uri"`
 				SHA256 string `json:"sha256"`
 			} `json:"selected_artifact"`
@@ -505,9 +516,14 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 		}
 		keys = append(keys, key)
 		if item.SelectedArtifact != nil {
-			artifactKey, artifactErr := metadataReferenceKey(item.SelectedArtifact.URI, item.SelectedArtifact.SHA256)
+			artifactKey, artifactErr := ArtifactCacheKey(item.ReleaseMetadataSHA, Artifact{
+				ID: item.SelectedArtifact.ID,
+				Target: item.SelectedArtifact.Target,
+				URI: item.SelectedArtifact.URI,
+				SHA256: item.SelectedArtifact.SHA256,
+			})
 			if artifactErr != nil {
-				return nil, artifactErr
+				return nil, fmt.Errorf("catalog: Manifest contains an invalid artifact cache identity")
 			}
 			keys = append(keys, artifactKey)
 		}
