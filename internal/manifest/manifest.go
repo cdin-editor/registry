@@ -78,6 +78,7 @@ type Document struct {
 	EnvironmentContracts []EnvironmentContract "json:\"environment_contracts,omitempty\""
 	Components           []Component           "json:\"components\""
 	ResolutionOrder      []resolver.Node       "json:\"resolution_order\""
+	Resolution           *resolver.ResolutionPolicy "json:\"resolution,omitempty\""
 }
 
 // Catalog records the exact Catalog Index source bytes used for resolution.
@@ -107,9 +108,38 @@ type Component struct {
 	Version            string            "json:\"version\""
 	ReleaseMetadataURI string            "json:\"release_metadata_uri\""
 	ReleaseMetadataSHA string            "json:\"release_metadata_sha256\""
-	SourceUnits        []SourceUnit      "json:\"source_units\""
+	SourceUnits        []SourceUnit      "json:\"source_units,omitempty\""
 	Dependencies       []Dependency      "json:\"dependencies\""
 	Contracts          catalog.Contracts "json:\"contracts,omitempty\""
+	Delivery           string            "json:\"delivery,omitempty\""
+	SelectedArtifact   *SelectedArtifact "json:\"selected_artifact,omitempty\""
+}
+
+// SelectedArtifact records the exact release asset selected and materialized by
+// Registry, including immutable byte identity and source/build provenance.
+type SelectedArtifact struct {
+	ArtifactID       string                   "json:\"artifact_id\""
+	Kind             string                   "json:\"kind\""
+	Target           catalog.Target           "json:\"target\""
+	Format           string                   "json:\"format\""
+	FileName         string                   "json:\"file_name\""
+	URI              string                   "json:\"uri\""
+	SHA256           string                   "json:\"sha256\""
+	SizeBytes        int64                    "json:\"size_bytes\""
+	Layout           string                   "json:\"layout\""
+	SourceUnitIDs    []string                 "json:\"source_unit_ids\""
+	Build            catalog.ArtifactBuild    "json:\"build\""
+	SourceProvenance []SourceProvenance       "json:\"source_provenance\""
+	WorkspacePath    string                   "json:\"workspace_path\""
+}
+
+// SourceProvenance records source identity without claiming that the source
+// tree was collected into the prepared package workspace.
+type SourceProvenance struct {
+	SourceUnitID  string "json:\"source_unit_id\""
+	RepositoryURI string "json:\"repository_uri\""
+	Revision      string "json:\"revision\""
+	Subdirectory  string "json:\"subdirectory,omitempty\""
 }
 
 // SourceUnit records the verified full Git commit and deterministic workspace path.
