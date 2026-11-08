@@ -27,10 +27,13 @@ func applyDeliveryPolicy(graph *Graph, policy ResolutionPolicy) *Conflict {
 			return &Conflict{Code: ConflictInvalidCatalog, Message: "artifact delivery requires a concrete target tuple"}
 		}
 	}
-	graph.Resolution = ResolutionPolicy{DeliveryMode: mode}
-	if policy.Target != nil {
-		target := *policy.Target
-		graph.Resolution.Target = &target
+	if policy.DeliveryMode != "" {
+		graph.Resolution = ResolutionPolicy{DeliveryMode: mode}
+		if policy.Target != nil {
+			target := *policy.Target
+			graph.Resolution.Target = &target
+		}
+		graph.SchemaVersion = artifactManifestVersion
 	}
 	if mode == "source" {
 		for i := range graph.Components {
@@ -73,6 +76,5 @@ func applyDeliveryPolicy(graph *Graph, policy ResolutionPolicy) *Conflict {
 		component.Delivery = "artifact"
 		component.SelectedArtifact = &copy
 	}
-	graph.SchemaVersion = artifactManifestVersion
 	return nil
 }
