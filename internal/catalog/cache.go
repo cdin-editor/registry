@@ -481,8 +481,8 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 		Components []struct {
 			ReleaseMetadataURI string `json:"release_metadata_uri"`
 			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
-			SelectedArtifact *struct {
-				URI string `json:"uri"`
+			SelectedArtifact   *struct {
+				URI    string `json:"uri"`
 				SHA256 string `json:"sha256"`
 			} `json:"selected_artifact"`
 		} `json:"components"`
@@ -506,7 +506,9 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 		keys = append(keys, key)
 		if item.SelectedArtifact != nil {
 			artifactKey, artifactErr := metadataReferenceKey(item.SelectedArtifact.URI, item.SelectedArtifact.SHA256)
-			if artifactErr != nil { return nil, artifactErr }
+			if artifactErr != nil {
+				return nil, artifactErr
+			}
 			keys = append(keys, artifactKey)
 		}
 	}
