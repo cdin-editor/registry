@@ -113,7 +113,6 @@ func TestArtifactCacheKeyBindsFullImmutableIdentity(t *testing.T) {
 	}
 }
 
-
 func TestValidateReleaseArtifactsRejectsDuplicateTargetLayoutRole(t *testing.T) {
 	first := validRuntimeArtifact()
 	second := validRuntimeArtifact()
@@ -149,8 +148,8 @@ func TestValidateReleaseArtifactsRejectsInvalidNativeABIAndAttestation(t *testin
 	t.Run("insecure attestation", func(t *testing.T) {
 		artifact := validRuntimeArtifact()
 		artifact.Attestations = []Attestation{{
-			URI: "http://example.invalid/attestation.json",
-			SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			URI:           "http://example.invalid/attestation.json",
+			SHA256:        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			PredicateType: "https://slsa.dev/provenance/v1",
 		}}
 		if err := ValidateReleaseArtifacts([]SourceUnit{validSource()}, []Artifact{artifact}); err == nil {
