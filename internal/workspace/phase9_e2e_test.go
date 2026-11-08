@@ -136,6 +136,22 @@ func TestRegistryArtifactPrepareOfflineReplay(t *testing.T) {
 	}
 
 	fetcher.offline = true
+
+	// A fresh offline cache must reject replay of the original artifact identity.
+	missingFetcher := &phase9ArtifactFetcher{
+		payload: artifactBytes, cache: make(map[string][]byte), offline: true,
+	}
+	missingPath := filepath.Join(t.TempDir(), "missing-artifact-replay")
+	missingOptions := workspaceOptions(missingPath)
+	missingOptions.ArtifactFetcher = missingFetcher
+	_, err = Replay(context.Background(), manifestBytes, prepared.ManifestSHA256, ReplayOptions{Workspace: missingOptions})
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("replay without the original asset error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+	if _, err := os.Lstat(missingPath); !os.IsNotExist(err) {
+		t.Fatalf("missing-asset replay published a partial workspace: %v", err)
+	}
+
 	replayedPath := filepath.Join(t.TempDir(), "replayed-artifact")
 	replayOptions := workspaceOptions(replayedPath)
 	replayOptions.ArtifactFetcher = fetcher
