@@ -47,8 +47,7 @@ type extractor struct {
 	expanded    int64
 	seen        map[string]string
 	names       map[string]string
-	kinds       map[string]entryKind
-	descendants map[string]struct{}
+	kinds    map[string]entryKind
 }
 
 // Extract verifies archive structure and writes regular files/directories only.
@@ -87,8 +86,7 @@ func Extract(data []byte, format, destination string, limits Limits) error {
 		limits:      limits,
 		seen:        make(map[string]string),
 		names:       make(map[string]string),
-		kinds:       make(map[string]entryKind),
-		descendants: make(map[string]struct{}),
+		kinds:  make(map[string]entryKind),
 	}
 	switch format {
 	case "tar.gz":
@@ -219,11 +217,6 @@ func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, decla
 			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: file/directory prefix collision")
 		}
 	}
-	if kind == kindFile {
-		if _, exists := x.descendants[folded]; exists {
-			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: file/directory prefix collision")
-		}
-	}
 	if existing, ok := x.kinds[folded]; ok {
 		if existing == kindFile || kind == kindFile {
 			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: file/directory path collision")
@@ -306,9 +299,6 @@ func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, decla
 	x.seen[folded] = name
 	x.names[folded] = name
 	x.kinds[folded] = kind
-	for index := 1; index < len(parts); index++ {
-		x.descendants[strings.Join(parts[:index], "/")] = struct{}{}
-	}
 	x.entries++
 	return nil
 }
