@@ -97,7 +97,7 @@ make build
 make check
 ```
 
-The executable is written to `build/registry`. The current source identifies itself as `0.1.0-dev`; this is a development version, not a stable Registry 1.0.0 release.
+The executable is written to `build/registry`. The current source identifies itself as `0.1.0-dev.1`; this is a development prerelease, not a stable Registry 1.0.0 release.
 
 ## License
 
