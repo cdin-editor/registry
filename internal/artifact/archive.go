@@ -7,7 +7,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path"
@@ -154,12 +156,52 @@ func (x *extractor) extractTarGzip(data []byte) error {
 	return nil
 }
 
+const zipUnicodePathExtraID = 0x7075
+
+// validateZIPUnicodePath rejects Info-ZIP Unicode Path fields that are
+// malformed or name a path other than the central-directory file name.
+// Different extractors may prefer this field over the legacy name, so accepting
+// divergent values would make the same archive extract to different paths.
+func validateZIPUnicodePath(name string, extra []byte) error {
+	seenUnicodePath := false
+	for len(extra) > 0 {
+		if len(extra) < 4 {
+			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: malformed zip extra field")
+		}
+		fieldID := binary.LittleEndian.Uint16(extra[:2])
+		fieldSize := int(binary.LittleEndian.Uint16(extra[2:4]))
+		if fieldSize > len(extra)-4 {
+			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: malformed zip extra field")
+		}
+		payload := extra[4 : 4+fieldSize]
+		if fieldID == zipUnicodePathExtraID {
+			if seenUnicodePath || len(payload) < 5 || payload[0] != 1 {
+				return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: invalid zip Unicode path extra field")
+			}
+			expectedCRC := binary.LittleEndian.Uint32(payload[1:5])
+			if crc32.ChecksumIEEE([]byte(name)) != expectedCRC {
+				return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: zip Unicode path checksum mismatch")
+			}
+			unicodeName := payload[5:]
+			if !utf8.Valid(unicodeName) || string(unicodeName) != name {
+				return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: zip Unicode path overrides the stored entry name")
+			}
+			seenUnicodePath = true
+		}
+		extra = extra[4+fieldSize:]
+	}
+	return nil
+}
+
 func (x *extractor) extractZip(data []byte) error {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: invalid zip structure")
 	}
 	for _, entry := range reader.File {
+		if err := validateZIPUnicodePath(entry.Name, entry.Extra); err != nil {
+			return err
+		}
 		mode := entry.Mode()
 		if mode&os.ModeSymlink != 0 || (mode&os.ModeType != 0 && !mode.IsDir() && !mode.IsRegular()) {
 			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: links and special zip entries are forbidden")
