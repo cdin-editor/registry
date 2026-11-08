@@ -556,7 +556,7 @@ func TestHTTPFetcherOfflineModeRejectsUnpinnedFetch(t *testing.T) {
 func TestHTTPFetcherOfflineModeRejectsDigestCacheMiss(t *testing.T) {
 	fetcher, err := NewHTTPFetcher(HTTPFetcherOptions{
 		AllowedHosts: []string{"catalog.example.invalid"},
-		Offline: true,
+		Offline:      true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -574,18 +574,18 @@ func TestHTTPFetcherOfflineArtifactCacheUsesFullIdentity(t *testing.T) {
 	const payload = "immutable runtime archive bytes"
 	cacheDir := t.TempDir()
 	descriptor := Artifact{
-		ID: "runtime-lua-modules",
-		Kind: "runtime-module-archive",
-		Target: Target{OS: "any", Architecture: "any", ABI: "none"},
-		Format: "tar.gz",
-		FileName: "runtime.tar.gz",
-		URI: "https://catalog.example.invalid/runtime.tar.gz",
-		SHA256: expectedDigest(payload),
-		SizeBytes: int64(len(payload)),
-		Layout: "lua-module-tree-v1",
+		ID:            "runtime-lua-modules",
+		Kind:          "runtime-module-archive",
+		Target:        Target{OS: "any", Architecture: "any", ABI: "none"},
+		Format:        "tar.gz",
+		FileName:      "runtime.tar.gz",
+		URI:           "https://catalog.example.invalid/runtime.tar.gz",
+		SHA256:        expectedDigest(payload),
+		SizeBytes:     int64(len(payload)),
+		Layout:        "lua-module-tree-v1",
 		SourceUnitIDs: []string{"runtime-source"},
 		Build: ArtifactBuild{
-			Recipe: ArtifactRecipe{SourceUnitID: "runtime-source", Path: "scripts/package.sh"},
+			Recipe:    ArtifactRecipe{SourceUnitID: "runtime-source", Path: "scripts/package.sh"},
 			Toolchain: []ToolchainEntry{{Name: "tar", Version: "1.35"}},
 		},
 	}
@@ -601,7 +601,7 @@ func TestHTTPFetcherOfflineArtifactCacheUsesFullIdentity(t *testing.T) {
 	offline, err := NewHTTPFetcher(HTTPFetcherOptions{
 		AllowedHosts: []string{"catalog.example.invalid"},
 		CacheDir: cacheDir,
-		Offline: true,
+		Offline:  true,
 		MaxBytes: 1 << 20,
 	})
 	if err != nil {
@@ -634,18 +634,18 @@ func TestHTTPFetcherOfflineArtifactCacheUsesFullIdentity(t *testing.T) {
 func TestHTTPFetcherArtifactCacheHitStillChecksAllowedHost(t *testing.T) {
 	const payload = "immutable runtime archive bytes"
 	descriptor := Artifact{
-		ID: "runtime-lua-modules",
-		Kind: "runtime-module-archive",
-		Target: Target{OS: "any", Architecture: "any", ABI: "none"},
-		Format: "tar.gz",
-		FileName: "runtime.tar.gz",
-		URI: "https://evil.example.invalid/runtime.tar.gz",
-		SHA256: expectedDigest(payload),
-		SizeBytes: int64(len(payload)),
-		Layout: "lua-module-tree-v1",
+		ID:            "runtime-lua-modules",
+		Kind:          "runtime-module-archive",
+		Target:        Target{OS: "any", Architecture: "any", ABI: "none"},
+		Format:        "tar.gz",
+		FileName:      "runtime.tar.gz",
+		URI:           "https://evil.example.invalid/runtime.tar.gz",
+		SHA256:        expectedDigest(payload),
+		SizeBytes:     int64(len(payload)),
+		Layout:        "lua-module-tree-v1",
 		SourceUnitIDs: []string{"runtime-source"},
 		Build: ArtifactBuild{
-			Recipe: ArtifactRecipe{SourceUnitID: "runtime-source", Path: "scripts/package.sh"},
+			Recipe:    ArtifactRecipe{SourceUnitID: "runtime-source", Path: "scripts/package.sh"},
 			Toolchain: []ToolchainEntry{{Name: "tar", Version: "1.35"}},
 		},
 	}
