@@ -4,6 +4,7 @@ package artifact
 
 import (
 	"archive/tar"
+	"context"
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
@@ -43,6 +44,7 @@ const (
 )
 
 type extractor struct {
+	ctx      context.Context
 	root     string
 	limits   Limits
 	entries  int
@@ -55,6 +57,18 @@ type extractor struct {
 // Extract verifies archive structure and writes regular files/directories only.
 // The destination must be an empty, private, real directory owned by the caller.
 func Extract(data []byte, format, destination string, limits Limits) error {
+	return ExtractContext(context.Background(), data, format, destination, limits)
+}
+
+// ExtractContext is Extract with cancellation checks during archive traversal and
+// file writes. A failed or canceled extraction removes its partial destination.
+func ExtractContext(ctx context.Context, data []byte, format, destination string, limits Limits) error {
+	if ctx == nil {
+		return fmt.Errorf("ARTIFACT_EXTRACTION_FAILED: extraction context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if limits.MaxCompressedBytes <= 0 {
 		limits.MaxCompressedBytes = DefaultMaxCompressedBytes
 	}
@@ -84,6 +98,7 @@ func Extract(data []byte, format, destination string, limits Limits) error {
 	}
 
 	x := &extractor{
+		ctx:    ctx,
 		root:   destination,
 		limits: limits,
 		seen:   make(map[string]string),
@@ -114,12 +129,15 @@ func (x *extractor) extractTarGzip(data []byte) error {
 
 	reader := tar.NewReader(gz)
 	for {
+		if err := x.ctx.Err(); err != nil {
+			return err
+		}
 		header, err := reader.Next()
 		if err == io.EOF {
 			// tar.Reader stops after the archive end markers. Drain the gzip
 			// stream as well so its checksum and uncompressed-size trailer are
 			// verified before the package is accepted.
-			if _, err := io.Copy(io.Discard, gz); err != nil {
+			if _, err := io.Copy(io.Discard, contextReader{ctx: x.ctx, reader: gz}); err != nil {
 				return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: invalid gzip checksum or trailer")
 			}
 			break
@@ -199,6 +217,9 @@ func (x *extractor) extractZip(data []byte) error {
 		return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: invalid zip structure")
 	}
 	for _, entry := range reader.File {
+		if err := x.ctx.Err(); err != nil {
+			return err
+		}
 		if err := validateZIPUnicodePath(entry.Name, entry.Extra); err != nil {
 			return err
 		}
@@ -234,7 +255,22 @@ func (x *extractor) extractZip(data []byte) error {
 	return nil
 }
 
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(buffer []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(buffer)
+}
+
 func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, declaredSize, mode int64) error {
+	if err := x.ctx.Err(); err != nil {
+		return err
+	}
 	if x.entries >= x.limits.MaxEntries {
 		return fmt.Errorf("ARTIFACT_LIMIT_EXCEEDED: archive entry count exceeded")
 	}
@@ -315,7 +351,7 @@ func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, decla
 		if err != nil {
 			return fmt.Errorf("ARTIFACT_EXTRACTION_FAILED: create package file")
 		}
-		written, copyErr := io.Copy(file, io.LimitReader(source, declaredSize+1))
+		written, copyErr := io.Copy(file, io.LimitReader(contextReader{ctx: x.ctx, reader: source}, declaredSize+1))
 		if copyErr == nil && written != declaredSize {
 			copyErr = fmt.Errorf("entry size mismatch")
 		}
