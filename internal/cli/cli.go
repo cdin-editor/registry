@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cdin-editor/registry/internal/buildinfo"
 	"github.com/cdin-editor/registry/internal/artifact"
+	"github.com/cdin-editor/registry/internal/buildinfo"
 	"github.com/cdin-editor/registry/internal/catalog"
 	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
@@ -317,9 +317,9 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 		if component.Delivery == "artifact" {
 			packageFetcher, fetchErr := catalog.NewHTTPFetcher(catalog.HTTPFetcherOptions{
 				AllowedHosts: options.allowedHosts,
-				CacheDir: options.cacheDir,
-				MaxBytes: artifact.DefaultMaxCompressedBytes,
-				Offline: options.offline,
+				CacheDir:     options.cacheDir,
+				MaxBytes:     artifact.DefaultMaxCompressedBytes,
+				Offline:      options.offline,
 			})
 			if fetchErr != nil {
 				fmt.Fprintf(stderr, "registry: configure artifact transport: %v\n", fetchErr)
@@ -330,13 +330,13 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 		}
 	}
 	prepared, err := workspace.Prepare(ctx, result, workspace.Options{
-		Destination: options.outputPath,
-		RegistryVersion: buildinfo.Version,
-		Git: collector.CommandGit{},
+		Destination:      options.outputPath,
+		RegistryVersion:  buildinfo.Version,
+		Git:              collector.CommandGit{},
 		RepositoryPolicy: catalogRepositoryPolicy{hosts: options.allowedHosts},
-		ArtifactFetcher: artifactFetcher,
-		ArtifactLimits: artifact.Limits{},
-		Validator: validator,
+		ArtifactFetcher:  artifactFetcher,
+		ArtifactLimits:   artifact.Limits{},
+		Validator:        validator,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "registry: prepare workspace: %v\n", err)
