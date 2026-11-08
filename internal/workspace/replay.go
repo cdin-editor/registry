@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -135,6 +136,7 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		EnvironmentContracts: make([]resolver.EnvironmentContract, 0, len(document.EnvironmentContracts)),
 		Components:           make([]resolver.ResolvedComponent, 0, len(document.Components)),
 		ResolutionOrder:      append([]resolver.Node(nil), document.ResolutionOrder...),
+		Resolution:           cloneReplayResolution(document.Resolution),
 	}
 	for _, item := range document.Catalogs {
 		graph.Catalogs = append(graph.Catalogs, resolver.CatalogReference{
@@ -174,12 +176,28 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 			SourceUnits:        make([]catalog.SourceUnit, 0, len(item.SourceUnits)),
 			Dependencies:       make([]resolver.ResolvedDependency, 0, len(item.Dependencies)),
 			Contracts:          item.Contracts,
+			Delivery:           item.Delivery,
 		}
 		for _, source := range item.SourceUnits {
 			component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
 				ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
 				Revision: source.Revision, Subdirectory: source.Subdirectory,
 			})
+		}
+		if item.SelectedArtifact != nil {
+			selected := item.SelectedArtifact
+			component.Artifact = &catalog.Artifact{
+				ID: selected.ArtifactID, Kind: selected.Kind, Target: selected.Target,
+				Format: selected.Format, FileName: selected.FileName, URI: selected.URI,
+				SHA256: selected.SHA256, SizeBytes: selected.SizeBytes, Layout: selected.Layout,
+				SourceUnitIDs: append([]string(nil), selected.SourceUnitIDs...), Build: selected.Build,
+			}
+			for _, source := range selected.SourceProvenance {
+				component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
+					ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+					Revision: source.Revision, Subdirectory: source.Subdirectory,
+				})
+			}
 		}
 		for _, dependency := range item.Dependencies {
 			component.Dependencies = append(component.Dependencies, resolver.ResolvedDependency{
@@ -211,6 +229,18 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		})
 	}
 	return resolver.Result{Graph: graph, Report: report}, nil
+}
+
+func cloneReplayResolution(policy *resolver.ResolutionPolicy) *resolver.ResolutionPolicy {
+	if policy == nil {
+		return nil
+	}
+	copyPolicy := *policy
+	if policy.Target != nil {
+		target := *policy.Target
+		copyPolicy.Target = &target
+	}
+	return &copyPolicy
 }
 
 type replayReleaseIdentity struct {
@@ -322,12 +352,24 @@ func fetchReplayBytes(ctx context.Context, fetcher catalog.Fetcher, uri, expecte
 }
 
 func compareReplayRelease(component manifest.Component, release catalog.Release, selected map[replayReleaseIdentity]manifest.Component) error {
-	if len(release.SourceUnits) != len(component.SourceUnits) {
-		return fmt.Errorf("workspace: replay source-unit set mismatch")
+	manifestSources := make(map[string]manifest.SourceProvenance)
+	if component.Delivery == "artifact" {
+		if component.SelectedArtifact == nil {
+			return fmt.Errorf("workspace: artifact replay has no selected artifact provenance")
+		}
+		for _, source := range component.SelectedArtifact.SourceProvenance {
+			manifestSources[source.SourceUnitID] = source
+		}
+	} else {
+		for _, source := range component.SourceUnits {
+			manifestSources[source.SourceUnitID] = manifest.SourceProvenance{
+				SourceUnitID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+				Revision: source.Revision, Subdirectory: source.Subdirectory,
+			}
+		}
 	}
-	manifestSources := make(map[string]manifest.SourceUnit, len(component.SourceUnits))
-	for _, source := range component.SourceUnits {
-		manifestSources[source.SourceUnitID] = source
+	if len(release.SourceUnits) != len(manifestSources) {
+		return fmt.Errorf("workspace: replay source-unit set mismatch")
 	}
 	seenSources := make(map[string]struct{}, len(release.SourceUnits))
 	for _, source := range release.SourceUnits {
@@ -344,6 +386,13 @@ func compareReplayRelease(component manifest.Component, release catalog.Release,
 			recorded.Subdirectory != source.Subdirectory {
 			return fmt.Errorf("workspace: replay source-unit provenance mismatch")
 		}
+	}
+	if component.Delivery == "artifact" {
+		if err := compareReplayArtifact(component.SelectedArtifact, release.Artifacts); err != nil {
+			return err
+		}
+	} else if component.SelectedArtifact != nil {
+		return fmt.Errorf("workspace: source replay unexpectedly records a package artifact")
 	}
 
 	if len(release.Dependencies) != len(component.Dependencies) {
@@ -388,6 +437,38 @@ func compareReplayRelease(component manifest.Component, release catalog.Release,
 	if !sameReplayProviders(component.Contracts.Provides, release.Contracts.Provides) ||
 		!sameReplayRequirements(component.Contracts.Requires, release.Contracts.Requires) {
 		return fmt.Errorf("workspace: replay contract declarations mismatch")
+	}
+	return nil
+}
+
+func compareReplayArtifact(selected *manifest.SelectedArtifact, artifacts []catalog.Artifact) error {
+	if selected == nil {
+		return fmt.Errorf("workspace: selected artifact is missing")
+	}
+	var match *catalog.Artifact
+	for index := range artifacts {
+		if artifacts[index].ID == selected.ArtifactID {
+			if match != nil {
+				return fmt.Errorf("workspace: release metadata repeats the selected artifact ID")
+			}
+			match = &artifacts[index]
+		}
+	}
+	if match == nil {
+		return fmt.Errorf("workspace: recorded artifact is absent from immutable release metadata")
+	}
+	actual := *match
+	recordedSourceIDs := append([]string(nil), selected.SourceUnitIDs...)
+	actualSourceIDs := append([]string(nil), actual.SourceUnitIDs...)
+	sort.Strings(recordedSourceIDs)
+	sort.Strings(actualSourceIDs)
+	if !reflect.DeepEqual(recordedSourceIDs, actualSourceIDs) ||
+		selected.Kind != actual.Kind || selected.Target != actual.Target ||
+		selected.Format != actual.Format || selected.FileName != actual.FileName ||
+		selected.URI != actual.URI || !strings.EqualFold(selected.SHA256, actual.SHA256) ||
+		selected.SizeBytes != actual.SizeBytes || selected.Layout != actual.Layout ||
+		!reflect.DeepEqual(selected.Build, actual.Build) {
+		return fmt.Errorf("workspace: recorded artifact identity differs from immutable release metadata")
 	}
 	return nil
 }
