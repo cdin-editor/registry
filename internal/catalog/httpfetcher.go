@@ -182,6 +182,67 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 	if !isSHA256(expectedSHA) {
 		return nil, fmt.Errorf("catalog: expected metadata digest is not SHA-256")
 	}
+	return f.fetchWithCacheKey(ctx, metadataURI, expectedSHA, metadataCacheKey(metadataURI, expectedSHA))
+}
+
+// FetchArtifact is the production immutable-artifact transport. Its cache key
+// binds the artifact to the exact release metadata document, artifact ID,
+// target tuple, URI and SHA-256. The transport verifies bytes before extraction.
+func (f *HTTPFetcher) FetchArtifact(ctx context.Context, releaseMetadataSHA string, descriptor Artifact) ([]byte, error) {
+	key, err := ArtifactCacheKey(releaseMetadataSHA, descriptor)
+	if err != nil {
+		return nil, fmt.Errorf("ARTIFACT_URI_REJECTED: artifact cache identity is invalid")
+	}
+	data, err := f.fetchWithCacheKey(ctx, descriptor.URI, strings.ToLower(descriptor.SHA256), key)
+	if err != nil {
+		return nil, classifyArtifactTransportError(err)
+	}
+	return data, nil
+}
+
+func classifyArtifactTransportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "artifact_offline_miss"):
+		return err
+	case strings.Contains(message, "redirect"):
+		return fmt.Errorf("ARTIFACT_REDIRECT_REJECTED: redirect policy rejected the asset request")
+	case strings.Contains(message, "allow-listed"),
+		strings.Contains(message, "private"),
+		strings.Contains(message, "loopback"),
+		strings.Contains(message, "link-local"),
+		strings.Contains(message, "reserved"),
+		strings.Contains(message, "address"):
+		return fmt.Errorf("ARTIFACT_HOST_REJECTED: asset host or resolved address is not permitted")
+	case strings.Contains(message, "https"),
+		strings.Contains(message, "uri"),
+		strings.Contains(message, "credential"),
+		strings.Contains(message, "hostname"),
+		strings.Contains(message, "port"):
+		return fmt.Errorf("ARTIFACT_URI_REJECTED: asset URI is not an approved HTTPS URI")
+	case strings.Contains(message, "digest"):
+		return fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: asset bytes do not match the pinned SHA-256")
+	case strings.Contains(message, "http status 404") || strings.Contains(message, "http status 410"):
+		return fmt.Errorf("ARTIFACT_REPLAY_UNAVAILABLE: the immutable historical asset is unavailable")
+	default:
+		return fmt.Errorf("ARTIFACT_FETCH_FAILED: immutable asset retrieval failed")
+	}
+}
+
+func (f *HTTPFetcher) fetchWithCacheKey(ctx context.Context, metadataURI, expectedSHA, key string) ([]byte, error) {
+	if f == nil {
+		return nil, fmt.Errorf("catalog: HTTP fetcher is not initialized")
+	}
+	if ctx == nil {
+		return nil, fmt.Errorf("catalog: HTTP fetch context is required")
+	}
+	expectedSHA = strings.ToLower(expectedSHA)
+	if !isSHA256(expectedSHA) || !isSHA256(key) {
+		return nil, fmt.Errorf("catalog: invalid digest-addressed cache identity")
+	}
 	if f.cacheDir == "" {
 		if f.offline {
 			return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: offline mode has no verified cache entry")
@@ -191,34 +252,32 @@ func (f *HTTPFetcher) FetchWithDigest(ctx context.Context, metadataURI, expected
 			return nil, err
 		}
 		if httpMetadataDigest(data) != expectedSHA {
-			return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
+			return nil, fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: fetched bytes do not match declared SHA-256")
 		}
 		return data, nil
 	}
 	if f.metadataCache != nil {
-		release, leaseErr := f.metadataCache.beginEntryLease(ctx, metadataURI, expectedSHA)
+		release, leaseErr := f.metadataCache.beginKeyLease(ctx, key)
 		if leaseErr != nil {
 			return nil, leaseErr
 		}
 		defer release()
 	}
-	cachePath := f.cachePath(metadataURI, expectedSHA)
+	cachePath := f.cachePathForKey(key)
 	if data, ok := f.readCache(cachePath, expectedSHA); ok {
 		return data, nil
 	}
 	if f.offline {
-		return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: no verified cached bytes for the pinned URI and digest")
+		return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: no verified cached bytes for the pinned identity")
 	}
 	data, err := f.fetch(ctx, metadataURI)
 	if err != nil {
 		return nil, err
 	}
 	if httpMetadataDigest(data) != expectedSHA {
-		return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
+		return nil, fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: fetched bytes do not match declared SHA-256")
 	}
 	if err := f.writeCache(cachePath, data); err != nil {
-		// Cache is an optimization. A verified network response remains valid
-		// even when the local cache is read-only or temporarily unavailable.
 		return data, nil
 	}
 	return data, nil
@@ -381,8 +440,11 @@ func (f *HTTPFetcher) BeginReplayLease(ctx context.Context, manifestBytes []byte
 }
 
 func (f *HTTPFetcher) cachePath(metadataURI, expectedSHA string) string {
-	sum := sha256.Sum256([]byte(metadataURI + "\x00" + expectedSHA))
-	return filepath.Join(f.cacheDir, hex.EncodeToString(sum[:])+".json")
+	return f.cachePathForKey(metadataCacheKey(metadataURI, expectedSHA))
+}
+
+func (f *HTTPFetcher) cachePathForKey(key string) string {
+	return filepath.Join(f.cacheDir, key+".json")
 }
 
 func (f *HTTPFetcher) readCache(path, expectedSHA string) ([]byte, bool) {
