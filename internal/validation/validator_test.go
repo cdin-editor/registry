@@ -367,3 +367,53 @@ func TestProductDefinitionStillRejectsPartialWildcardAfterNormalization(t *testi
 		t.Fatal("partial wildcard target was accepted")
 	}
 }
+
+func TestComponentReleaseNormalizesArtifactTargetAliasesBeforeSchemaValidation(t *testing.T) {
+	validator := newTestValidator(t)
+	input := []byte(`{
+		"schema_version": "1.1.0",
+		"component_id": "native-sdk",
+		"variant": "default",
+		"version": "1.0.0",
+		"status": "active",
+		"source_units": [{
+			"source_unit_id": "source",
+			"repository_uri": "https://github.com/example/native-sdk",
+			"revision": "0123456789abcdef0123456789abcdef01234567"
+		}],
+		"artifacts": [{
+			"artifact_id": "mac-sdk",
+			"kind": "sdk-package",
+			"target": {
+				"os": "MacOS",
+				"architecture": "AMD64",
+				"abi": "GNU-GLIBC-2.28"
+			},
+			"format": "tar.gz",
+			"file_name": "native-sdk.tar.gz",
+			"uri": "https://github.com/example/native-sdk/releases/download/v1/native-sdk.tar.gz",
+			"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"size_bytes": 1024,
+			"layout": "cmake-prefix-v1",
+			"source_unit_ids": ["source"],
+			"build": {
+				"recipe": {"source_unit_id": "source", "path": "scripts/package.sh"},
+				"toolchain": [{"name": "cmake", "version": "3.30.0"}]
+			}
+		}],
+		"dependencies": [],
+		"contracts": {"provides": [], "requires": []}
+	}`)
+	normalized, err := validator.Normalize(ComponentRelease, input, "release.json")
+	if err != nil {
+		t.Fatalf("Normalize() rejected supported release target aliases: %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(normalized, &document); err != nil {
+		t.Fatal(err)
+	}
+	target := document["artifacts"].([]any)[0].(map[string]any)["target"].(map[string]any)
+	if target["os"] != "darwin" || target["architecture"] != "x86_64" || target["abi"] != "gnu-glibc-2.28" {
+		t.Fatalf("normalized artifact target = %#v", target)
+	}
+}
