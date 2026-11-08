@@ -243,6 +243,13 @@ func (f *HTTPFetcher) fetchWithCacheKey(ctx context.Context, metadataURI, expect
 	if !isSHA256(expectedSHA) || !isSHA256(key) {
 		return nil, fmt.Errorf("catalog: invalid digest-addressed cache identity")
 	}
+	parsed, err := url.Parse(metadataURI)
+	if err != nil {
+		return nil, fmt.Errorf("ARTIFACT_URI_REJECTED: asset URI is invalid")
+	}
+	if err := f.validateURL(parsed); err != nil {
+		return nil, err
+	}
 	if f.cacheDir == "" {
 		if f.offline {
 			return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: offline mode has no verified cache entry")
