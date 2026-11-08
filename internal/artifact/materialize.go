@@ -140,12 +140,19 @@ func verifiedArchive(ctx context.Context, component resolver.ResolvedComponent, 
 	cachePath := ""
 	if cacheRoot != "" {
 		cachePath = filepath.Join(cacheRoot, hex.EncodeToString(sum[:])+".archive")
-		if ok, err := verifyFile(cachePath, selected.SizeBytes, expectedSHA); err != nil {
-			if !os.IsNotExist(err) {
-				_ = os.Remove(cachePath)
+		if ok, err := verifyFile(cachePath, selected.SizeBytes, expectedSHA); err == nil {
+			if ok {
+				return cachePath, func() {}, nil
 			}
-		} else if ok {
-			return cachePath, func() {}, nil
+			// A present but corrupt cache entry is never reused. Remove it
+			// before a new atomic publication (Windows rename does not replace).
+			if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+				return "", func() {}, fmt.Errorf("artifact: remove corrupt cache entry: %w", err)
+			}
+		} else if !os.IsNotExist(err) {
+			if removeErr := os.Remove(cachePath); removeErr != nil && !os.IsNotExist(removeErr) {
+				return "", func() {}, fmt.Errorf("artifact: remove invalid cache entry: %w", removeErr)
+			}
 		}
 	}
 
