@@ -196,3 +196,104 @@ func TestMetadataCachePinIdentityUsesExactManifestBytesAndStableMetadataKeys(t *
 		t.Fatal("cache identity did not include the exact URI")
 	}
 }
+
+
+func TestMetadataCachePinAndGCUseFullArtifactIdentity(t *testing.T) {
+	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseURI := "https://catalog.example.invalid/releases/runtime.json"
+	releaseSHA := expectedDigest("runtime-release-metadata")
+	payload := "immutable runtime package"
+	descriptor := validRuntimeArtifact()
+	descriptor.URI = "https://catalog.example.invalid/releases/runtime.tar.gz"
+	descriptor.SHA256 = expectedDigest(payload)
+	descriptor.SizeBytes = int64(len(payload))
+	artifactKey, err := ArtifactCacheKey(releaseSHA, descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manifestBytes, err := json.Marshal(struct {
+		SchemaVersion string `json:"schema_version"`
+		Catalogs []any `json:"catalogs"`
+		Components []struct {
+			ReleaseMetadataURI string `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
+			SelectedArtifact Artifact `json:"selected_artifact"`
+		} `json:"components"`
+	}{
+		SchemaVersion: "1.1.0",
+		Components: []struct {
+			ReleaseMetadataURI string `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
+			SelectedArtifact Artifact `json:"selected_artifact"`
+		}{{
+			ReleaseMetadataURI: releaseURI,
+			ReleaseMetadataSHA: releaseSHA,
+			SelectedArtifact: descriptor,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	old := time.Now().Add(-2 * time.Hour)
+	releasePath := writeCacheFixture(t, cache, releaseURI, releaseSHA, "metadata", old)
+	artifactPath := filepath.Join(cache.root, artifactKey+".json")
+	if err := os.WriteFile(artifactPath, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(artifactPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	unpinnedPath := writeCacheFixture(t, cache, "https://catalog.example.invalid/unpinned.json", expectedDigest("unpinned"), "other", old)
+
+	pinID, err := cache.RetainManifest(manifestBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := metadataKeysFromManifest(manifestBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsKey(keys, metadataCacheKey(releaseURI, releaseSHA)) || !containsKey(keys, artifactKey) {
+		t.Fatalf("manifest cache keys = %v; expected release metadata and full artifact keys", keys)
+	}
+
+	result, err := cache.GarbageCollect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(releasePath); err != nil {
+		t.Fatalf("pinned release metadata was removed: %v", err)
+	}
+	if _, err := os.Stat(artifactPath); err != nil {
+		t.Fatalf("pinned artifact was removed: %v", err)
+	}
+	if _, err := os.Stat(unpinnedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unpinned stale cache entry remains: %v (GC %+v)", err, result)
+	}
+
+	if err := cache.ReleaseManifest(pinID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.GarbageCollect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{"release": releasePath, "artifact": artifactPath} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("unpinned %s cache entry remains after GC: %v", name, err)
+		}
+	}
+}
+
+func containsKey(keys []string, expected string) bool {
+	for _, key := range keys {
+		if key == expected {
+			return true
+		}
+	}
+	return false
+}
