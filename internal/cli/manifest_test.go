@@ -414,6 +414,30 @@ func TestManifestCLIReplayStrictMetadataUsesExplicitAllowList(t *testing.T) {
 	}
 }
 
+func TestManifestCLIReplayOfflineRejectsSourceDeliveryBeforeGitOrNetwork(t *testing.T) {
+	_, revision := createCLIReplayRepository(t)
+	payload, _, _ := buildCLIReplayManifest(t, revision, false)
+	input := writeCLIManifest(t, payload)
+	destination := filepath.Join(t.TempDir(), "offline-source")
+
+	var stdout, stderr bytes.Buffer
+	code := runManifestWithDependencies(context.Background(), []string{
+		"replay", "--input", input, "--output", destination,
+		"--allow-host", "source.example.invalid",
+		"--cache-dir", filepath.Join(t.TempDir(), "cache"),
+		"--offline",
+	}, strings.NewReader(""), &stdout, &stderr, nil, nil)
+	if code != exitInvalid || !strings.Contains(stderr.String(), "error[OFFLINE_SOURCE_UNAVAILABLE]") {
+		t.Fatalf("offline source replay exit=%d stderr=%s", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("offline source rejection wrote stdout: %s", stdout.String())
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("offline source rejection published a destination: %v", err)
+	}
+}
+
 func TestManifestCLIUsageErrorsHaveStableExitCodeAndCode(t *testing.T) {
 	cases := [][]string{
 		{"verify"},
@@ -422,7 +446,7 @@ func TestManifestCLIUsageErrorsHaveStableExitCodeAndCode(t *testing.T) {
 		{"replay", "--input", "manifest.json", "--output", "out"},
 		{"replay", "--input", "manifest.json", "--allow-host", "source.example.invalid"},
 		{"verify", "--input", "manifest.json", "--verify-remote-metadata"},
-		{"replay", "--input", "manifest.json", "--output", "out", "--allow-host", "source.example.invalid", "--cache-dir", "cache"},
+		{"replay", "--input", "manifest.json", "--output", "out", "--allow-host", "source.example.invalid", "--offline"},
 		{"unknown"},
 	}
 	for _, args := range cases {
