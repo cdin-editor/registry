@@ -109,6 +109,14 @@ type ProductDefinition struct {
 	Components           []Requirement         `json:"components"`
 	EnvironmentContracts []EnvironmentContract `json:"environment_contracts,omitempty"`
 	Policy               Policy                `json:"policy,omitempty"`
+	Resolution           *ResolutionPolicy     `json:"resolution,omitempty"`
+}
+
+// ResolutionPolicy selects a delivery mode and (for artifacts) an exact
+// platform target. A nil policy preserves the historical source-only behavior.
+type ResolutionPolicy struct {
+	DeliveryMode string          `json:"delivery_mode"`
+	Target       *catalog.Target `json:"target,omitempty"`
 }
 
 // Policy carries only the selection policy frozen in contract 1.1.0.
@@ -253,6 +261,8 @@ type ResolvedComponent struct {
 	SourceUnits        []catalog.SourceUnit `json:"source_units"`
 	Dependencies       []ResolvedDependency `json:"dependencies"`
 	Contracts          catalog.Contracts    `json:"contracts"`
+	Delivery           string               `json:"delivery,omitempty"`
+	Artifact           *catalog.Artifact    `json:"artifact,omitempty"`
 }
 
 // Graph is the immutable selection result consumed by collection/workspace
@@ -264,6 +274,7 @@ type Graph struct {
 	EnvironmentContracts []EnvironmentContract `json:"environment_contracts"`
 	Components           []ResolvedComponent   `json:"components"`
 	ResolutionOrder      []Node                `json:"resolution_order"`
+	Resolution           *ResolutionPolicy     `json:"resolution,omitempty"`
 }
 
 // Result pairs the deterministic report with either a complete Graph or nil.
