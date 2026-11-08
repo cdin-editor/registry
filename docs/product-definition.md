@@ -77,7 +77,6 @@ applied after the compatible release graph has been solved. See
 [Immutable artifact delivery](artifact-delivery.md) for package metadata,
 layouts, cache behavior and offline preparation.
 
-
 Registry supports one exact version or a space-separated set of comparisons:
 
 ```yaml
