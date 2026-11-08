@@ -369,8 +369,8 @@ func compareReplayRelease(component manifest.Component, release catalog.Release,
 			return fmt.Errorf("workspace: replay source-unit set mismatch")
 		}
 		for _, source := range component.SourceUnits {
-			manifestSources[source.ID] = manifest.SourceProvenance{
-				SourceUnitID: source.ID, RepositoryURI: source.RepositoryURI,
+			manifestSources[source.SourceUnitID] = manifest.SourceProvenance{
+				SourceUnitID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
 				Revision: source.Revision, Subdirectory: source.Subdirectory,
 			}
 		}
