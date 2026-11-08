@@ -103,8 +103,11 @@ func (v *Validator) Normalize(kind Kind, input []byte, filename string) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("decode %s: %w", filename, err)
 	}
-	if kind == ProductDefinition {
+	switch kind {
+	case ProductDefinition:
 		normalizeProductTargetAliases(document)
+	case ComponentRelease:
+		normalizeComponentReleaseTargetAliases(document)
 	}
 	if err := schema.Validate(document); err != nil {
 		return nil, fmt.Errorf("schema validation failed: %w", err)
@@ -139,6 +142,37 @@ func normalizeProductTargetAliases(document any) {
 	target["os"] = osName
 	target["architecture"] = architecture
 	target["abi"] = abi
+}
+
+func normalizeComponentReleaseTargetAliases(document any) {
+	root, ok := document.(map[string]any)
+	if !ok {
+		return
+	}
+	artifacts, ok := root["artifacts"].([]any)
+	if !ok {
+		return
+	}
+	for _, item := range artifacts {
+		artifact, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		target, ok := artifact["target"].(map[string]any)
+		if !ok {
+			continue
+		}
+		osName, osOK := target["os"].(string)
+		architecture, archOK := target["architecture"].(string)
+		abi, abiOK := target["abi"].(string)
+		if !osOK || !archOK || !abiOK {
+			continue
+		}
+		osName, architecture, abi = platform.NormalizeTargetAliases(osName, architecture, abi)
+		target["os"] = osName
+		target["architecture"] = architecture
+		target["abi"] = abi
+	}
 }
 
 func decodeJSON(input []byte) (any, error) {

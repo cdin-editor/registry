@@ -197,7 +197,6 @@ func TestMetadataCachePinIdentityUsesExactManifestBytesAndStableMetadataKeys(t *
 	}
 }
 
-
 func TestMetadataCachePinAndGCUseFullArtifactIdentity(t *testing.T) {
 	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
 	if err != nil {
@@ -217,22 +216,22 @@ func TestMetadataCachePinAndGCUseFullArtifactIdentity(t *testing.T) {
 
 	manifestBytes, err := json.Marshal(struct {
 		SchemaVersion string `json:"schema_version"`
-		Catalogs []any `json:"catalogs"`
-		Components []struct {
-			ReleaseMetadataURI string `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
-			SelectedArtifact Artifact `json:"selected_artifact"`
+		Catalogs       []any  `json:"catalogs"`
+		Components     []struct {
+			ReleaseMetadataURI string   `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string   `json:"release_metadata_sha256"`
+			SelectedArtifact   Artifact `json:"selected_artifact"`
 		} `json:"components"`
 	}{
 		SchemaVersion: "1.1.0",
 		Components: []struct {
-			ReleaseMetadataURI string `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
-			SelectedArtifact Artifact `json:"selected_artifact"`
+			ReleaseMetadataURI string   `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string   `json:"release_metadata_sha256"`
+			SelectedArtifact   Artifact `json:"selected_artifact"`
 		}{{
 			ReleaseMetadataURI: releaseURI,
 			ReleaseMetadataSHA: releaseSHA,
-			SelectedArtifact: descriptor,
+			SelectedArtifact:   descriptor,
 		}},
 	})
 	if err != nil {
