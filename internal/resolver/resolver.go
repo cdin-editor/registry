@@ -31,6 +31,7 @@ import (
 
 const (
 	manifestSchemaVersion   = "1.0.0"
+	artifactManifestVersion = "1.1.0"
 	reportSchemaVersion     = "1.1.0"
 	defaultMaxSearchStates  = 100000
 	maxResolverCandidates   = 16384
@@ -66,6 +67,8 @@ const (
 	ConflictContractProviderMissing      ConflictCode = "CONTRACT_PROVIDER_MISSING"
 	ConflictContractProviderAmbiguous    ConflictCode = "CONTRACT_PROVIDER_AMBIGUOUS"
 	ConflictInternalUnresolvedDependency ConflictCode = "INTERNAL_UNRESOLVED_DEPENDENCY"
+	ConflictArtifactNotFound              ConflictCode = "ARTIFACT_NOT_FOUND"
+	ConflictArtifactAmbiguous              ConflictCode = "ARTIFACT_AMBIGUOUS"
 )
 
 // RejectionReasonCode is the closed Registry 1.1 candidate-rejection vocabulary.
@@ -108,7 +111,15 @@ type ProductDefinition struct {
 	SchemaVersion        string                `json:"schema_version"`
 	Components           []Requirement         `json:"components"`
 	EnvironmentContracts []EnvironmentContract `json:"environment_contracts,omitempty"`
+	Resolution           ResolutionPolicy      `json:"resolution,omitempty"`
 	Policy               Policy                `json:"policy,omitempty"`
+}
+
+// ResolutionPolicy selects the delivery form for each already-resolved release.
+// An omitted policy preserves legacy source collection.
+type ResolutionPolicy struct {
+	DeliveryMode string         `json:"delivery_mode"`
+	Target       *catalog.Target `json:"target,omitempty"`
 }
 
 // Policy carries only the selection policy frozen in contract 1.1.0.
@@ -250,6 +261,9 @@ type ResolvedComponent struct {
 	Version            string               `json:"version"`
 	ReleaseMetadataURI string               `json:"release_metadata_uri"`
 	ReleaseMetadataSHA string               `json:"release_metadata_sha256"`
+	Delivery           string               `json:"delivery,omitempty"`
+	SelectedArtifact   *catalog.Artifact    `json:"selected_artifact,omitempty"`
+	Artifacts          []catalog.Artifact   `json:"-"`
 	SourceUnits        []catalog.SourceUnit `json:"source_units"`
 	Dependencies       []ResolvedDependency `json:"dependencies"`
 	Contracts          catalog.Contracts    `json:"contracts"`
@@ -259,6 +273,7 @@ type ResolvedComponent struct {
 // stages. It contains no absolute paths or host-specific values (REG-023/024).
 type Graph struct {
 	SchemaVersion        string                `json:"schema_version"`
+	Resolution           ResolutionPolicy      `json:"resolution,omitempty"`
 	Catalogs             []CatalogReference    `json:"catalogs"`
 	Roots                []Requirement         `json:"roots"`
 	EnvironmentContracts []EnvironmentContract `json:"environment_contracts"`
@@ -452,6 +467,10 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 		result.Report.RejectedCandidates = normalizeRejected(rejectedForFinalState(engine, selected))
 		populateConflictNodes(graphConflict, selected)
 		result.Report.Conflicts = append(result.Report.Conflicts, *graphConflict)
+		return result
+	}
+	if conflict := applyDeliveryPolicy(graph, def.Resolution); conflict != nil {
+		result.Report.Conflicts = append(result.Report.Conflicts, *conflict)
 		return result
 	}
 	result.Graph = graph
@@ -1017,6 +1036,7 @@ func buildGraph(state *searchState, catalogs []CatalogReference, roots []Require
 			ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version,
 			ReleaseMetadataURI: r.MetadataURI, ReleaseMetadataSHA: r.MetadataSHA,
 			SourceUnits:  append([]catalog.SourceUnit(nil), r.SourceUnits...),
+			Artifacts:    append([]catalog.Artifact(nil), r.Artifacts...),
 			Dependencies: dependencies, Contracts: r.Contracts,
 		})
 		selected = append(selected, SelectedCandidate{ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version})
