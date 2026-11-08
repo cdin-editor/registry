@@ -144,9 +144,6 @@ func runManifestWithDependencies(
 		return exitOK
 	}
 
-	if git == nil {
-		return writeManifestError(stderr, "INTERNAL_ERROR", "Git runner is not configured")
-	}
 	hasArtifact, hasSource := false, false
 	for _, component := range document.Components {
 		if component.Delivery == "artifact" {
@@ -157,6 +154,9 @@ func runManifestWithDependencies(
 	}
 	if options.offline && hasSource {
 		return writeManifestError(stderr, "OFFLINE_SOURCE_UNAVAILABLE", "offline replay requires every selected component to use a cached immutable artifact; source delivery needs Git retrieval")
+	}
+	if hasSource && git == nil {
+		return writeManifestError(stderr, "INTERNAL_ERROR", "Git runner is not configured for source replay")
 	}
 
 	replayOptions := workspace.ReplayOptions{
