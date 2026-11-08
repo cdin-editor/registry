@@ -117,7 +117,9 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 	hasSource, hasArtifact := false, false
 	for _, component := range resolution.Graph.Components {
 		delivery := component.Delivery
-		if delivery == "" { delivery = "source" }
+		if delivery == "" {
+			delivery = "source"
+		}
 		switch delivery {
 		case "source":
 			hasSource = true
@@ -200,8 +202,12 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 	sourceGraph.Components = make([]resolver.ResolvedComponent, 0, len(resolution.Graph.Components))
 	for _, component := range resolution.Graph.Components {
 		delivery := component.Delivery
-		if delivery == "" { delivery = "source" }
-		if delivery == "source" { sourceGraph.Components = append(sourceGraph.Components, component) }
+		if delivery == "" {
+			delivery = "source"
+		}
+		if delivery == "source" {
+			sourceGraph.Components = append(sourceGraph.Components, component)
+		}
 	}
 	sources := []collector.Source{}
 	if len(sourceGraph.Components) > 0 {
@@ -209,7 +215,9 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 			Git: options.Git, Policy: options.RepositoryPolicy, Credentials: options.Credentials,
 			GitCache: options.GitObjectCache, TempDir: options.TempDir,
 		})
-		if err != nil { return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err) }
+		if err != nil {
+			return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err)
+		}
 	}
 	if hooks.afterCollect != nil {
 		if err := hooks.afterCollect(sources); err != nil {
@@ -219,19 +227,29 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 
 	packages := make([]manifest.ArtifactPackage, 0)
 	for _, component := range resolution.Graph.Components {
-		if component.Delivery != "artifact" { continue }
-		if component.SelectedArtifact == nil { return Prepared{}, fmt.Errorf("workspace: selected artifact metadata is missing") }
+		if component.Delivery != "artifact" {
+			continue
+		}
+		if component.SelectedArtifact == nil {
+			return Prepared{}, fmt.Errorf("workspace: selected artifact metadata is missing")
+		}
 		parent := filepath.Join(stage, "components", component.ComponentID, component.Variant)
-		if err := os.MkdirAll(parent, 0o755); err != nil { return Prepared{}, fmt.Errorf("workspace: create package parent: %w", err) }
-		if err := ensureNoSymlinkAncestors(parent); err != nil { return Prepared{}, fmt.Errorf("workspace: unsafe package parent: %w", err) }
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: create package parent: %w", err)
+		}
+		if err := ensureNoSymlinkAncestors(parent); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: unsafe package parent: %w", err)
+		}
 		packageDir := filepath.Join(parent, "package")
-		if err := os.Mkdir(packageDir, 0o700); err != nil { return Prepared{}, fmt.Errorf("workspace: create private package directory: %w", err) }
+		if err := os.Mkdir(packageDir, 0o700); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: create private package directory: %w", err)
+		}
 		if err := artifact.Materialize(ctx, options.ArtifactFetcher, *component.SelectedArtifact, packageDir, options.ArtifactLimits); err != nil {
 			return Prepared{}, fmt.Errorf("workspace: materialize %s/%s artifact: %w", component.ComponentID, component.Variant, err)
 		}
 		packages = append(packages, manifest.ArtifactPackage{
 			ComponentID: component.ComponentID, Variant: component.Variant,
-			ArtifactID: component.SelectedArtifact.ID,
+			ArtifactID:    component.SelectedArtifact.ID,
 			WorkspacePath: filepath.ToSlash(filepath.Join("components", component.ComponentID, component.Variant, "package")),
 		})
 	}
