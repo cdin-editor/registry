@@ -9,6 +9,17 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 - Pass an explicit target OS and architecture to every Pipeline release-matrix build. The previous matrix could inherit the runner's native `GOARCH`, producing mislabeled or duplicate ARM64/AMD64 assets instead of the requested cross-compiled binaries.
 
+## [0.1.0-dev.1] - 2026-11-08
+
+> Corrected development prerelease. This release rebuilds the Registry CLI
+> with an explicit target OS and architecture for every published asset.
+> It supersedes the incorrectly mapped platform binaries in `v0.1.0-dev`.
+
+### Fixed
+
+- Cross-compile Linux AMD64/ARM64, macOS AMD64/ARM64 and Windows AMD64 assets for their declared target instead of inheriting the runner's native architecture.
+- Publish architecture-specific executable assets that can be consumed by a platform-aware CDIN bootstrap after exact tag and SHA-256 verification.
+
 ## [0.1.0-dev] - 2026-11-07
 
 > Development prerelease. This version matches
