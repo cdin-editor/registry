@@ -41,7 +41,42 @@ The IDs and variants must match the values published in Release Metadata and ref
 - `environment_contracts` lists contracts already supplied by the target environment rather than by a Registry-managed component.
 - `policy.allow_prerelease` controls whether prerelease versions may be selected. It defaults to `false`.
 
-## Version constraints
+## Delivery policy
+
+The optional top-level `resolution` object selects how Registry materializes
+each already-resolved component. Omitting it preserves the default
+source-collection behavior.
+
+For a native package request, specify the exact target tuple:
+
+```yaml
+resolution:
+  delivery_mode: artifact
+  target:
+    os: linux
+    architecture: x86_64
+    abi: gnu-glibc-2.28
+```
+
+Supported delivery modes are:
+
+- `source`: collect exact source commits; this is the default.
+- `artifact`: require one compatible prebuilt package for every selected
+  component. A missing or ambiguous package fails resolution.
+- `artifact-or-source`: prefer a compatible package and fall back to source
+  only when no compatible package is published.
+
+The target is not guessed from the machine running Registry. The caller must
+provide the target ABI explicitly. Exact platform matches are preferred over a
+universal runtime package. The only universal tuple is
+`any / any / none`; native development and SDK packages require a concrete
+target.
+
+The delivery policy does not change version or dependency selection. It is
+applied after the compatible release graph has been solved. See
+[Immutable artifact delivery](artifact-delivery.md) for package metadata,
+layouts, cache behavior and offline preparation.
+
 
 Registry supports one exact version or a space-separated set of comparisons:
 
