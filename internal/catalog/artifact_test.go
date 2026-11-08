@@ -112,3 +112,49 @@ func TestArtifactCacheKeyBindsFullImmutableIdentity(t *testing.T) {
 		})
 	}
 }
+
+
+func TestValidateReleaseArtifactsRejectsDuplicateTargetLayoutRole(t *testing.T) {
+	first := validRuntimeArtifact()
+	second := validRuntimeArtifact()
+	second.ID = "runtime-any-secondary"
+	second.FileName = "runtime-secondary.tar.gz"
+	if err := ValidateReleaseArtifacts([]SourceUnit{validSource()}, []Artifact{first, second}); err == nil {
+		t.Fatal("two artifacts for the same target and layout role were accepted")
+	}
+}
+
+func TestValidateReleaseArtifactsRejectsUnsafePortableFileNames(t *testing.T) {
+	for _, name := range []string{"CON.txt", "runtime.", "runtime ", ".", "..", "runtime:stream"} {
+		t.Run(name, func(t *testing.T) {
+			artifact := validRuntimeArtifact()
+			artifact.FileName = name
+			if err := ValidateReleaseArtifacts([]SourceUnit{validSource()}, []Artifact{artifact}); err == nil {
+				t.Fatalf("unsafe artifact filename %q was accepted", name)
+			}
+		})
+	}
+}
+
+func TestValidateReleaseArtifactsRejectsInvalidNativeABIAndAttestation(t *testing.T) {
+	t.Run("native ABI none", func(t *testing.T) {
+		artifact := validRuntimeArtifact()
+		artifact.Kind = "sdk-package"
+		artifact.Layout = "cmake-prefix-v1"
+		artifact.Target = Target{OS: "linux", Architecture: "x86_64", ABI: "none"}
+		if err := ValidateReleaseArtifacts([]SourceUnit{validSource()}, []Artifact{artifact}); err == nil {
+			t.Fatal("native artifact with ABI none was accepted")
+		}
+	})
+	t.Run("insecure attestation", func(t *testing.T) {
+		artifact := validRuntimeArtifact()
+		artifact.Attestations = []Attestation{{
+			URI: "http://example.invalid/attestation.json",
+			SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			PredicateType: "https://slsa.dev/provenance/v1",
+		}}
+		if err := ValidateReleaseArtifacts([]SourceUnit{validSource()}, []Artifact{artifact}); err == nil {
+			t.Fatal("insecure attestation reference was accepted")
+		}
+	})
+}

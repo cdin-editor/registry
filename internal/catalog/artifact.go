@@ -135,6 +135,43 @@ type Attestation struct {
 	PredicateType string `json:"predicate_type"`
 }
 
+func validArtifactHTTPSURI(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && parsed.IsAbs() && strings.EqualFold(parsed.Scheme, "https") &&
+		parsed.Opaque == "" && parsed.Hostname() != "" && parsed.User == nil &&
+		parsed.RawQuery == "" && parsed.Fragment == ""
+}
+
+func validArtifactFileName(value string) bool {
+	if value == "" || !utf8.ValidString(value) || value == "." || value == ".." ||
+		path.Base(value) != value || strings.ContainsAny(value, "/\\:\x00") ||
+		strings.HasSuffix(value, ".") || strings.HasSuffix(value, " ") {
+		return false
+	}
+	base := strings.ToUpper(strings.SplitN(value, ".", 2)[0])
+	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" {
+		return false
+	}
+	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) &&
+		base[3] >= '1' && base[3] <= '9' {
+		return false
+	}
+	return true
+}
+
+func isSHA256Value(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f' ||
+			character >= 'A' && character <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateReleaseArtifacts performs semantic checks that JSON Schema cannot
 // express: stable artifact identity, source provenance references, URL policy,
 // normalized recipe paths and kind/layout/target agreement.
@@ -150,6 +187,7 @@ func ValidateReleaseArtifacts(sources []SourceUnit, artifacts []Artifact) error 
 		sourceIDs[source.ID] = struct{}{}
 	}
 	seen := make(map[string]struct{}, len(artifacts))
+	seenTargetLayouts := make(map[string]struct{}, len(artifacts))
 	for _, artifact := range artifacts {
 		if artifact.ID == "" {
 			return fmt.Errorf("empty artifact identity")
@@ -175,12 +213,11 @@ func ValidateReleaseArtifacts(sources []SourceUnit, artifacts []Artifact) error 
 				return fmt.Errorf("artifact SHA-256 is invalid")
 			}
 		}
-		parsed, err := url.Parse(artifact.URI)
-		if err != nil || !parsed.IsAbs() || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		if !validArtifactHTTPSURI(artifact.URI) {
 			return fmt.Errorf("artifact URI must be an absolute HTTPS URI without credentials, query or fragment")
 		}
-		if artifact.FileName == "" || path.Base(artifact.FileName) != artifact.FileName || strings.ContainsAny(artifact.FileName, "/\\:\x00") || !utf8.ValidString(artifact.FileName) {
-			return fmt.Errorf("artifact file name must be a safe basename")
+		if !validArtifactFileName(artifact.FileName) {
+			return fmt.Errorf("artifact file name must be a safe cross-platform basename")
 		}
 		if artifact.Kind == "runtime-module-archive" {
 			if artifact.Layout != "lua-module-tree-v1" || !artifact.Target.IsUniversal() {
@@ -193,6 +230,16 @@ func ValidateReleaseArtifacts(sources []SourceUnit, artifacts []Artifact) error 
 		} else {
 			return fmt.Errorf("unsupported artifact kind")
 		}
+		targetLayoutKey := strings.Join([]string{
+			artifact.Target.OS,
+			artifact.Target.Architecture,
+			artifact.Target.ABI,
+			artifact.Layout,
+		}, "\x00")
+		if _, exists := seenTargetLayouts[targetLayoutKey]; exists {
+			return fmt.Errorf("multiple artifacts declare the same target and package layout")
+		}
+		seenTargetLayouts[targetLayoutKey] = struct{}{}
 		if len(artifact.SourceUnitIDs) == 0 {
 			return fmt.Errorf("artifact has no source provenance")
 		}
@@ -219,6 +266,12 @@ func ValidateReleaseArtifacts(sources []SourceUnit, artifacts []Artifact) error 
 		for _, tool := range artifact.Build.Toolchain {
 			if strings.TrimSpace(tool.Name) == "" || strings.TrimSpace(tool.Version) == "" {
 				return fmt.Errorf("artifact toolchain entry is incomplete")
+			}
+		}
+		for _, attestation := range artifact.Attestations {
+			if !validArtifactHTTPSURI(attestation.URI) || !isSHA256Value(attestation.SHA256) ||
+				strings.TrimSpace(attestation.PredicateType) == "" {
+				return fmt.Errorf("artifact attestation reference is invalid")
 			}
 		}
 	}
