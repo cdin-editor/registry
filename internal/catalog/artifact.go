@@ -26,6 +26,10 @@ func (t Target) IsUniversal() bool {
 	return t.OS == "any" && t.Architecture == "any" && t.ABI == "none"
 }
 
+func (t Target) Valid() bool {
+	return validArtifactTarget(t)
+}
+
 func (t Target) Matches(want Target) bool {
 	return t == want || t.IsUniversal()
 }
