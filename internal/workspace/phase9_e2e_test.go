@@ -76,7 +76,7 @@ func TestRegistryArtifactPrepareOfflineReplay(t *testing.T) {
 	artifactBytes := phase9NativePackageZIP(t)
 	target := catalog.Target{OS: "linux", Architecture: "x86_64", ABI: "gnu-glibc-2.28"}
 	descriptor := catalog.Artifact{
-		ID:            "engine-linux-x86_64",
+		ID:            "engine-linux-x86-64",
 		Kind:          "native-development-package",
 		Target:        target,
 		Format:        "zip",
