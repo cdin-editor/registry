@@ -316,3 +316,55 @@ func TestREG005NormalizeProductDefinitionYAMLReturnsValidatedJSON(t *testing.T) 
 		t.Fatal("Normalize() accepted duplicate JSON keys")
 	}
 }
+
+
+func TestProductDefinitionNormalizesCommonPlatformAliasesBeforeSchemaValidation(t *testing.T) {
+	validator := newTestValidator(t)
+	input := []byte(`{
+		"schema_version": "1.1.0",
+		"components": [
+			{"component_id": "runtime", "version_constraint": ">=1.0.0"}
+		],
+		"resolution": {
+			"delivery_mode": "artifact",
+			"target": {
+				"os": "MacOS",
+				"architecture": "AMD64",
+				"abi": "GNU-GLIBC-2.28"
+			}
+		}
+	}`)
+	normalized, err := validator.Normalize(ProductDefinition, input, "product.json")
+	if err != nil {
+		t.Fatalf("Normalize() rejected supported aliases: %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(normalized, &document); err != nil {
+		t.Fatal(err)
+	}
+	target := document["resolution"].(map[string]any)["target"].(map[string]any)
+	if target["os"] != "darwin" || target["architecture"] != "x86_64" || target["abi"] != "gnu-glibc-2.28" {
+		t.Fatalf("normalized target = %#v", target)
+	}
+}
+
+func TestProductDefinitionStillRejectsPartialWildcardAfterNormalization(t *testing.T) {
+	validator := newTestValidator(t)
+	input := []byte(`{
+		"schema_version": "1.1.0",
+		"components": [
+			{"component_id": "backend", "version_constraint": ">=1.0.0"}
+		],
+		"resolution": {
+			"delivery_mode": "artifact",
+			"target": {
+				"os": "linux",
+				"architecture": "any",
+				"abi": "gnu"
+			}
+		}
+	}`)
+	if _, err := validator.Normalize(ProductDefinition, input, "product.json"); err == nil {
+		t.Fatal("partial wildcard target was accepted")
+	}
+}

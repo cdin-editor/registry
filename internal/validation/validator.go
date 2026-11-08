@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cdin-editor/registry/internal/platform"
 	"github.com/cdin-editor/registry/internal/schemas"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -102,6 +103,9 @@ func (v *Validator) Normalize(kind Kind, input []byte, filename string) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("decode %s: %w", filename, err)
 	}
+	if kind == ProductDefinition {
+		normalizeProductTargetAliases(document)
+	}
 	if err := schema.Validate(document); err != nil {
 		return nil, fmt.Errorf("schema validation failed: %w", err)
 	}
@@ -110,6 +114,31 @@ func (v *Validator) Normalize(kind Kind, input []byte, filename string) ([]byte,
 		return nil, fmt.Errorf("normalize %s to JSON: %w", filename, err)
 	}
 	return normalized, nil
+}
+
+func normalizeProductTargetAliases(document any) {
+	root, ok := document.(map[string]any)
+	if !ok {
+		return
+	}
+	resolution, ok := root["resolution"].(map[string]any)
+	if !ok {
+		return
+	}
+	target, ok := resolution["target"].(map[string]any)
+	if !ok {
+		return
+	}
+	osName, osOK := target["os"].(string)
+	architecture, archOK := target["architecture"].(string)
+	abi, abiOK := target["abi"].(string)
+	if !osOK || !archOK || !abiOK {
+		return
+	}
+	osName, architecture, abi = platform.NormalizeTargetAliases(osName, architecture, abi)
+	target["os"] = osName
+	target["architecture"] = architecture
+	target["abi"] = abi
 }
 
 func decodeJSON(input []byte) (any, error) {
