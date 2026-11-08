@@ -69,14 +69,14 @@ const schemaVersion = "1.0.0"
 // Document is the public Resolved Manifest v1 data model. It is a
 // reproducibility record, not a mutable product configuration or lockfile.
 type Document struct {
-	SchemaVersion        string                    `json:"schema_version"`
-	RegistryVersion      string                    `json:"registry_version"`
+	SchemaVersion        string                     `json:"schema_version"`
+	RegistryVersion      string                     `json:"registry_version"`
 	Resolution           *resolver.ResolutionPolicy `json:"resolution,omitempty"`
-	Catalogs             []Catalog                 `json:"catalogs"`
-	Roots                []Root                    `json:"roots"`
-	EnvironmentContracts []EnvironmentContract     `json:"environment_contracts,omitempty"`
-	Components           []Component               `json:"components"`
-	ResolutionOrder      []resolver.Node           `json:"resolution_order"`
+	Catalogs             []Catalog                  `json:"catalogs"`
+	Roots                []Root                     `json:"roots"`
+	EnvironmentContracts []EnvironmentContract      `json:"environment_contracts,omitempty"`
+	Components           []Component                `json:"components"`
+	ResolutionOrder      []resolver.Node            `json:"resolution_order"`
 }
 
 // Catalog records the exact Catalog Index source bytes used for resolution.
@@ -132,7 +132,7 @@ type SourceProvenance struct {
 // SelectedArtifact is the immutable release asset plus its staged workspace path.
 type SelectedArtifact struct {
 	catalog.Artifact
-	WorkspacePath   string             `json:"workspace_path"`
+	WorkspacePath    string             `json:"workspace_path"`
 	SourceProvenance []SourceProvenance `json:"source_provenance"`
 }
 
@@ -314,7 +314,7 @@ func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, pac
 				}
 				component.SourceUnits = append(component.SourceUnits, SourceUnit{
 					SourceUnitID: source.ID, RepositoryURI: source.RepositoryURI,
-					Revision: strings.ToLower(collectedSource.Revision),
+					Revision:     strings.ToLower(collectedSource.Revision),
 					Subdirectory: source.Subdirectory, WorkspacePath: expectedPath,
 				})
 				delete(collectedByKey, key)
@@ -357,8 +357,8 @@ func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, pac
 			}
 			sort.Slice(provenance, func(i, j int) bool { return provenance[i].SourceUnitID < provenance[j].SourceUnitID })
 			component.SelectedArtifact = &SelectedArtifact{
-				Artifact: *resolved.SelectedArtifact,
-				WorkspacePath: expectedPath,
+				Artifact:         *resolved.SelectedArtifact,
+				WorkspacePath:    expectedPath,
 				SourceProvenance: provenance,
 			}
 			delete(packageByKey, key)
@@ -623,9 +623,13 @@ func validateDocument(document Document) error {
 			}
 			switch document.Resolution.DeliveryMode {
 			case "source":
-				if delivery != "source" { return fmt.Errorf("source-only Manifest contains an artifact component") }
+				if delivery != "source" {
+					return fmt.Errorf("source-only Manifest contains an artifact component")
+				}
 			case "artifact":
-				if delivery != "artifact" { return fmt.Errorf("artifact-only Manifest contains a source component") }
+				if delivery != "artifact" {
+					return fmt.Errorf("artifact-only Manifest contains a source component")
+				}
 			}
 		} else if component.Delivery != "" || component.SelectedArtifact != nil {
 			return fmt.Errorf("legacy source Manifest contains artifact delivery fields")
@@ -754,7 +758,7 @@ func validateSelectedArtifact(component Component, resolution resolver.Resolutio
 	if selected.Target != *resolution.Target && !selected.Target.IsUniversal() {
 		return fmt.Errorf("selected artifact target does not match the resolved target")
 	}
-	if err := requireStrictOrder(selected.SourceProvenance, func(a,b SourceProvenance) bool {
+	if err := requireStrictOrder(selected.SourceProvenance, func(a, b SourceProvenance) bool {
 		return a.SourceUnitID < b.SourceUnitID
 	}, "artifact source provenance"); err != nil {
 		return err
