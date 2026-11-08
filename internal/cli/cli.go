@@ -302,12 +302,32 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 		}
 		return exitInvalid
 	}
+	var artifactFetcher *catalog.HTTPFetcher
+	hasArtifacts := false
+	for _, component := range result.Graph.Components {
+		if component.Delivery == "artifact" {
+			hasArtifacts = true
+			break
+		}
+	}
+	if hasArtifacts {
+		artifactFetcher, err = catalog.NewHTTPFetcher(catalog.HTTPFetcherOptions{
+			AllowedHosts: options.allowedHosts,
+			MaxBytes:     catalog.MaxDeclaredArtifactBytes,
+		})
+		if err != nil {
+			fmt.Fprintf(stderr, "registry: configure artifact transport: %v\n", err)
+			return exitInvalid
+		}
+	}
 	prepared, err := workspace.Prepare(ctx, result, workspace.Options{
-		Destination:      options.outputPath,
-		RegistryVersion:  buildinfo.Version,
-		Git:              collector.CommandGit{},
-		RepositoryPolicy: catalogRepositoryPolicy{hosts: options.allowedHosts},
-		Validator:        validator,
+		Destination:        options.outputPath,
+		RegistryVersion:    buildinfo.Version,
+		Git:                collector.CommandGit{},
+		RepositoryPolicy:   catalogRepositoryPolicy{hosts: options.allowedHosts},
+		ArtifactDownloader: artifactFetcher,
+		ArtifactCacheDir:   options.cacheDir,
+		Validator:          validator,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "registry: prepare workspace: %v\n", err)
