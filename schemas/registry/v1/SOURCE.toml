@@ -1,7 +1,7 @@
 schema_version = 1
-contract_version = "1.2.0"
+contract_version = "1.3.0"
 repository = "cdin-editor/spec"
-revision = "0539a56e769d1bd2fdff44219175b978f662dd18"
+revision = "8e47b93e51253143fb96bf07f0ae6574c426e75e"
 schema_directory = "schemas/registry/v1"
 files = [
   "product-definition.schema.json",
