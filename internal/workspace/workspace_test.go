@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"os/exec"
@@ -242,5 +243,34 @@ func TestREG022RejectsFailedResolution(t *testing.T) {
 	}
 	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
 		t.Fatalf("failed resolution created destination: %v", err)
+	}
+}
+
+
+func TestREG022RenameFailureDoesNotPublishDestinationOrLeakStage(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	destination := filepath.Join(t.TempDir(), "prepared")
+	injected := errors.New("injected final rename failure")
+
+	_, err := prepare(context.Background(), successfulResolution(repository, revision), workspaceOptions(destination), prepareHooks{
+		rename: func(stage, final string) error {
+			if filepath.Dir(stage) != filepath.Dir(final) {
+				t.Fatalf("staging directory %q is not adjacent to destination %q", stage, final)
+			}
+			return injected
+		},
+	})
+	if !errors.Is(err, injected) {
+		t.Fatalf("prepare error = %v, want injected rename failure", err)
+	}
+	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+		t.Fatalf("failed publication left a destination: %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(destination), ".prepared.registry-stage-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("staging directories leaked after rename failure: %v", matches)
 	}
 }
