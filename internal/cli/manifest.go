@@ -23,6 +23,7 @@ type manifestCommandOptions struct {
 	allowedHosts         []string
 	cacheDir             string
 	verifyRemoteMetadata bool
+	offline              bool
 }
 
 type manifestVerifyReceipt struct {
@@ -114,22 +115,28 @@ func runManifestWithDependencies(
 		}
 	}
 
+	var document manifest.Document
+	if err := json.Unmarshal(input.data, &document); err != nil {
+		return writeManifestError(stderr, "MANIFEST_INVALID", "verified Manifest could not be decoded")
+	}
+
 	if operation == "verify" {
-		var document manifest.Document
-		if err := json.Unmarshal(input.data, &document); err != nil {
-			return writeManifestError(stderr, "MANIFEST_INVALID", "verified Manifest could not be decoded")
-		}
 		sourceCount := 0
+		artifactCount := 0
 		for _, component := range document.Components {
 			sourceCount += len(component.SourceUnits)
+			if component.Delivery == "artifact" {
+				artifactCount++
+			}
 		}
 		receipt := manifestVerifyReceipt{
-			Valid:           true,
-			SchemaVersion:   document.SchemaVersion,
-			RegistryVersion: document.RegistryVersion,
-			ManifestSHA256:  manifest.Digest(input.data),
-			Components:      len(document.Components),
-			SourceUnits:     sourceCount,
+			Valid:            true,
+			SchemaVersion:    document.SchemaVersion,
+			RegistryVersion:  document.RegistryVersion,
+			ManifestSHA256:   manifest.Digest(input.data),
+			Components:       len(document.Components),
+			SourceUnits:      sourceCount,
+			ArtifactPackages: artifactCount,
 		}
 		if err := writeJSONReceipt(stdout, receipt); err != nil {
 			return writeManifestError(stderr, "CLI_OUTPUT_WRITE_FAILED", "Manifest is valid, but the verification receipt could not be written to stdout")
@@ -140,6 +147,18 @@ func runManifestWithDependencies(
 	if git == nil {
 		return writeManifestError(stderr, "INTERNAL_ERROR", "Git runner is not configured")
 	}
+	hasArtifact, hasSource := false, false
+	for _, component := range document.Components {
+		if component.Delivery == "artifact" {
+			hasArtifact = true
+		} else {
+			hasSource = true
+		}
+	}
+	if options.offline && hasSource {
+		return writeManifestError(stderr, "OFFLINE_SOURCE_UNAVAILABLE", "offline replay requires every selected component to use a cached immutable artifact; source delivery needs Git retrieval")
+	}
+
 	replayOptions := workspace.ReplayOptions{
 		Workspace: workspace.Options{
 			Destination:      options.outputPath,
@@ -156,18 +175,28 @@ func runManifestWithDependencies(
 		}
 		replayOptions.Workspace.GitObjectCache = gitObjectCache
 	}
-	if options.verifyRemoteMetadata {
+	if hasArtifact || options.verifyRemoteMetadata {
 		if newFetcher == nil {
-			return writeManifestError(stderr, "INTERNAL_ERROR", "remote metadata fetcher is not configured")
+			return writeManifestError(stderr, "INTERNAL_ERROR", "artifact or metadata fetcher is not configured")
 		}
 		fetcher, err := newFetcher(catalog.HTTPFetcherOptions{
 			AllowedHosts: options.allowedHosts,
 			CacheDir:     options.cacheDir,
+			Offline:      options.offline,
 		})
 		if err != nil {
-			return writeManifestError(stderr, "REPLAY_METADATA_CONFIG_FAILED", "cannot configure strict metadata verification; check --allow-host and --cache-dir")
+			return writeManifestError(stderr, "REPLAY_FETCHER_CONFIG_FAILED", "cannot configure artifact or metadata retrieval; check --allow-host and --cache-dir")
 		}
-		replayOptions.MetadataFetcher = fetcher
+		if hasArtifact {
+			digestFetcher, ok := fetcher.(catalog.DigestFetcher)
+			if !ok {
+				return writeManifestError(stderr, "REPLAY_ARTIFACT_FETCHER_UNAVAILABLE", "configured transport does not support digest-bound artifact retrieval")
+			}
+			replayOptions.Workspace.ArtifactFetcher = digestFetcher
+		}
+		if options.verifyRemoteMetadata {
+			replayOptions.MetadataFetcher = fetcher
+		}
 	}
 
 	prepared, err := workspace.Replay(ctx, input.data, options.expectedSHA256, replayOptions)
@@ -216,6 +245,16 @@ func parseManifestCommandOptions(operation string, args []string) (manifestComma
 	for i := 0; i < len(args); i++ {
 		flag := args[i]
 		switch flag {
+		case "--offline":
+			if operation != "replay" {
+				return options, fmt.Errorf("--offline is supported only by replay")
+			}
+			if seen[flag] {
+				return options, fmt.Errorf("%s may be specified only once", flag)
+			}
+			seen[flag] = true
+			options.offline = true
+			continue
 		case "--verify-remote-metadata":
 			if operation != "replay" {
 				return options, fmt.Errorf("--verify-remote-metadata is supported only by replay")
@@ -290,8 +329,8 @@ func parseManifestCommandOptions(operation string, args []string) (manifestComma
 		if len(options.allowedHosts) == 0 {
 			return options, fmt.Errorf("at least one --allow-host is required for pinned Git source retrieval")
 		}
-		if options.cacheDir != "" && !options.verifyRemoteMetadata {
-			return options, fmt.Errorf("--cache-dir requires --verify-remote-metadata")
+		if options.offline && options.cacheDir == "" {
+			return options, fmt.Errorf("--offline requires --cache-dir with previously verified artifacts")
 		}
 	}
 	return options, nil

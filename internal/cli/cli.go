@@ -312,6 +312,14 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 		}
 		return exitInvalid
 	}
+	if options.offline {
+		for _, component := range result.Graph.Components {
+			if component.Delivery != "artifact" {
+				fmt.Fprintln(stderr, "registry: error[OFFLINE_SOURCE_UNAVAILABLE]: offline prepare requires every selected component to use an immutable artifact; source delivery requires Git retrieval")
+				return exitInvalid
+			}
+		}
+	}
 	var artifactFetcher artifact.DigestFetcher
 	for _, component := range result.Graph.Components {
 		if component.Delivery == "artifact" {
