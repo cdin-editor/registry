@@ -14,6 +14,16 @@ used Registry before.
 5. [Catalogs and releases](catalogs.md) — make component releases available to
    Registry.
 6. [Outputs](outputs.md) — read the prepared Workspace and its records.
+7. [Immutable artifact delivery](artifact-delivery.md) — publish and consume
+   target-specific prebuilt packages, including digest-pinned offline replay.
+(getting-started.md) — what Registry is and how to run it.
+2. [Concepts](concepts.md) — the words used by Registry and what each one means.
+3. [Using Registry](using-registry.md) — validate, resolve, and prepare a product.
+4. [Product Definition](product-definition.md) — describe the components and
+   version ranges your product needs.
+5. [Catalogs and releases](catalogs.md) — make component releases available to
+   Registry.
+6. [Outputs](outputs.md) — read the prepared Workspace and its records.
 
 ## Look up a task
 
