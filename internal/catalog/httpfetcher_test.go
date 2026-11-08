@@ -554,12 +554,110 @@ func TestHTTPFetcherOfflineModeRejectsUnpinnedFetch(t *testing.T) {
 }
 
 func TestHTTPFetcherOfflineModeRejectsDigestCacheMiss(t *testing.T) {
-	fetcher := &HTTPFetcher{offline: true}
+	fetcher, err := NewHTTPFetcher(HTTPFetcherOptions{
+		AllowedHosts: []string{"catalog.example.invalid"},
+		Offline: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := fetcher.FetchWithDigest(
 		context.Background(),
 		"https://catalog.example.invalid/release.json",
 		strings.Repeat("a", 64),
 	); err == nil || !strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
 		t.Fatalf("offline digest fetch error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+}
+
+func TestHTTPFetcherOfflineArtifactCacheUsesFullIdentity(t *testing.T) {
+	const payload = "immutable runtime archive bytes"
+	cacheDir := t.TempDir()
+	descriptor := Artifact{
+		ID: "runtime-lua-modules",
+		Kind: "runtime-module-archive",
+		Target: Target{OS: "any", Architecture: "any", ABI: "none"},
+		Format: "tar.gz",
+		FileName: "runtime.tar.gz",
+		URI: "https://catalog.example.invalid/runtime.tar.gz",
+		SHA256: expectedDigest(payload),
+		SizeBytes: int64(len(payload)),
+		Layout: "lua-module-tree-v1",
+		SourceUnitIDs: []string{"runtime-source"},
+		Build: ArtifactBuild{
+			Recipe: ArtifactRecipe{SourceUnitID: "runtime-source", Path: "scripts/package.sh"},
+			Toolchain: []ToolchainEntry{{Name: "tar", Version: "1.35"}},
+		},
+	}
+	releaseSHA := expectedDigest("runtime-release-metadata")
+	online := testHTTPFetcher(t, func(*http.Request) (*http.Response, error) {
+		return httpResponse(http.StatusOK, payload, int64(len(payload))), nil
+	}, 1<<20, cacheDir)
+	got, err := online.FetchArtifact(context.Background(), releaseSHA, descriptor)
+	if err != nil || string(got) != payload {
+		t.Fatalf("online FetchArtifact = %q, %v", got, err)
+	}
+
+	offline, err := NewHTTPFetcher(HTTPFetcherOptions{
+		AllowedHosts: []string{"catalog.example.invalid"},
+		CacheDir: cacheDir,
+		Offline: true,
+		MaxBytes: 1 << 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = offline.FetchArtifact(context.Background(), releaseSHA, descriptor)
+	if err != nil || string(got) != payload {
+		t.Fatalf("offline FetchArtifact = %q, %v", got, err)
+	}
+
+	changed := descriptor
+	changed.ID = "runtime-other-artifact"
+	if _, err := offline.FetchArtifact(context.Background(), releaseSHA, changed); err == nil ||
+		!strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("changed artifact identity error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+	changed = descriptor
+	changed.Target = Target{OS: "linux", Architecture: "x86_64", ABI: "gnu-glibc-2.28"}
+	if _, err := offline.FetchArtifact(context.Background(), releaseSHA, changed); err == nil ||
+		!strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("changed target identity error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+	changed = descriptor
+	if _, err := offline.FetchArtifact(context.Background(), expectedDigest("different-release"), changed); err == nil ||
+		!strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("changed release identity error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+}
+
+func TestHTTPFetcherArtifactCacheHitStillChecksAllowedHost(t *testing.T) {
+	const payload = "immutable runtime archive bytes"
+	descriptor := Artifact{
+		ID: "runtime-lua-modules",
+		Kind: "runtime-module-archive",
+		Target: Target{OS: "any", Architecture: "any", ABI: "none"},
+		Format: "tar.gz",
+		FileName: "runtime.tar.gz",
+		URI: "https://evil.example.invalid/runtime.tar.gz",
+		SHA256: expectedDigest(payload),
+		SizeBytes: int64(len(payload)),
+		Layout: "lua-module-tree-v1",
+		SourceUnitIDs: []string{"runtime-source"},
+		Build: ArtifactBuild{
+			Recipe: ArtifactRecipe{SourceUnitID: "runtime-source", Path: "scripts/package.sh"},
+			Toolchain: []ToolchainEntry{{Name: "tar", Version: "1.35"}},
+		},
+	}
+	offline, err := NewHTTPFetcher(HTTPFetcherOptions{
+		AllowedHosts: []string{"catalog.example.invalid"},
+		Offline: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := offline.FetchArtifact(context.Background(), expectedDigest("release"), descriptor); err == nil ||
+		!strings.Contains(err.Error(), "ARTIFACT_HOST_REJECTED") {
+		t.Fatalf("unapproved cached URI error = %v, want ARTIFACT_HOST_REJECTED", err)
 	}
 }
