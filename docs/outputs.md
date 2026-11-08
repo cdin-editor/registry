@@ -15,7 +15,6 @@ Registry copies declared source files and extracts regular files/directories
 from digest-verified package archives. It does not compile components, run
 build scripts or install component dependencies.
 
-
 Use the Workspace as input to the next step of the CDIN build process.
 
 ## Resolved Manifest
@@ -30,7 +29,6 @@ It records:
 - selected artifact identity, target, kind, format, layout, URI, size and SHA-256;
 - the Workspace-relative path and source provenance for every artifact package;
 - the resolved dependency and contract information.
-
 
 The Manifest lets a later operation verify the recorded selection without
 asking the Resolver to choose versions again.
