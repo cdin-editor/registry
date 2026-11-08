@@ -631,6 +631,91 @@ func TestHTTPFetcherOfflineArtifactCacheUsesFullIdentity(t *testing.T) {
 	}
 }
 
+func TestHTTPFetcherConcurrentArtifactCachePreservesFullIdentity(t *testing.T) {
+	const workerCount = 16
+	const payload = "immutable native package bytes"
+	const releaseMetadata = "immutable component release metadata"
+	cacheDir := t.TempDir()
+	var mu sync.Mutex
+	requests := 0
+	fetcher := testHTTPFetcher(t, func(*http.Request) (*http.Response, error) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		return httpResponse(http.StatusOK, payload, int64(len(payload))), nil
+	}, 1<<20, cacheDir)
+	descriptor := Artifact{
+		ID:            "backend-linux-x86-64",
+		Kind:          "native-development-package",
+		Target:        Target{OS: "linux", Architecture: "x86_64", ABI: "gnu-glibc-2.28"},
+		Format:        "zip",
+		FileName:      "backend-linux-x86-64.zip",
+		URI:           "https://catalog.example.invalid/backend-linux-x86-64.zip",
+		SHA256:        expectedDigest(payload),
+		SizeBytes:     int64(len(payload)),
+		Layout:        "cmake-prefix-v1",
+		SourceUnitIDs: []string{"backend"},
+		Build: ArtifactBuild{
+			Recipe:    ArtifactRecipe{SourceUnitID: "backend", Path: "CMakeLists.txt"},
+			Toolchain: []ToolchainEntry{{Name: "CMake", Version: "3.30.0"}},
+			Runner:    "ubuntu-24.04",
+		},
+	}
+	releaseSHA := expectedDigest(releaseMetadata)
+	fetchAll := func() {
+		t.Helper()
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		errs := make(chan error, workerCount)
+		workers.Add(workerCount)
+		for i := 0; i < workerCount; i++ {
+			go func() {
+				defer workers.Done()
+				<-start
+				data, err := fetcher.FetchArtifact(context.Background(), releaseSHA, descriptor)
+				if err != nil {
+					errs <- err
+					return
+				}
+				if string(data) != payload {
+					errs <- errors.New("concurrent FetchArtifact returned bytes that differ from the expected package")
+				}
+			}()
+		}
+		close(start)
+		workers.Wait()
+		close(errs)
+		for err := range errs {
+			t.Error(err)
+		}
+	}
+
+	fetchAll()
+	cacheKey, err := ArtifactCacheKey(releaseSHA, descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath := fetcher.cachePathForKey(cacheKey)
+	if err := os.WriteFile(cachePath, []byte("corrupt-artifact-cache"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fetchAll()
+
+	data, err := fetcher.FetchArtifact(context.Background(), releaseSHA, descriptor)
+	if err != nil || string(data) != payload {
+		t.Fatalf("FetchArtifact after concurrent cache repair = %q, %v", data, err)
+	}
+	cached, ok := fetcher.readCache(cachePath, descriptor.SHA256)
+	if !ok || string(cached) != payload {
+		t.Fatalf("final artifact cache entry is not verified: ok=%v bytes=%q", ok, cached)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests < 1 || requests > workerCount*2+1 {
+		t.Fatalf("artifact network request count = %d, outside bounded concurrent waves", requests)
+	}
+}
+
 func TestHTTPFetcherArtifactCacheHitStillChecksAllowedHost(t *testing.T) {
 	const payload = "immutable runtime archive bytes"
 	descriptor := Artifact{
