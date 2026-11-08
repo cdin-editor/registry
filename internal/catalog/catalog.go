@@ -109,6 +109,7 @@ type Release struct {
 	SourceUnits   []SourceUnit `json:"source_units"`
 	Dependencies  []Dependency `json:"dependencies"`
 	Contracts     Contracts    `json:"contracts"`
+	Artifacts     []Artifact   `json:"artifacts,omitempty"`
 	Raw           []byte       `json:"-"`
 	MetadataURI   string       `json:"-"`
 	MetadataSHA   string       `json:"-"`
@@ -278,6 +279,9 @@ func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, va
 		release.Raw = append([]byte(nil), payload...)
 		release.MetadataURI = entry.MetadataURI
 		release.MetadataSHA = actual
+		if err := ValidateReleaseArtifacts(release); err != nil {
+			return err
+		}
 
 		if prior, ok := seen[key]; ok {
 			if prior.MetadataSHA != release.MetadataSHA {
