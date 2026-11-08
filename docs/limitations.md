@@ -40,7 +40,6 @@ release metadata. It does not identify or authenticate the publisher.
 Attestation references are recorded but are not cryptographically verified by
 this implementation.
 
-
 Registry validates documents against the embedded public schemas, checks the
 SHA-256 digest of release metadata before parsing it, verifies release
 identities, and requires full Git commit IDs.
