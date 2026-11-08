@@ -148,6 +148,50 @@ func TestExtractTarGzipRejectsPrivilegedModeAndLinks(t *testing.T) {
 	}
 }
 
+func TestExtractTarGzipValidatesChecksumTrailer(t *testing.T) {
+	data := tarGzipBytes(t, struct {
+		name string
+		kind byte
+		mode int64
+		body string
+	}{name: "include/api.h", kind: tar.TypeReg, mode: 0o644, body: "payload"})
+	// The gzip trailer starts with the CRC32, followed by ISIZE.
+	data[len(data)-8] ^= 0xff
+	if err := Extract(data, "tar.gz", t.TempDir(), Limits{}); err == nil {
+		t.Fatal("corrupt gzip checksum trailer was accepted")
+	}
+}
+
+func TestExtractTarGzipRejectsPAXPathTraversal(t *testing.T) {
+	var buffer bytes.Buffer
+	gz := gzip.NewWriter(&buffer)
+	writer := tar.NewWriter(gz)
+	header := &tar.Header{
+		Name:       "safe.txt",
+		Typeflag:   tar.TypeReg,
+		Mode:       0o644,
+		Size:       int64(len("payload")),
+		Format:     tar.FormatPAX,
+		PAXRecords: map[string]string{"path": "../escape"},
+	}
+	if err := writer.WriteHeader(header); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write([]byte("payload")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Extract(buffer.Bytes(), "tar.gz", t.TempDir(), Limits{}); err == nil {
+		t.Fatal("PAX path traversal override was accepted")
+	}
+}
+
 func TestExtractRejectsTraversalAndCollisions(t *testing.T) {
 	tests := []struct {
 		name    string
