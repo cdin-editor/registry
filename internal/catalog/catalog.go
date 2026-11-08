@@ -107,6 +107,7 @@ type Release struct {
 	Version       string       `json:"version"`
 	Status        string       `json:"status"`
 	SourceUnits   []SourceUnit `json:"source_units"`
+	Artifacts     []Artifact   `json:"artifacts,omitempty"`
 	Dependencies  []Dependency `json:"dependencies"`
 	Contracts     Contracts    `json:"contracts"`
 	Raw           []byte       `json:"-"`
@@ -271,6 +272,9 @@ func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, va
 		}
 		if release.Variant == "" {
 			release.Variant = "default"
+		}
+		if err := ValidateReleaseArtifacts(release.SourceUnits, release.Artifacts); err != nil {
+			return fmt.Errorf("catalog: validate artifacts for %s/%s@%s: %w", key.component, key.variant, key.version, err)
 		}
 		if release.ComponentID != key.component || release.Variant != key.variant || release.Version != key.version {
 			return fmt.Errorf("catalog: index identity does not match release metadata for %s/%s@%s", key.component, key.variant, key.version)
