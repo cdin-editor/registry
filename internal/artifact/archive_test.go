@@ -399,6 +399,66 @@ func TestExtractHonorsEntryAndExpandedLimits(t *testing.T) {
 	}
 }
 
+func TestExtractRejectsHighCompressionArchiveBombs(t *testing.T) {
+	const expandedBytes = 1 << 20
+	payload := strings.Repeat("x", expandedBytes)
+
+	buildZIP := func() []byte {
+		var buffer bytes.Buffer
+		writer := zip.NewWriter(&buffer)
+		entry, err := writer.CreateHeader(&zip.FileHeader{Name: "payload.bin", Method: zip.Deflate})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return buffer.Bytes()
+	}
+	buildTARGZ := func() []byte {
+		return tarGzipBytes(t, struct {
+			name string
+			kind byte
+			mode int64
+			body string
+		}{name: "payload.bin", kind: tar.TypeReg, mode: 0o644, body: payload})
+	}
+
+	for _, test := range []struct {
+		format string
+		build  func() []byte
+	}{
+		{format: "zip", build: buildZIP},
+		{format: "tar.gz", build: buildTARGZ},
+	} {
+		t.Run(test.format, func(t *testing.T) {
+			data := test.build()
+			if len(data) >= 16<<10 {
+				t.Fatalf("fixture is not highly compressed: compressed=%d expanded=%d", len(data), expandedBytes)
+			}
+
+			destination := filepath.Join(t.TempDir(), "stage")
+			if err := os.Mkdir(destination, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			err := Extract(data, test.format, destination, Limits{
+				MaxCompressedBytes: 16 << 10,
+				MaxExpandedBytes:   64 << 10,
+			})
+			if err == nil || !strings.Contains(err.Error(), "ARTIFACT_LIMIT_EXCEEDED") {
+				t.Fatalf("high-compression archive error = %v, want ARTIFACT_LIMIT_EXCEEDED", err)
+			}
+			if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+				t.Fatalf("rejected archive left a partial staging directory: %v", err)
+			}
+		})
+	}
+}
+
+
 type fakeDigestFetcher struct {
 	data []byte
 }
