@@ -82,11 +82,11 @@ func Extract(data []byte, format, destination string, limits Limits) error {
 	}
 
 	x := &extractor{
-		root:  destination,
+		root:   destination,
 		limits: limits,
-		seen:  make(map[string]string),
-		names: make(map[string]string),
-		kinds: make(map[string]entryKind),
+		seen:   make(map[string]string),
+		names:  make(map[string]string),
+		kinds:  make(map[string]entryKind),
 	}
 	switch format {
 	case "tar.gz":
