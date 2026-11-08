@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -136,6 +137,9 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		Components:           make([]resolver.ResolvedComponent, 0, len(document.Components)),
 		ResolutionOrder:      append([]resolver.Node(nil), document.ResolutionOrder...),
 	}
+	if document.Resolution != nil {
+		graph.Resolution = *document.Resolution
+	}
 	for _, item := range document.Catalogs {
 		graph.Catalogs = append(graph.Catalogs, resolver.CatalogReference{
 			CatalogID: item.CatalogID, MetadataURI: item.MetadataURI, MetadataSHA: item.MetadataSHA,
@@ -161,7 +165,7 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		Conflicts:          []resolver.Conflict{},
 		Warnings: []resolver.Warning{{
 			Code:    "MANIFEST_REPLAY_PINNED",
-			Message: "Replayed the exact selected versions and source commits from the verified Manifest; version selection was not rerun.",
+			Message: "Replayed the exact selected versions, source commits and immutable package artifacts from the verified Manifest; version and artifact selection were not rerun.",
 		}},
 	}
 	for _, item := range document.Components {
@@ -171,15 +175,30 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 			Version:            item.Version,
 			ReleaseMetadataURI: item.ReleaseMetadataURI,
 			ReleaseMetadataSHA: item.ReleaseMetadataSHA,
+			Delivery:           item.Delivery,
 			SourceUnits:        make([]catalog.SourceUnit, 0, len(item.SourceUnits)),
 			Dependencies:       make([]resolver.ResolvedDependency, 0, len(item.Dependencies)),
 			Contracts:          item.Contracts,
 		}
-		for _, source := range item.SourceUnits {
-			component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
-				ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
-				Revision: source.Revision, Subdirectory: source.Subdirectory,
-			})
+		if item.Delivery == "artifact" {
+			if item.SelectedArtifact == nil {
+				return resolver.Result{}, fmt.Errorf("artifact component is missing its selected artifact descriptor")
+			}
+			selected := item.SelectedArtifact.Artifact
+			component.SelectedArtifact = &selected
+			for _, source := range item.SelectedArtifact.SourceProvenance {
+				component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
+					ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+					Revision: source.Revision, Subdirectory: source.Subdirectory,
+				})
+			}
+		} else {
+			for _, source := range item.SourceUnits {
+				component.SourceUnits = append(component.SourceUnits, catalog.SourceUnit{
+					ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+					Revision: source.Revision, Subdirectory: source.Subdirectory,
+				})
+			}
 		}
 		for _, dependency := range item.Dependencies {
 			component.Dependencies = append(component.Dependencies, resolver.ResolvedDependency{
@@ -289,6 +308,9 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 		if release.ComponentID != component.ComponentID || release.Variant != component.Variant || release.Version != component.Version {
 			return fmt.Errorf("workspace: replay release identity mismatch")
 		}
+		if err := catalog.ValidateReleaseArtifacts(release.SourceUnits, release.Artifacts); err != nil {
+			return fmt.Errorf("workspace: replay release artifact metadata is invalid")
+		}
 		if err := compareReplayRelease(component, release, selected); err != nil {
 			return err
 		}
@@ -322,17 +344,46 @@ func fetchReplayBytes(ctx context.Context, fetcher catalog.Fetcher, uri, expecte
 }
 
 func compareReplayRelease(component manifest.Component, release catalog.Release, selected map[replayReleaseIdentity]manifest.Component) error {
-	if len(release.SourceUnits) != len(component.SourceUnits) {
-		return fmt.Errorf("workspace: replay source-unit set mismatch")
+	manifestSources := make(map[string]manifest.SourceProvenance)
+	if component.Delivery == "artifact" {
+		if component.SelectedArtifact == nil {
+			return fmt.Errorf("workspace: replay artifact descriptor is missing")
+		}
+		for _, source := range component.SelectedArtifact.SourceProvenance {
+			manifestSources[source.SourceUnitID] = source
+		}
+		artifactMatches := 0
+		for _, candidate := range release.Artifacts {
+			if candidate.ID == component.SelectedArtifact.ID {
+				artifactMatches++
+				if !reflect.DeepEqual(candidate, component.SelectedArtifact.Artifact) {
+					return fmt.Errorf("workspace: replay selected artifact descriptor differs from release metadata")
+				}
+			}
+		}
+		if artifactMatches != 1 {
+			return fmt.Errorf("workspace: replay selected artifact identity is absent or ambiguous in release metadata")
+		}
+	} else {
+		if len(release.SourceUnits) != len(component.SourceUnits) {
+			return fmt.Errorf("workspace: replay source-unit set mismatch")
+		}
+		for _, source := range component.SourceUnits {
+			manifestSources[source.ID] = manifest.SourceProvenance{
+				SourceUnitID: source.ID, RepositoryURI: source.RepositoryURI,
+				Revision: source.Revision, Subdirectory: source.Subdirectory,
+			}
+		}
 	}
-	manifestSources := make(map[string]manifest.SourceUnit, len(component.SourceUnits))
-	for _, source := range component.SourceUnits {
-		manifestSources[source.SourceUnitID] = source
-	}
-	seenSources := make(map[string]struct{}, len(release.SourceUnits))
+	seenSources := make(map[string]struct{}, len(manifestSources))
 	for _, source := range release.SourceUnits {
 		recorded, ok := manifestSources[source.ID]
 		if !ok {
+			// Artifact manifests intentionally retain only source units used by
+			// the selected package, not every auxiliary release source unit.
+			if component.Delivery == "artifact" {
+				continue
+			}
 			return fmt.Errorf("workspace: replay source-unit identity mismatch")
 		}
 		if _, duplicate := seenSources[source.ID]; duplicate {
@@ -344,6 +395,9 @@ func compareReplayRelease(component manifest.Component, release catalog.Release,
 			recorded.Subdirectory != source.Subdirectory {
 			return fmt.Errorf("workspace: replay source-unit provenance mismatch")
 		}
+	}
+	if len(seenSources) != len(manifestSources) {
+		return fmt.Errorf("workspace: replay artifact source provenance is absent from release metadata")
 	}
 
 	if len(release.Dependencies) != len(component.Dependencies) {
