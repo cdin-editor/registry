@@ -8,6 +8,9 @@ WSL launcher (C:\\Windows\\System32\\bash.exe) rather than Git Bash.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -15,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -156,17 +160,33 @@ def check_boundaries() -> None:
     print("Package and consumer-independence boundaries: OK")
 
 
-def fetch_schema(url: str, destination: Path) -> None:
+def fetch_schema(repository: str, blob_sha: str, destination: Path) -> None:
+    if not re.fullmatch(r"[0-9a-f]{40}", blob_sha):
+        raise SystemExit(f"Invalid pinned Spec schema Git blob SHA: {blob_sha!r}")
+    url = f"https://api.github.com/repos/{repository}/git/blobs/{blob_sha}"
     request = urllib.request.Request(
-        url, headers={"User-Agent": "cdin-registry-schema-check"}
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "cdin-registry-schema-check",
+        },
     )
     last_error: Exception | None = None
     for attempt in range(3):
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
-                destination.write_bytes(response.read())
+                blob = json.loads(response.read().decode("utf-8"))
+            if blob.get("sha") != blob_sha or blob.get("encoding") != "base64":
+                raise ValueError("GitHub returned a different or unsupported schema blob")
+            encoded = "".join(str(blob.get("content", "")).split())
+            payload = base64.b64decode(encoded, validate=True)
+            git_object = b"blob " + str(len(payload)).encode("ascii") + b"\\0" + payload
+            actual_sha = hashlib.sha1(git_object).hexdigest()
+            if actual_sha != blob_sha:
+                raise ValueError("Downloaded schema content does not match its pinned Git blob SHA")
+            destination.write_bytes(payload)
             return
-        except (OSError, urllib.error.URLError) as exc:
+        except (OSError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
             last_error = exc
             if attempt < 2:
                 time.sleep(attempt + 1)
@@ -180,11 +200,13 @@ def sync_schemas(mode: str) -> None:
     embedded = ROOT / "internal/schemas/registry/v1"
     if not source.is_file():
         raise SystemExit(f"Missing schema source lock: {source}")
-    lock = source.read_text(encoding="utf-8")
-    repository_match = re.search(r'^repository = "([^"]+)"$', lock, re.M)
-    revision_match = re.search(r'^revision = "([^"]+)"$', lock, re.M)
-    repository = repository_match.group(1) if repository_match else ""
-    revision = revision_match.group(1) if revision_match else ""
+    try:
+        lock = tomllib.loads(source.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise SystemExit(f"Invalid schema source lock: {exc}") from exc
+
+    repository = lock.get("repository", "")
+    revision = lock.get("revision", "")
     if repository != "cdin-editor/spec" or not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise SystemExit(
             "Invalid schema source lock; expected cdin-editor/spec and a full commit SHA."
@@ -197,16 +219,22 @@ def sync_schemas(mode: str) -> None:
         "resolution-report.schema.json",
         "update-discovery-report.schema.json",
     )
+    schema_blobs = lock.get("schema_blobs", [])
+    if not isinstance(schema_blobs, list):
+        raise SystemExit("Invalid schema source lock; schema_blobs must be an array.")
+    pinned = {
+        item.get("name"): item.get("blob_sha")
+        for item in schema_blobs
+        if isinstance(item, dict)
+    }
+    if len(pinned) != len(schema_blobs) or set(pinned) != set(names):
+        raise SystemExit("Invalid schema source lock; every Registry schema must have one pinned Git blob SHA.")
     embedded.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="registry-schemas-") as temporary:
         temp = Path(temporary)
         for name in names:
-            url = (
-                f"https://raw.githubusercontent.com/{repository}/{revision}/"
-                f"schemas/registry/v1/{name}"
-            )
             downloaded = temp / name
-            fetch_schema(url, downloaded)
+            fetch_schema(repository, pinned[name], downloaded)
             subprocess.run(
                 [sys.executable, "-m", "json.tool", str(downloaded)],
                 cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
@@ -219,7 +247,7 @@ def sync_schemas(mode: str) -> None:
                     if not local_copy.is_file() or local_copy.read_bytes() != downloaded.read_bytes():
                         print(f"Schema drift detected: {local_copy}", file=sys.stderr)
                         print(
-                            "Update the Spec first, advance SOURCE.toml to the accepted Spec commit, "
+                            "Update the Spec first, advance SOURCE.toml and the blob pins, "
                             "then run --update.",
                             file=sys.stderr,
                         )
@@ -229,7 +257,7 @@ def sync_schemas(mode: str) -> None:
                                 cwd=ROOT,
                             )
                         raise SystemExit(1)
-    print(f"Registry v1 schemas and embedded copies match {repository}@{revision}")
+    print(f"Registry v1 schemas and embedded copies match {repository}@{revision} (Git blob-pinned)")
 
 
 def release_build() -> None:
