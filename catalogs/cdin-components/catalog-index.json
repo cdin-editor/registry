@@ -25,6 +25,13 @@
     },
     {
       "component_id": "frontend",
+      "variant": "gui-sdl",
+      "version": "1.0.2",
+      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/5bbeac3e3301d34fc7ad7041dc8b369992cc8462/registry/releases/frontend-gui-sdl-1.0.2.json",
+      "metadata_sha256": "0a40cc1f6d46127282c0b26c3af60d5c688a26ede41db3d3c8c9e75270bff088"
+    },
+    {
+      "component_id": "frontend",
       "variant": "tui",
       "version": "1.0.0",
       "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/7ad6f29912d6b60efa8420d14b55787e05ed2769/registry/releases/frontend-tui-1.0.0.json",
@@ -36,6 +43,13 @@
       "version": "1.0.1",
       "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/c4b0019a66f89ca63d97f158c0afbaf22f1c2359/registry/releases/frontend-tui-1.0.1.json",
       "metadata_sha256": "da045f62089df07e1b2335777354e461a2cdef413110bdea2e4842a6964ebf01"
+    },
+    {
+      "component_id": "frontend",
+      "variant": "tui",
+      "version": "1.0.2",
+      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/5bbeac3e3301d34fc7ad7041dc8b369992cc8462/registry/releases/frontend-tui-1.0.2.json",
+      "metadata_sha256": "b5f33bce95723fae6bf6ae5a1052c8f273aa85e4b69487942ff517e1d04b89bf"
     },
     {
       "component_id": "kernel",
