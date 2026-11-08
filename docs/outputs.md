@@ -5,12 +5,16 @@ important JSON documents into it.
 
 ## Workspace
 
-The Workspace contains the source units for the selected releases. Each source
-unit is placed under a stable path derived from its component, variant, and
-source-unit IDs.
+The Workspace contains source units, verified artifact package directories, or
+both. Source units are placed under
+`components/<component>/<variant>/sources/<source-unit-id>/`. An artifact
+package is placed under
+`components/<component>/<variant>/package/`.
 
-Registry copies the declared source files. It does not compile them, run their
-build scripts, install their dependencies, or launch the product.
+Registry copies declared source files and extracts regular files/directories
+from digest-verified package archives. It does not compile components, run
+build scripts or install component dependencies.
+
 
 Use the Workspace as input to the next step of the CDIN build process.
 
