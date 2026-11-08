@@ -68,7 +68,6 @@ Required options:
 
 Resolve prints a JSON Resolution Report. It does not collect Git source.
 
-
 ## Prepare
 
 ```sh
@@ -94,7 +93,6 @@ Catalog Index and warm the cache during an earlier online prepare.
 
 It prints a JSON receipt with paths and digests for the Workspace, Manifest,
 and Report.
-
 
 ## Manifest commands
 
@@ -137,7 +135,6 @@ requires `--cache-dir` and an artifact-only Manifest whose exact packages are
 already cached; source-delivered components require Git retrieval and are
 rejected in this mode.
 
-
 ### Discover available updates
 
 ```sh
@@ -169,7 +166,6 @@ historical Manifest. If `--report` is used, the file must not already exist.
 
 A pin retains the Catalog/release metadata and package assets,
 plus Git objects referenced by a verified Manifest.
-
 
 ### Release a pin
 
