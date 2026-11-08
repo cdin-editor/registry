@@ -15,6 +15,8 @@ import (
 	"github.com/cdin-editor/registry/internal/catalog"
 )
 
+const validReleaseMetadataSHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
 func zipBytes(t *testing.T, names ...string) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
@@ -215,7 +217,7 @@ func TestMaterializeChecksSizeAndDigestBeforeExtraction(t *testing.T) {
 
 	descriptor.SizeBytes++
 	root = t.TempDir()
-	if err := Materialize(context.Background(), fakeDigestFetcher{data: data}, descriptor, root, Limits{}); err == nil {
+	if err := Materialize(context.Background(), fakeDigestFetcher{data: data}, validReleaseMetadataSHA, descriptor, root, Limits{}); err == nil {
 		t.Fatal("size mismatch accepted")
 	}
 }
