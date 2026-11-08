@@ -600,9 +600,9 @@ func TestHTTPFetcherOfflineArtifactCacheUsesFullIdentity(t *testing.T) {
 
 	offline, err := NewHTTPFetcher(HTTPFetcherOptions{
 		AllowedHosts: []string{"catalog.example.invalid"},
-		CacheDir: cacheDir,
-		Offline:  true,
-		MaxBytes: 1 << 20,
+		CacheDir:     cacheDir,
+		Offline:      true,
+		MaxBytes:     1 << 20,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -651,7 +651,7 @@ func TestHTTPFetcherArtifactCacheHitStillChecksAllowedHost(t *testing.T) {
 	}
 	offline, err := NewHTTPFetcher(HTTPFetcherOptions{
 		AllowedHosts: []string{"catalog.example.invalid"},
-		Offline: true,
+		Offline:      true,
 	})
 	if err != nil {
 		t.Fatal(err)
