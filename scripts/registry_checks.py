@@ -160,6 +160,48 @@ def check_boundaries() -> None:
     print("Package and consumer-independence boundaries: OK")
 
 
+def verify_schema_tree(repository: str, tree_sha: str, pinned: dict[str, str]) -> None:
+    if not re.fullmatch(r"[0-9a-f]{40}", tree_sha):
+        raise SystemExit(f"Invalid pinned Spec schema tree SHA: {tree_sha!r}")
+    url = f"https://api.github.com/repos/{repository}/git/trees/{tree_sha}?recursive=1"
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "cdin-registry-schema-check",
+        },
+    )
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                tree = json.loads(response.read().decode("utf-8"))
+            if tree.get("sha") != tree_sha or tree.get("truncated") is True:
+                raise ValueError("GitHub returned a different or truncated Spec schema tree")
+            expected = {
+                f"schemas/registry/v1/{name}": blob_sha
+                for name, blob_sha in pinned.items()
+            }
+            actual = {
+                entry.get("path"): entry
+                for entry in tree.get("tree", [])
+                if entry.get("path") in expected
+            }
+            if set(actual) != set(expected):
+                raise ValueError("Pinned Spec schema tree is missing one or more schema paths")
+            for path, blob_sha in expected.items():
+                entry = actual[path]
+                if entry.get("type") != "blob" or entry.get("sha") != blob_sha:
+                    raise ValueError(f"Spec schema tree identity mismatch for {path}")
+            return
+        except (OSError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(attempt + 1)
+    assert last_error is not None
+    raise last_error
+
+
 def fetch_schema(repository: str, blob_sha: str, destination: Path) -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", blob_sha):
         raise SystemExit(f"Invalid pinned Spec schema Git blob SHA: {blob_sha!r}")
@@ -207,10 +249,13 @@ def sync_schemas(mode: str) -> None:
 
     repository = lock.get("repository", "")
     revision = lock.get("revision", "")
+    tree_sha = lock.get("tree_sha", "")
     if repository != "cdin-editor/spec" or not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise SystemExit(
             "Invalid schema source lock; expected cdin-editor/spec and a full commit SHA."
         )
+    if not re.fullmatch(r"[0-9a-f]{40}", tree_sha):
+        raise SystemExit("Invalid schema source lock; expected a full immutable Git tree SHA.")
     names = (
         "product-definition.schema.json",
         "catalog-index.schema.json",
@@ -229,6 +274,7 @@ def sync_schemas(mode: str) -> None:
     }
     if len(pinned) != len(schema_blobs) or set(pinned) != set(names):
         raise SystemExit("Invalid schema source lock; every Registry schema must have one pinned Git blob SHA.")
+    verify_schema_tree(repository, tree_sha, pinned)
     embedded.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="registry-schemas-") as temporary:
         temp = Path(temporary)
@@ -257,7 +303,7 @@ def sync_schemas(mode: str) -> None:
                                 cwd=ROOT,
                             )
                         raise SystemExit(1)
-    print(f"Registry v1 schemas and embedded copies match {repository}@{revision} (Git blob-pinned)")
+    print(f"Registry v1 schemas and embedded copies match {repository}@{revision} (tree and Git blob-pinned)")
 
 
 def release_build() -> None:

@@ -2,6 +2,7 @@ schema_version = 1
 contract_version = "1.3.0"
 repository = "cdin-editor/spec"
 revision = "42ba5edf3f26069e8dbe1fb38b70bcddd2687a2e"
+tree_sha = "524e27fd3529de7083c11385bfae8252d498d9b2"
 schema_directory = "schemas/registry/v1"
 files = [
   "product-definition.schema.json",
