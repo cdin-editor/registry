@@ -78,7 +78,6 @@ type Document struct {
 	Components           []Component               `json:"components"`
 	ResolutionOrder      []resolver.Node           `json:"resolution_order"`
 }
-}
 
 // Catalog records the exact Catalog Index source bytes used for resolution.
 type Catalog struct {
@@ -135,7 +134,6 @@ type SelectedArtifact struct {
 	catalog.Artifact
 	WorkspacePath   string             `json:"workspace_path"`
 	SourceProvenance []SourceProvenance `json:"source_provenance"`
-}
 }
 
 // SourceUnit records the verified full Git commit and deterministic workspace path.
@@ -531,8 +529,27 @@ func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.
 }
 
 func validateDocument(document Document) error {
-	if document.SchemaVersion != schemaVersion {
+	if document.SchemaVersion != schemaVersion && document.SchemaVersion != "1.1.0" {
 		return fmt.Errorf("unsupported Manifest schema version %q", document.SchemaVersion)
+	}
+	artifactManifest := document.SchemaVersion == "1.1.0"
+	if artifactManifest {
+		if document.Resolution == nil {
+			return fmt.Errorf("artifact Manifest is missing its resolution policy")
+		}
+		mode := document.Resolution.DeliveryMode
+		if mode != "source" && mode != "artifact" && mode != "artifact-or-source" {
+			return fmt.Errorf("artifact Manifest has an invalid delivery mode")
+		}
+		if mode != "source" {
+			if document.Resolution.Target == nil || document.Resolution.Target.Validate() != nil || document.Resolution.Target.IsUniversal() {
+				return fmt.Errorf("artifact Manifest has an invalid target tuple")
+			}
+		} else if document.Resolution.Target != nil && document.Resolution.Target.Validate() != nil {
+			return fmt.Errorf("source Manifest has an invalid optional target tuple")
+		}
+	} else if document.Resolution != nil {
+		return fmt.Errorf("legacy source Manifest cannot contain a delivery policy")
 	}
 	if _, err := semver.Parse(document.RegistryVersion); err != nil {
 		return fmt.Errorf("invalid Registry version: %w", err)
@@ -598,13 +615,41 @@ func validateDocument(document Document) error {
 		if err := validateMetadataURI(component.ReleaseMetadataURI); err != nil {
 			return fmt.Errorf("component %s/%s release metadata URI: %w", component.ComponentID, component.Variant, err)
 		}
-		if len(component.SourceUnits) == 0 {
-			return fmt.Errorf("component %s/%s has no source units", component.ComponentID, component.Variant)
+		delivery := "source"
+		if artifactManifest {
+			delivery = component.Delivery
+			if delivery != "source" && delivery != "artifact" {
+				return fmt.Errorf("component %s/%s has invalid delivery mode", component.ComponentID, component.Variant)
+			}
+			switch document.Resolution.DeliveryMode {
+			case "source":
+				if delivery != "source" { return fmt.Errorf("source-only Manifest contains an artifact component") }
+			case "artifact":
+				if delivery != "artifact" { return fmt.Errorf("artifact-only Manifest contains a source component") }
+			}
+		} else if component.Delivery != "" || component.SelectedArtifact != nil {
+			return fmt.Errorf("legacy source Manifest contains artifact delivery fields")
 		}
-		if err := requireStrictOrder(component.SourceUnits, func(a, b SourceUnit) bool {
-			return a.SourceUnitID < b.SourceUnitID
-		}, "source units for "+key); err != nil {
-			return err
+		if delivery == "source" {
+			if len(component.SourceUnits) == 0 || component.SelectedArtifact != nil {
+				return fmt.Errorf("source component %s/%s has no sources or unexpectedly contains an artifact", component.ComponentID, component.Variant)
+			}
+			if err := requireStrictOrder(component.SourceUnits, func(a, b SourceUnit) bool {
+				return a.SourceUnitID < b.SourceUnitID
+			}, "source units for "+key); err != nil {
+				return err
+			}
+		} else {
+			if len(component.SourceUnits) != 0 || component.SelectedArtifact == nil {
+				return fmt.Errorf("artifact component %s/%s has source checkout fields or no selected artifact", component.ComponentID, component.Variant)
+			}
+			if err := validateSelectedArtifact(component, *document.Resolution); err != nil {
+				return fmt.Errorf("artifact component %s/%s: %w", component.ComponentID, component.Variant, err)
+			}
+			if _, exists := workspacePaths[component.SelectedArtifact.WorkspacePath]; exists {
+				return fmt.Errorf("duplicate workspace path %q", component.SelectedArtifact.WorkspacePath)
+			}
+			workspacePaths[component.SelectedArtifact.WorkspacePath] = struct{}{}
 		}
 		if err := requireStrictOrder(component.Dependencies, func(a, b Dependency) bool {
 			if a.ComponentID != b.ComponentID {
@@ -687,6 +732,67 @@ func validateDocument(document Document) error {
 				return fmt.Errorf("resolution order places dependency %s before its dependent %s incorrectly", dependencyKey, key)
 			}
 		}
+	}
+	return nil
+}
+
+func validateSelectedArtifact(component Component, resolution resolver.ResolutionPolicy) error {
+	selected := component.SelectedArtifact
+	if selected == nil {
+		return fmt.Errorf("selected artifact is required")
+	}
+	expectedPath := fmt.Sprintf("components/%s/%s/package", component.ComponentID, component.Variant)
+	if !safeWorkspacePath(selected.WorkspacePath) || selected.WorkspacePath != expectedPath {
+		return fmt.Errorf("artifact package path is not canonical")
+	}
+	if !lowerSHA256(selected.SHA256) {
+		return fmt.Errorf("artifact digest is missing or non-canonical")
+	}
+	if resolution.Target == nil {
+		return fmt.Errorf("artifact target cannot be checked without a resolved target")
+	}
+	if selected.Target != *resolution.Target && !selected.Target.IsUniversal() {
+		return fmt.Errorf("selected artifact target does not match the resolved target")
+	}
+	if err := requireStrictOrder(selected.SourceProvenance, func(a,b SourceProvenance) bool {
+		return a.SourceUnitID < b.SourceUnitID
+	}, "artifact source provenance"); err != nil {
+		return err
+	}
+	sourceUnits := make([]catalog.SourceUnit, 0, len(selected.SourceProvenance))
+	provenanceIDs := make(map[string]bool, len(selected.SourceProvenance))
+	for _, source := range selected.SourceProvenance {
+		if !fullGitObjectID(source.Revision) {
+			return fmt.Errorf("artifact source provenance has an invalid immutable revision")
+		}
+		if err := validateRepositoryURI(source.RepositoryURI); err != nil {
+			return fmt.Errorf("artifact source provenance repository URI: %w", err)
+		}
+		if source.Subdirectory != "" && !safeWorkspacePath(source.Subdirectory) {
+			return fmt.Errorf("artifact source provenance has an unsafe subdirectory")
+		}
+		if provenanceIDs[source.SourceUnitID] {
+			return fmt.Errorf("artifact source provenance contains duplicates")
+		}
+		provenanceIDs[source.SourceUnitID] = true
+		sourceUnits = append(sourceUnits, catalog.SourceUnit{
+			ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+			Revision: source.Revision, Subdirectory: source.Subdirectory,
+		})
+	}
+	if len(sourceUnits) != len(selected.SourceUnitIDs) {
+		return fmt.Errorf("artifact source provenance does not cover every source unit")
+	}
+	for _, id := range selected.SourceUnitIDs {
+		if !provenanceIDs[id] {
+			return fmt.Errorf("artifact source provenance does not match the artifact source-unit set")
+		}
+	}
+	if !provenanceIDs[selected.Build.Recipe.SourceUnitID] {
+		return fmt.Errorf("artifact build recipe is not covered by source provenance")
+	}
+	if err := catalog.ValidateReleaseArtifacts(sourceUnits, []catalog.Artifact{selected.Artifact}); err != nil {
+		return fmt.Errorf("artifact descriptor is invalid: %w", err)
 	}
 	return nil
 }
