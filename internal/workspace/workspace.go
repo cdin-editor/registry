@@ -244,7 +244,7 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		if err := os.Mkdir(packageDir, 0o700); err != nil {
 			return Prepared{}, fmt.Errorf("workspace: create private package directory: %w", err)
 		}
-		if err := artifact.Materialize(ctx, options.ArtifactFetcher, *component.SelectedArtifact, packageDir, options.ArtifactLimits); err != nil {
+		if err := artifact.Materialize(ctx, options.ArtifactFetcher, component.ReleaseMetadataSHA, *component.SelectedArtifact, packageDir, options.ArtifactLimits); err != nil {
 			return Prepared{}, fmt.Errorf("workspace: materialize %s/%s artifact: %w", component.ComponentID, component.Variant, err)
 		}
 		packages = append(packages, manifest.ArtifactPackage{
