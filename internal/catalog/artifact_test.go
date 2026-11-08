@@ -66,7 +66,6 @@ func TestValidateReleaseArtifactsRejectsHTTPURI(t *testing.T) {
 	}
 }
 
-
 func TestArtifactCacheKeyBindsFullImmutableIdentity(t *testing.T) {
 	base := validRuntimeArtifact()
 	releaseSHA := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -75,15 +74,31 @@ func TestArtifactCacheKeyBindsFullImmutableIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	changed := []struct {
-		name string
+		name       string
 		releaseSHA string
-		artifact Artifact
+		artifact   Artifact
 	}{
 		{name: "release metadata digest", releaseSHA: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", artifact: base},
-		{name: "artifact id", releaseSHA: releaseSHA, artifact: func() Artifact { value := base; value.ID = "runtime-other"; return value }()},
-		{name: "target", releaseSHA: releaseSHA, artifact: func() Artifact { value := base; value.Target = Target{OS: "linux", Architecture: "x86_64", ABI: "gnu-glibc-2.28"}; return value }()},
-		{name: "URI", releaseSHA: releaseSHA, artifact: func() Artifact { value := base; value.URI += ".mirror"; return value }()},
-		{name: "content digest", releaseSHA: releaseSHA, artifact: func() Artifact { value := base; value.SHA256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"; return value }()},
+		{name: "artifact id", releaseSHA: releaseSHA, artifact: func() Artifact {
+			value := base
+			value.ID = "runtime-other"
+			return value
+		}()},
+		{name: "target", releaseSHA: releaseSHA, artifact: func() Artifact {
+			value := base
+			value.Target = Target{OS: "linux", Architecture: "x86_64", ABI: "gnu-glibc-2.28"}
+			return value
+		}()},
+		{name: "URI", releaseSHA: releaseSHA, artifact: func() Artifact {
+			value := base
+			value.URI += ".mirror"
+			return value
+		}()},
+		{name: "content digest", releaseSHA: releaseSHA, artifact: func() Artifact {
+			value := base
+			value.SHA256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+			return value
+		}()},
 	}
 	for _, testCase := range changed {
 		t.Run(testCase.name, func(t *testing.T) {
