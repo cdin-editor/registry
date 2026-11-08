@@ -46,7 +46,7 @@ func (t Target) Validate() error {
 	default:
 		return fmt.Errorf("unsupported artifact architecture")
 	}
-	if !validABI(t.ABI) {
+	if t.ABI == "none" || !validABI(t.ABI) {
 		return fmt.Errorf("native artifact target requires a valid lower-case ABI identifier")
 	}
 	return nil

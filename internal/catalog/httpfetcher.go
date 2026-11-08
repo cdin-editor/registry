@@ -223,7 +223,9 @@ func classifyArtifactTransportError(err error) error {
 		strings.Contains(message, "hostname"),
 		strings.Contains(message, "port"):
 		return fmt.Errorf("ARTIFACT_URI_REJECTED: asset URI is not an approved HTTPS URI")
-	case strings.Contains(message, "digest"):
+	case strings.Contains(message, "digest"),
+		strings.Contains(message, "does not match"),
+		strings.Contains(message, "do not match"):
 		return fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: asset bytes do not match the pinned SHA-256")
 	case strings.Contains(message, "http status 404") || strings.Contains(message, "http status 410"):
 		return fmt.Errorf("ARTIFACT_REPLAY_UNAVAILABLE: the immutable historical asset is unavailable")
@@ -282,7 +284,7 @@ func (f *HTTPFetcher) fetchWithCacheKey(ctx context.Context, metadataURI, expect
 		return nil, err
 	}
 	if httpMetadataDigest(data) != expectedSHA {
-		return nil, fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: fetched bytes do not match declared SHA-256")
+		return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
 	}
 	if err := f.writeCache(cachePath, data); err != nil {
 		return data, nil
