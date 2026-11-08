@@ -47,16 +47,25 @@ func tarGzipBytes(t *testing.T, entries ...struct {
 	gz := gzip.NewWriter(&buffer)
 	writer := tar.NewWriter(gz)
 	for _, item := range entries {
+		size := int64(0)
+		linkname := ""
+		if item.kind == tar.TypeReg || item.kind == tar.TypeRegA {
+			size = int64(len(item.body))
+		}
+		if item.kind == tar.TypeSymlink || item.kind == tar.TypeLink {
+			linkname = item.body
+		}
 		header := &tar.Header{
 			Name:     item.name,
 			Typeflag: item.kind,
 			Mode:     item.mode,
-			Size:     int64(len(item.body)),
+			Size:     size,
+			Linkname: linkname,
 		}
 		if err := writer.WriteHeader(header); err != nil {
 			t.Fatal(err)
 		}
-		if item.body != "" {
+		if size > 0 {
 			if _, err := writer.Write([]byte(item.body)); err != nil {
 				t.Fatal(err)
 			}
