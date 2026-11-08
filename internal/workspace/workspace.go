@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cdin-editor/registry/internal/artifact"
 	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/resolver"
@@ -69,6 +70,8 @@ type Options struct {
 	RepositoryPolicy collector.RepositoryPolicy
 	Credentials      collector.GitCredentialProvider
 	GitObjectCache   *collector.GitObjectCache
+	ArtifactDownloader artifact.Downloader
+	ArtifactCacheDir string
 	Validator        *validation.Validator
 }
 
@@ -81,6 +84,7 @@ type Prepared struct {
 	ManifestSHA256 string
 	ReportSHA256   string
 	Sources        []collector.Source
+	Packages       []artifact.Materialized
 }
 
 // Prepare collects a successful Resolver graph, builds and validates both
@@ -107,8 +111,22 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 	if options.Destination == "" {
 		return Prepared{}, fmt.Errorf("workspace: destination is required")
 	}
-	if options.Git == nil || options.RepositoryPolicy == nil || options.Validator == nil {
-		return Prepared{}, fmt.Errorf("workspace: GitRunner, RepositoryPolicy and Validator are required")
+	if options.Validator == nil {
+		return Prepared{}, fmt.Errorf("workspace: schema Validator is required")
+	}
+	needsSource, needsArtifact := false, false
+	for _, component := range resolution.Graph.Components {
+		if component.Delivery == "artifact" {
+			needsArtifact = true
+		} else if len(component.SourceUnits) > 0 {
+			needsSource = true
+		}
+	}
+	if needsSource && (options.Git == nil || options.RepositoryPolicy == nil) {
+		return Prepared{}, fmt.Errorf("workspace: source delivery requires GitRunner and RepositoryPolicy")
+	}
+	if needsArtifact && options.ArtifactDownloader == nil {
+		return Prepared{}, fmt.Errorf("workspace: artifact delivery requires an HTTPS ArtifactDownloader")
 	}
 	if strings.TrimSpace(options.RegistryVersion) == "" {
 		return Prepared{}, fmt.Errorf("workspace: Registry version is required")
@@ -173,15 +191,25 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		return Prepared{}, fmt.Errorf("workspace: secure staging directory ACL: %w", err)
 	}
 
-	sources, err := collector.Collect(ctx, resolution.Graph, stage, collector.Options{
-		Git:         options.Git,
-		Policy:      options.RepositoryPolicy,
-		Credentials: options.Credentials,
-		GitCache:    options.GitObjectCache,
-		TempDir:     options.TempDir,
-	})
-	if err != nil {
-		return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err)
+	sources := make([]collector.Source, 0)
+	if needsSource {
+		sourceGraph := *resolution.Graph
+		sourceGraph.Components = make([]resolver.ResolvedComponent, 0, len(resolution.Graph.Components))
+		for _, component := range resolution.Graph.Components {
+			if component.Delivery != "artifact" {
+				sourceGraph.Components = append(sourceGraph.Components, component)
+			}
+		}
+		sources, err = collector.Collect(ctx, &sourceGraph, stage, collector.Options{
+			Git:         options.Git,
+			Policy:      options.RepositoryPolicy,
+			Credentials: options.Credentials,
+			GitCache:    options.GitObjectCache,
+			TempDir:     options.TempDir,
+		})
+		if err != nil {
+			return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err)
+		}
 	}
 	if hooks.afterCollect != nil {
 		if err := hooks.afterCollect(sources); err != nil {
@@ -192,7 +220,18 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		return Prepared{}, err
 	}
 
-	document, err := manifest.Build(resolution.Graph, sources, options.RegistryVersion)
+	packages, err := artifact.Materialize(ctx, resolution.Graph.Components, stage, artifact.Options{
+		Downloader: options.ArtifactDownloader,
+		CacheDir: options.ArtifactCacheDir,
+	})
+	if err != nil {
+		return Prepared{}, fmt.Errorf("workspace: materialize selected artifacts: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return Prepared{}, err
+	}
+
+	document, err := manifest.BuildWithArtifacts(resolution.Graph, sources, packages, options.RegistryVersion)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("workspace: build Resolved Manifest: %w", err)
 	}
@@ -291,6 +330,7 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		ManifestSHA256: manifest.Digest(manifestBytes),
 		ReportSHA256:   manifest.Digest(reportBytes),
 		Sources:        append([]collector.Source(nil), sources...),
+		Packages:       append([]artifact.Materialized(nil), packages...),
 	}, nil
 }
 
