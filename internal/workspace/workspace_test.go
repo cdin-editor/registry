@@ -246,7 +246,6 @@ func TestREG022RejectsFailedResolution(t *testing.T) {
 	}
 }
 
-
 func TestREG022RenameFailureDoesNotPublishDestinationOrLeakStage(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	destination := filepath.Join(t.TempDir(), "prepared")
