@@ -103,7 +103,6 @@ and integration steps.
 
 Registry never runs the component code it collects or extracts.
 
-
 ## Resolved Manifest
 
 The Resolved Manifest is the record of a successful preparation. It includes
