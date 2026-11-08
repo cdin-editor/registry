@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"path"
@@ -38,6 +40,35 @@ func (t Target) Validate() error {
 		return fmt.Errorf("native artifact target requires a lower-case ABI identifier")
 	}
 	return nil
+}
+
+// ArtifactCacheKey returns the v1 cache identity required by the public
+// artifact contract. It deliberately includes release metadata identity,
+// artifact ID, target, URI and content digest; filenames and versions alone
+// never identify a package.
+func ArtifactCacheKey(releaseMetadataSHA string, artifact Artifact) (string, error) {
+	releaseMetadataSHA = strings.ToLower(releaseMetadataSHA)
+	expectedSHA := strings.ToLower(artifact.SHA256)
+	if !isSHA256(releaseMetadataSHA) || !isSHA256(expectedSHA) ||
+		strings.TrimSpace(artifact.ID) == "" {
+		return "", fmt.Errorf("invalid immutable artifact cache identity")
+	}
+	target := artifact.Target
+	if err := target.Validate(); err != nil {
+		return "", fmt.Errorf("invalid artifact cache target")
+	}
+	identity := strings.Join([]string{
+		"registry-artifact-v1",
+		releaseMetadataSHA,
+		artifact.ID,
+		target.OS,
+		target.Architecture,
+		target.ABI,
+		artifact.URI,
+		expectedSHA,
+	}, "\x00")
+	sum := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // Artifact records one immutable package published by the component owner.
