@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cdin-editor/registry/internal/artifact"
 	"github.com/cdin-editor/registry/internal/collector"
 	"github.com/cdin-editor/registry/internal/manifest"
 	"github.com/cdin-editor/registry/internal/resolver"
@@ -69,6 +70,8 @@ type Options struct {
 	RepositoryPolicy collector.RepositoryPolicy
 	Credentials      collector.GitCredentialProvider
 	GitObjectCache   *collector.GitObjectCache
+	ArtifactFetcher  artifact.DigestFetcher
+	ArtifactLimits   artifact.Limits
 	Validator        *validation.Validator
 }
 
@@ -81,6 +84,7 @@ type Prepared struct {
 	ManifestSHA256 string
 	ReportSHA256   string
 	Sources        []collector.Source
+	Artifacts      []manifest.ArtifactPackage
 }
 
 // Prepare collects a successful Resolver graph, builds and validates both
@@ -107,8 +111,27 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 	if options.Destination == "" {
 		return Prepared{}, fmt.Errorf("workspace: destination is required")
 	}
-	if options.Git == nil || options.RepositoryPolicy == nil || options.Validator == nil {
-		return Prepared{}, fmt.Errorf("workspace: GitRunner, RepositoryPolicy and Validator are required")
+	if options.Validator == nil {
+		return Prepared{}, fmt.Errorf("workspace: Validator is required")
+	}
+	hasSource, hasArtifact := false, false
+	for _, component := range resolution.Graph.Components {
+		delivery := component.Delivery
+		if delivery == "" { delivery = "source" }
+		switch delivery {
+		case "source":
+			hasSource = true
+		case "artifact":
+			hasArtifact = true
+		default:
+			return Prepared{}, fmt.Errorf("workspace: unsupported component delivery mode")
+		}
+	}
+	if hasSource && (options.Git == nil || options.RepositoryPolicy == nil) {
+		return Prepared{}, fmt.Errorf("workspace: source delivery requires GitRunner and RepositoryPolicy")
+	}
+	if hasArtifact && options.ArtifactFetcher == nil {
+		return Prepared{}, fmt.Errorf("workspace: artifact delivery requires a digest-aware HTTPS ArtifactFetcher")
 	}
 	if strings.TrimSpace(options.RegistryVersion) == "" {
 		return Prepared{}, fmt.Errorf("workspace: Registry version is required")
@@ -173,26 +196,50 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		return Prepared{}, fmt.Errorf("workspace: secure staging directory ACL: %w", err)
 	}
 
-	sources, err := collector.Collect(ctx, resolution.Graph, stage, collector.Options{
-		Git:         options.Git,
-		Policy:      options.RepositoryPolicy,
-		Credentials: options.Credentials,
-		GitCache:    options.GitObjectCache,
-		TempDir:     options.TempDir,
-	})
-	if err != nil {
-		return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err)
+	sourceGraph := *resolution.Graph
+	sourceGraph.Components = make([]resolver.ResolvedComponent, 0, len(resolution.Graph.Components))
+	for _, component := range resolution.Graph.Components {
+		delivery := component.Delivery
+		if delivery == "" { delivery = "source" }
+		if delivery == "source" { sourceGraph.Components = append(sourceGraph.Components, component) }
+	}
+	sources := []collector.Source{}
+	if len(sourceGraph.Components) > 0 {
+		sources, err = collector.Collect(ctx, &sourceGraph, stage, collector.Options{
+			Git: options.Git, Policy: options.RepositoryPolicy, Credentials: options.Credentials,
+			GitCache: options.GitObjectCache, TempDir: options.TempDir,
+		})
+		if err != nil { return Prepared{}, fmt.Errorf("workspace: collect selected sources: %w", err) }
 	}
 	if hooks.afterCollect != nil {
 		if err := hooks.afterCollect(sources); err != nil {
 			return Prepared{}, fmt.Errorf("workspace: after source collection: %w", err)
 		}
 	}
+
+	packages := make([]manifest.ArtifactPackage, 0)
+	for _, component := range resolution.Graph.Components {
+		if component.Delivery != "artifact" { continue }
+		if component.SelectedArtifact == nil { return Prepared{}, fmt.Errorf("workspace: selected artifact metadata is missing") }
+		parent := filepath.Join(stage, "components", component.ComponentID, component.Variant)
+		if err := os.MkdirAll(parent, 0o755); err != nil { return Prepared{}, fmt.Errorf("workspace: create package parent: %w", err) }
+		if err := ensureNoSymlinkAncestors(parent); err != nil { return Prepared{}, fmt.Errorf("workspace: unsafe package parent: %w", err) }
+		packageDir := filepath.Join(parent, "package")
+		if err := os.Mkdir(packageDir, 0o700); err != nil { return Prepared{}, fmt.Errorf("workspace: create private package directory: %w", err) }
+		if err := artifact.Materialize(ctx, options.ArtifactFetcher, *component.SelectedArtifact, packageDir, options.ArtifactLimits); err != nil {
+			return Prepared{}, fmt.Errorf("workspace: materialize %s/%s artifact: %w", component.ComponentID, component.Variant, err)
+		}
+		packages = append(packages, manifest.ArtifactPackage{
+			ComponentID: component.ComponentID, Variant: component.Variant,
+			ArtifactID: component.SelectedArtifact.ID,
+			WorkspacePath: filepath.ToSlash(filepath.Join("components", component.ComponentID, component.Variant, "package")),
+		})
+	}
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}
 
-	document, err := manifest.Build(resolution.Graph, sources, options.RegistryVersion)
+	document, err := manifest.BuildWithArtifacts(resolution.Graph, sources, packages, options.RegistryVersion)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("workspace: build Resolved Manifest: %w", err)
 	}
@@ -291,6 +338,7 @@ func prepare(ctx context.Context, resolution resolver.Result, options Options, h
 		ManifestSHA256: manifest.Digest(manifestBytes),
 		ReportSHA256:   manifest.Digest(reportBytes),
 		Sources:        append([]collector.Source(nil), sources...),
+		Artifacts:      append([]manifest.ArtifactPackage(nil), packages...),
 	}, nil
 }
 
