@@ -24,7 +24,11 @@ func Materialize(ctx context.Context, fetcher DigestFetcher, descriptor catalog.
 	if ctx == nil { return fmt.Errorf("ARTIFACT_FETCH_FAILED: context is required") }
 	if err := ctx.Err(); err != nil { return err }
 	if fetcher == nil { return fmt.Errorf("ARTIFACT_FETCH_FAILED: digest-aware HTTPS fetcher is required") }
-	if descriptor.SizeBytes <= 0 || descriptor.SizeBytes > limits.MaxCompressedBytes && limits.MaxCompressedBytes > 0 {
+	maxCompressedBytes := limits.MaxCompressedBytes
+	if maxCompressedBytes <= 0 {
+		maxCompressedBytes = DefaultMaxCompressedBytes
+	}
+	if descriptor.SizeBytes <= 0 || descriptor.SizeBytes > maxCompressedBytes {
 		return fmt.Errorf("ARTIFACT_LIMIT_EXCEEDED: declared artifact size exceeds configured compressed limit")
 	}
 	data, err := fetcher.FetchWithDigest(ctx, descriptor.URI, descriptor.SHA256)
