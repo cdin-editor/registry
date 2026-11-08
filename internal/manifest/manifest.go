@@ -564,8 +564,17 @@ func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.
 }
 
 func validateDocument(document Document) error {
-	if document.SchemaVersion != schemaVersion {
-		return fmt.Errorf("unsupported Manifest schema version %q", document.SchemaVersion)
+	if document.Resolution == nil {
+		if document.SchemaVersion != schemaVersion {
+			return fmt.Errorf("unsupported Manifest schema version %q", document.SchemaVersion)
+		}
+	} else {
+		if document.SchemaVersion != artifactSchemaVersion {
+			return fmt.Errorf("artifact-aware Manifest must use schema version %q", artifactSchemaVersion)
+		}
+		if err := validateManifestResolution(document.Resolution); err != nil {
+			return err
+		}
 	}
 	if _, err := semver.Parse(document.RegistryVersion); err != nil {
 		return fmt.Errorf("invalid Registry version: %w", err)
@@ -631,8 +640,35 @@ func validateDocument(document Document) error {
 		if err := validateMetadataURI(component.ReleaseMetadataURI); err != nil {
 			return fmt.Errorf("component %s/%s release metadata URI: %w", component.ComponentID, component.Variant, err)
 		}
-		if len(component.SourceUnits) == 0 {
-			return fmt.Errorf("component %s/%s has no source units", component.ComponentID, component.Variant)
+		delivery := component.Delivery
+		if document.Resolution == nil {
+			if delivery != "" || component.SelectedArtifact != nil {
+				return fmt.Errorf("legacy source-only Manifest contains delivery fields for %s/%s", component.ComponentID, component.Variant)
+			}
+			delivery = "source"
+		} else {
+			if delivery != "source" && delivery != "artifact" {
+				return fmt.Errorf("component %s/%s has an invalid or missing delivery mode", component.ComponentID, component.Variant)
+			}
+			switch document.Resolution.DeliveryMode {
+			case "source":
+				if delivery != "source" {
+					return fmt.Errorf("source-only resolution contains artifact delivery for %s/%s", component.ComponentID, component.Variant)
+				}
+			case "artifact":
+				if delivery != "artifact" {
+					return fmt.Errorf("artifact-only resolution contains source delivery for %s/%s", component.ComponentID, component.Variant)
+				}
+			case "artifact-or-source":
+			default:
+				return fmt.Errorf("Manifest has an unsupported delivery policy")
+			}
+		}
+		if delivery == "source" && len(component.SourceUnits) == 0 {
+			return fmt.Errorf("source-delivered component %s/%s has no source units", component.ComponentID, component.Variant)
+		}
+		if delivery == "artifact" && len(component.SourceUnits) != 0 {
+			return fmt.Errorf("artifact-delivered component %s/%s must not claim collected source units", component.ComponentID, component.Variant)
 		}
 		if err := requireStrictOrder(component.SourceUnits, func(a, b SourceUnit) bool {
 			return a.SourceUnitID < b.SourceUnitID
@@ -682,6 +718,13 @@ func validateDocument(document Document) error {
 			}
 			workspacePaths[source.WorkspacePath] = struct{}{}
 		}
+		if delivery == "artifact" {
+			if err := validateSelectedArtifact(component, document.Resolution.Target, workspacePaths); err != nil {
+				return fmt.Errorf("component %s/%s selected artifact: %w", component.ComponentID, component.Variant, err)
+			}
+		} else if component.SelectedArtifact != nil {
+			return fmt.Errorf("source-delivered component %s/%s unexpectedly records a selected artifact", component.ComponentID, component.Variant)
+		}
 	}
 	for _, root := range document.Roots {
 		component, exists := components[componentKey(root.ComponentID, root.Variant)]
@@ -721,6 +764,101 @@ func validateDocument(document Document) error {
 			}
 		}
 	}
+	return nil
+}
+
+
+func validateManifestResolution(policy *resolver.ResolutionPolicy) error {
+	if policy == nil {
+		return nil
+	}
+	switch policy.DeliveryMode {
+	case "source":
+		if policy.Target != nil && (!policy.Target.Valid() || policy.Target.IsUniversal()) {
+			return fmt.Errorf("Manifest source delivery target must be concrete when present")
+		}
+	case "artifact", "artifact-or-source":
+		if policy.Target == nil || !policy.Target.Valid() || policy.Target.IsUniversal() {
+			return fmt.Errorf("Manifest artifact delivery requires a concrete target tuple")
+		}
+	default:
+		return fmt.Errorf("Manifest contains an unsupported delivery mode %q", policy.DeliveryMode)
+	}
+	return nil
+}
+
+func validateSelectedArtifact(component Component, target *catalog.Target, workspacePaths map[string]struct{}) error {
+	selected := component.SelectedArtifact
+	if selected == nil {
+		return fmt.Errorf("artifact delivery has no selected_artifact record")
+	}
+	expectedPath := fmt.Sprintf("components/%s/%s/package", component.ComponentID, component.Variant)
+	if selected.WorkspacePath != expectedPath || !safeWorkspacePath(selected.WorkspacePath) {
+		return fmt.Errorf("package workspace path is unsafe or non-canonical")
+	}
+	if _, exists := workspacePaths[selected.WorkspacePath]; exists {
+		return fmt.Errorf("package workspace path collides with another component")
+	}
+	if !lowerSHA256(selected.SHA256) || selected.SizeBytes < 1 || selected.SizeBytes > catalog.MaxDeclaredArtifactBytes {
+		return fmt.Errorf("package size or SHA-256 identity is invalid")
+	}
+	if selected.URI == "" {
+		return fmt.Errorf("package URI is missing")
+	}
+	parsed, err := url.Parse(selected.URI)
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" {
+		return fmt.Errorf("package URI must be absolute HTTPS without credentials")
+	}
+	if strings.Contains(selected.FileName, "/") || strings.Contains(selected.FileName, "\\") || selected.FileName == "" || selected.FileName == "." || selected.FileName == ".." {
+		return fmt.Errorf("package filename is not a safe basename")
+	}
+	if target != nil && selected.Target != *target && !selected.Target.IsUniversal() {
+		return fmt.Errorf("selected artifact target does not match the recorded target")
+	}
+	if len(selected.SourceUnitIDs) == 0 || len(selected.SourceProvenance) != len(selected.SourceUnitIDs) {
+		return fmt.Errorf("selected artifact has incomplete source provenance")
+	}
+	if err := requireStrictOrder(selected.SourceUnitIDs, func(a, b string) bool { return a < b }, "artifact source unit IDs"); err != nil {
+		return err
+	}
+	if err := requireStrictOrder(selected.SourceProvenance, func(a, b SourceProvenance) bool {
+		return a.SourceUnitID < b.SourceUnitID
+	}, "artifact source provenance"); err != nil {
+		return err
+	}
+	sourceUnits := make([]catalog.SourceUnit, 0, len(selected.SourceProvenance))
+	for index, source := range selected.SourceProvenance {
+		if source.SourceUnitID != selected.SourceUnitIDs[index] {
+			return fmt.Errorf("artifact source provenance order does not match source_unit_ids")
+		}
+		if !fullGitObjectID(source.Revision) {
+			return fmt.Errorf("artifact source unit %q has an invalid full Git revision", source.SourceUnitID)
+		}
+		if err := validateRepositoryURI(source.RepositoryURI); err != nil {
+			return fmt.Errorf("artifact source unit %q repository URI: %w", source.SourceUnitID, err)
+		}
+		if source.Subdirectory != "" && !safeWorkspacePath(source.Subdirectory) {
+			return fmt.Errorf("artifact source unit %q has an unsafe subdirectory", source.SourceUnitID)
+		}
+		sourceUnits = append(sourceUnits, catalog.SourceUnit{
+			ID: source.SourceUnitID, RepositoryURI: source.RepositoryURI,
+			Revision: source.Revision, Subdirectory: source.Subdirectory,
+		})
+	}
+	descriptor := catalog.Artifact{
+		ID: selected.ArtifactID, Kind: selected.Kind, Target: selected.Target,
+		Format: selected.Format, FileName: selected.FileName, URI: selected.URI,
+		SHA256: selected.SHA256, SizeBytes: selected.SizeBytes, Layout: selected.Layout,
+		SourceUnitIDs: append([]string(nil), selected.SourceUnitIDs...), Build: selected.Build,
+	}
+	release := catalog.Release{
+		ComponentID: component.ComponentID, Variant: component.Variant, Version: component.Version,
+		Status: "active", SourceUnits: sourceUnits, Artifacts: []catalog.Artifact{descriptor},
+	}
+	if err := catalog.ValidateReleaseArtifacts(release); err != nil {
+		return err
+	}
+	workspacePaths[selected.WorkspacePath] = struct{}{}
 	return nil
 }
 
