@@ -94,6 +94,7 @@ func TestRegistryArtifactPrepareOfflineReplay(t *testing.T) {
 	}
 
 	resolution := successfulResolution(t.TempDir(), strings.Repeat("a", 40))
+	resolution.Graph.Components[0].SourceUnits[0].RepositoryURI = "https://source.example.invalid/engine.git"
 	resolution.Graph.SchemaVersion = "1.1.0"
 	resolution.Graph.Resolution = resolver.ResolutionPolicy{DeliveryMode: "artifact", Target: &target}
 	component := &resolution.Graph.Components[0]
