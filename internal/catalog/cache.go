@@ -517,9 +517,9 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 		keys = append(keys, key)
 		if item.SelectedArtifact != nil {
 			artifactKey, artifactErr := ArtifactCacheKey(item.ReleaseMetadataSHA, Artifact{
-				ID: item.SelectedArtifact.ID,
+				ID:     item.SelectedArtifact.ID,
 				Target: item.SelectedArtifact.Target,
-				URI: item.SelectedArtifact.URI,
+				URI:    item.SelectedArtifact.URI,
 				SHA256: item.SelectedArtifact.SHA256,
 			})
 			if artifactErr != nil {
