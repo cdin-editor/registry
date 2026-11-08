@@ -22,7 +22,24 @@ they do not make every downloaded component safe to execute.
   outbound network policy, including restrictions on private and link-local
   addresses.
 
-## What Registry verifies
+## Artifact package behavior
+
+Registry verifies the declared package size and SHA-256 before extracting an
+artifact. It extracts only regular files and directories; links, special files,
+privileged modes, unsafe paths, and case/normalization collisions are rejected.
+Compressed size, expanded size, entry count and path depth are bounded.
+
+Offline artifact preparation requires a local Catalog Index and already
+verified cache entries for all selected release metadata and package assets.
+Every selected component must use artifact delivery. The CLI rejects source
+fallback because a source checkout requires Git retrieval. Offline artifact
+replay has the same all-artifact requirement.
+
+An artifact digest proves byte identity relative to the trusted Catalog and
+release metadata. It does not identify or authenticate the publisher.
+Attestation references are recorded but are not cryptographically verified by
+this implementation.
+
 
 Registry validates documents against the embedded public schemas, checks the
 SHA-256 digest of release metadata before parsing it, verifies release
