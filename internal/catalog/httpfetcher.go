@@ -164,6 +164,12 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 // Fetch implements the original transport-neutral Fetcher contract. Without
 // an expected digest it deliberately bypasses persistent cache reads/writes.
 func (f *HTTPFetcher) Fetch(ctx context.Context, metadataURI string) ([]byte, error) {
+	if f == nil {
+		return nil, fmt.Errorf("catalog: HTTP fetcher is not initialized")
+	}
+	if f.offline {
+		return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: offline fetch requires a pinned URI and SHA-256")
+	}
 	return f.fetch(ctx, metadataURI)
 }
 

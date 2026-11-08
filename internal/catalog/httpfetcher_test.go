@@ -544,3 +544,23 @@ func TestREG019HTTPFetcherConcurrentDigestCachePreservesIntegrity(t *testing.T) 
 		t.Fatalf("network request count = %d, outside bounded worker waves", requests)
 	}
 }
+
+
+func TestHTTPFetcherOfflineModeRejectsUnpinnedFetch(t *testing.T) {
+	fetcher := &HTTPFetcher{offline: true}
+	if _, err := fetcher.Fetch(context.Background(), "https://catalog.example.invalid/index.json"); err == nil ||
+		!strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("offline unpinned fetch error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+}
+
+func TestHTTPFetcherOfflineModeRejectsDigestCacheMiss(t *testing.T) {
+	fetcher := &HTTPFetcher{offline: true}
+	if _, err := fetcher.FetchWithDigest(
+		context.Background(),
+		"https://catalog.example.invalid/release.json",
+		strings.Repeat("a", 64),
+	); err == nil || !strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("offline digest fetch error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+}
