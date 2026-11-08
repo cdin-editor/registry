@@ -273,6 +273,9 @@ func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, va
 		if release.Variant == "" {
 			release.Variant = "default"
 		}
+		for artifactIndex := range release.Artifacts {
+			release.Artifacts[artifactIndex].Target = release.Artifacts[artifactIndex].Target.Normalize()
+		}
 		if err := ValidateReleaseArtifacts(release.SourceUnits, release.Artifacts); err != nil {
 			return fmt.Errorf("catalog: validate artifacts for %s/%s@%s: %w", key.component, key.variant, key.version, err)
 		}
