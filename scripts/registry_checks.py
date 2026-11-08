@@ -42,21 +42,35 @@ def check_format() -> None:
     files = go_files()
     if not files:
         raise SystemExit("No Go source files found.")
-    result = subprocess.run(
-        ["gofmt", "-l", *[str(path.relative_to(ROOT)) for path in files]],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    unformatted = [line for line in result.stdout.splitlines() if line.strip()]
+
+    unformatted: list[str] = []
+    parse_errors: list[str] = []
+    for path in files:
+        name = str(path.relative_to(ROOT))
+        result = subprocess.run(
+            ["gofmt", "-l", name],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            parse_errors.append(f"{name}: {detail or 'gofmt failed'}")
+        elif result.stdout.strip():
+            unformatted.append(name)
+
+    if parse_errors:
+        print("gofmt could not parse the following Go files:", file=sys.stderr)
+        for detail in parse_errors:
+            print(detail, file=sys.stderr)
+        raise SystemExit(1)
+
     if unformatted:
         print("The following Go files need gofmt:", file=sys.stderr)
         for name in unformatted:
             print(name, file=sys.stderr)
-            subprocess.run(
-                ["gofmt", "-d", name], cwd=ROOT, check=True
-            )
+            subprocess.run(["gofmt", "-d", name], cwd=ROOT, check=True)
         raise SystemExit(1)
     print("Go formatting: OK")
 
