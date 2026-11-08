@@ -259,7 +259,7 @@ func (f *HTTPFetcher) fetchWithCacheKey(ctx context.Context, metadataURI, expect
 			return nil, err
 		}
 		if httpMetadataDigest(data) != expectedSHA {
-			return nil, fmt.Errorf("ARTIFACT_DIGEST_MISMATCH: fetched bytes do not match declared SHA-256")
+			return nil, fmt.Errorf("catalog: fetched metadata does not match declared SHA-256")
 		}
 		return data, nil
 	}
