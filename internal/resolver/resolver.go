@@ -31,6 +31,7 @@ import (
 
 const (
 	manifestSchemaVersion   = "1.0.0"
+	artifactManifestSchemaVersion = "1.1.0"
 	reportSchemaVersion     = "1.1.0"
 	defaultMaxSearchStates  = 100000
 	maxResolverCandidates   = 16384
@@ -66,6 +67,9 @@ const (
 	ConflictContractProviderMissing      ConflictCode = "CONTRACT_PROVIDER_MISSING"
 	ConflictContractProviderAmbiguous    ConflictCode = "CONTRACT_PROVIDER_AMBIGUOUS"
 	ConflictInternalUnresolvedDependency ConflictCode = "INTERNAL_UNRESOLVED_DEPENDENCY"
+	ConflictArtifactNotFound              ConflictCode = "ARTIFACT_NOT_FOUND"
+	ConflictArtifactAmbiguous             ConflictCode = "ARTIFACT_AMBIGUOUS"
+	ConflictInvalidDeliveryPolicy         ConflictCode = "INVALID_DELIVERY_POLICY"
 )
 
 // RejectionReasonCode is the closed Registry 1.1 candidate-rejection vocabulary.
@@ -364,6 +368,10 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 		Conflicts:          []Conflict{},
 		Warnings:           []Warning{},
 	}}
+	if deliveryConflict := validateDeliveryPolicy(def.Resolution); deliveryConflict != nil {
+		result.Report.Conflicts = append(result.Report.Conflicts, *deliveryConflict)
+		return result
+	}
 	if len(def.Components) == 0 {
 		result.Report.Conflicts = append(result.Report.Conflicts, Conflict{Code: ConflictNoRootRequirements, Message: "Product Definition contains no root component requirements"})
 		return result
@@ -399,6 +407,7 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 		for _, release := range cat.Releases {
 			declarations := []int{
 				len(release.SourceUnits),
+				len(release.Artifacts),
 				len(release.Dependencies),
 				len(release.Contracts.Provides),
 				len(release.Contracts.Requires),
@@ -466,6 +475,20 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 		result.Report.Conflicts = append(result.Report.Conflicts, *graphConflict)
 		return result
 	}
+	if def.Resolution != nil {
+		policy := *def.Resolution
+		if def.Resolution.Target != nil {
+			target := *def.Resolution.Target
+			policy.Target = &target
+		}
+		graph.SchemaVersion = artifactManifestSchemaVersion
+		graph.Resolution = &policy
+		if deliveryConflict := applyDeliveryPolicy(graph); deliveryConflict != nil {
+			populateConflictNodes(deliveryConflict, selected)
+			result.Report.Conflicts = append(result.Report.Conflicts, *deliveryConflict)
+			return result
+		}
+	}
 	result.Graph = graph
 	result.Report.Result = "success"
 	result.Report.Selected = reportSelected
@@ -499,6 +522,9 @@ func buildCandidates(catalogs []*catalog.Catalog) (map[key][]candidate, []Catalo
 			}
 			if release.Status != "active" && release.Status != "withdrawn" {
 				return nil, nil, &Conflict{Code: ConflictInvalidReleaseStatus, Message: fmt.Sprintf("unsupported status %q for %s/%s@%s", release.Status, release.ComponentID, release.Variant, release.Version), InvolvedComponents: []string{release.ComponentID}}
+			}
+			if err := catalog.ValidateReleaseArtifacts(release); err != nil {
+				return nil, nil, &Conflict{Code: ConflictInvalidReleaseIdentity, Message: err.Error(), InvolvedComponents: []string{release.ComponentID}}
 			}
 			if len(release.SourceUnits) == 0 {
 				return nil, nil, &Conflict{Code: ConflictMissingSourceUnits, Message: fmt.Sprintf("release %s/%s@%s declares no source units", release.ComponentID, release.Variant, release.Version), InvolvedComponents: []string{release.ComponentID}}
@@ -1028,8 +1054,10 @@ func buildGraph(state *searchState, catalogs []CatalogReference, roots []Require
 		graph.Components = append(graph.Components, ResolvedComponent{
 			ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version,
 			ReleaseMetadataURI: r.MetadataURI, ReleaseMetadataSHA: r.MetadataSHA,
-			SourceUnits:  append([]catalog.SourceUnit(nil), r.SourceUnits...),
-			Dependencies: dependencies, Contracts: r.Contracts,
+			SourceUnits:        append([]catalog.SourceUnit(nil), r.SourceUnits...),
+			Dependencies:       dependencies,
+			Contracts:          r.Contracts,
+			AvailableArtifacts: append([]catalog.Artifact(nil), r.Artifacts...),
 		})
 		selected = append(selected, SelectedCandidate{ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version})
 	}
