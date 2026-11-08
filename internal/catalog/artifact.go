@@ -42,16 +42,16 @@ func (t Target) Validate() error {
 
 // Artifact records one immutable package published by the component owner.
 type Artifact struct {
-	ID            string      `json:"artifact_id"`
-	Kind          string      `json:"kind"`
-	Target        Target      `json:"target"`
-	Format        string      `json:"format"`
-	FileName      string      `json:"file_name"`
-	URI           string      `json:"uri"`
-	SHA256        string      `json:"sha256"`
-	SizeBytes     int64       `json:"size_bytes"`
-	Layout        string      `json:"layout"`
-	SourceUnitIDs []string    `json:"source_unit_ids"`
+	ID            string        `json:"artifact_id"`
+	Kind          string        `json:"kind"`
+	Target        Target        `json:"target"`
+	Format        string        `json:"format"`
+	FileName      string        `json:"file_name"`
+	URI           string        `json:"uri"`
+	SHA256        string        `json:"sha256"`
+	SizeBytes     int64         `json:"size_bytes"`
+	Layout        string        `json:"layout"`
+	SourceUnitIDs []string      `json:"source_unit_ids"`
 	Build         ArtifactBuild `json:"build"`
 	Attestations  []Attestation `json:"attestations,omitempty"`
 }
