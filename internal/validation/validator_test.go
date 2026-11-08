@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cdin-editor/registry/internal/platform"
 	"github.com/cdin-editor/registry/internal/schemas"
 )
 
