@@ -3,6 +3,12 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- Pass an explicit target OS and architecture to every Pipeline release-matrix build. The previous matrix could inherit the runner's native `GOARCH`, producing mislabeled or duplicate ARM64/AMD64 assets instead of the requested cross-compiled binaries.
+
 ## [0.1.0-dev] - 2026-11-07
 
 > Development prerelease. This version matches
