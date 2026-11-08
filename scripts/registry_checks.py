@@ -91,6 +91,7 @@ def run_fuzz_smoke() -> None:
         ("./internal/collector", "FuzzValidateCredentialEnvironment"),
         ("./internal/collector", "FuzzValidateCredentialEnvironmentDoesNotEchoSecret"),
         ("./internal/catalog", "FuzzMetadataKeysFromManifest"),
+        ("./internal/artifact", "FuzzExtractArchive"),
         ("./internal/collector", "FuzzGitObjectIDsFromManifest"),
     ]
     env = os.environ.copy()
