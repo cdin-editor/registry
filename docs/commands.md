@@ -167,7 +167,9 @@ historical Manifest. If `--report` is used, the file must not already exist.
   --cache-dir ./registry-cache
 ```
 
-A pin retains the metadata and Git objects referenced by a verified Manifest.
+A pin retains the Catalog/release metadata and package assets,
+plus Git objects referenced by a verified Manifest.
+
 
 ### Release a pin
 

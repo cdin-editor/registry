@@ -73,13 +73,36 @@ releases are included automatically.
 Resolve does not download component source. It returns a Resolution Report
 describing the selection or the reasons it could not be made.
 
+## Artifact package
+
+An artifact package is a publisher-built archive attached to Component Release
+Metadata. Its descriptor identifies an exact target tuple, archive format,
+layout version, URI, byte size, SHA-256 digest, source-unit provenance and
+build toolchain. Registry retrieves and verifies the archive but does not run
+its build recipe. Supported package layouts are versioned; consumers must not
+guess paths inside an archive.
+
+Runtime module archives use a universal target. Native development and SDK
+packages identify a concrete OS, architecture and ABI. See
+[Immutable artifact delivery](artifact-delivery.md).
+
+## Delivery mode
+
+The Product Definition may request `source`, `artifact`, or
+`artifact-or-source` delivery. The default remains source. Artifact selection
+takes place after version/dependency resolution and cannot alter the selected
+component release. Exact target matches take priority over universal runtime
+packages; ambiguity and missing strict-mode packages are errors.
+
 ## Workspace
 
-A Workspace is a new directory containing the source units selected by
-Registry, together with the records that explain the selection. CDIN can use
-that directory as input for its own build and integration steps.
+A Workspace is a new directory containing the source units and/or verified
+package directories selected by Registry, together with the records that
+explain the selection. CDIN can use that directory as input for its own build
+and integration steps.
 
-Registry never runs the component code it collects.
+Registry never runs the component code it collects or extracts.
+
 
 ## Resolved Manifest
 
