@@ -4,8 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,7 +17,6 @@ import (
 	"github.com/cdin-editor/registry/internal/resolver"
 	"github.com/cdin-editor/registry/internal/validation"
 )
-
 
 type phase9ArtifactFetcher struct {
 	payload  []byte
