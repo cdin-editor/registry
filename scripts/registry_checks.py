@@ -222,10 +222,13 @@ def fetch_schema(repository: str, blob_sha: str, destination: Path) -> None:
                 raise ValueError("GitHub returned a different or unsupported schema blob")
             encoded = "".join(str(blob.get("content", "")).split())
             payload = base64.b64decode(encoded, validate=True)
-            git_object = b"blob " + str(len(payload)).encode("ascii") + b"\\0" + payload
+            git_object = b"blob " + str(len(payload)).encode("ascii") + b"\0" + payload
             actual_sha = hashlib.sha1(git_object).hexdigest()
             if actual_sha != blob_sha:
-                raise ValueError("Downloaded schema content does not match its pinned Git blob SHA")
+                raise ValueError(
+                    f"Downloaded schema content does not match its pinned Git blob SHA: "
+                    f"expected {blob_sha}, got {actual_sha}"
+                )
             destination.write_bytes(payload)
             return
         except (OSError, urllib.error.URLError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
