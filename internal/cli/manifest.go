@@ -137,15 +137,42 @@ func runManifestWithDependencies(
 		return exitOK
 	}
 
+	var replayDocument manifest.Document
+	if err := json.Unmarshal(input.data, &replayDocument); err != nil {
+		return writeManifestError(stderr, "MANIFEST_INVALID", "verified Manifest could not be decoded for replay")
+	}
+	hasArtifacts := false
+	for _, component := range replayDocument.Components {
+		if component.Delivery == "artifact" {
+			hasArtifacts = true
+			break
+		}
+	}
+	var artifactFetcher *catalog.HTTPFetcher
+	if hasArtifacts {
+		artifactFetcher, err = catalog.NewHTTPFetcher(catalog.HTTPFetcherOptions{
+			AllowedHosts: options.allowedHosts,
+			MaxBytes:     catalog.MaxDeclaredArtifactBytes,
+		})
+		if err != nil {
+			return writeManifestError(stderr, "REPLAY_ARTIFACT_CONFIG_FAILED", "cannot configure artifact transport; check --allow-host")
+		}
+	}
 	if git == nil {
-		return writeManifestError(stderr, "INTERNAL_ERROR", "Git runner is not configured")
+		for _, component := range replayDocument.Components {
+			if component.Delivery != "artifact" && len(component.SourceUnits) > 0 {
+				return writeManifestError(stderr, "INTERNAL_ERROR", "Git runner is not configured for source replay")
+			}
+		}
 	}
 	replayOptions := workspace.ReplayOptions{
 		Workspace: workspace.Options{
 			Destination:      options.outputPath,
 			Git:              git,
 			RepositoryPolicy: catalogRepositoryPolicy{hosts: options.allowedHosts},
-			Validator:        validator,
+			Validator:          validator,
+			ArtifactDownloader: artifactFetcher,
+			ArtifactCacheDir:   options.cacheDir,
 		},
 		VerifyRemoteMetadata: options.verifyRemoteMetadata,
 	}
@@ -290,9 +317,7 @@ func parseManifestCommandOptions(operation string, args []string) (manifestComma
 		if len(options.allowedHosts) == 0 {
 			return options, fmt.Errorf("at least one --allow-host is required for pinned Git source retrieval")
 		}
-		if options.cacheDir != "" && !options.verifyRemoteMetadata {
-			return options, fmt.Errorf("--cache-dir requires --verify-remote-metadata")
-		}
+
 	}
 	return options, nil
 }
