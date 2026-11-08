@@ -296,3 +296,60 @@ func TestREG019CatalogLoaderRedactsUntrustedFetcherErrors(t *testing.T) {
 		t.Fatalf("Catalog diagnostic did not preserve a safe failure classification: %v", err)
 	}
 }
+
+func TestREG028CatalogCanonicalizesArtifactTargetAliases(t *testing.T) {
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := Release{
+		SchemaVersion: "1.1.0",
+		ComponentID:   "native-sdk",
+		Variant:       "default",
+		Version:       "1.0.0",
+		Status:        "active",
+		SourceUnits: []SourceUnit{{
+			ID:            "source",
+			RepositoryURI: "https://source.example.invalid/native-sdk.git",
+			Revision:      "0123456789abcdef0123456789abcdef01234567",
+		}},
+		Artifacts: []Artifact{{
+			ID:            "mac-sdk",
+			Kind:          "sdk-package",
+			Target:        Target{OS: "MacOS", Architecture: "AMD64", ABI: "GNU-GLIBC-2.28"},
+			Format:        "tar.gz",
+			FileName:      "native-sdk.tar.gz",
+			URI:           "https://releases.example.invalid/native-sdk.tar.gz",
+			SHA256:        strings.Repeat("a", 64),
+			SizeBytes:     1024,
+			Layout:        "cmake-prefix-v1",
+			SourceUnitIDs: []string{"source"},
+			Build: ArtifactBuild{
+				Recipe:    ArtifactRecipe{SourceUnitID: "source", Path: "scripts/package.sh"},
+				Toolchain: []ToolchainEntry{{Name: "cmake", Version: "3.30.0"}},
+			},
+		}},
+		Dependencies: []Dependency{},
+		Contracts:    Contracts{Provides: []ContractProvider{}, Requires: []ContractRequirement{}},
+	}
+	payload, err := json.Marshal(release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := fixtureEntry("catalog-native", release.ComponentID, release.Version, payload)
+	fixture := writeLocalCatalogFixture(t, "catalog.native", []Entry{entry}, map[string][]byte{
+		entry.MetadataURI: payload,
+	})
+	loaded, err := loadLocalCatalogFixture(t, fixture, fixture.fetcher, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Releases) != 1 || len(loaded.Releases[0].Artifacts) != 1 {
+		t.Fatalf("unexpected loaded artifact graph: %#v", loaded.Releases)
+	}
+	got := loaded.Releases[0].Artifacts[0].Target
+	want := Target{OS: "darwin", Architecture: "x86_64", ABI: "gnu-glibc-2.28"}
+	if got != want {
+		t.Fatalf("loaded canonical artifact target = %#v, want %#v", got, want)
+	}
+}
