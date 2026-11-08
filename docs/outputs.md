@@ -27,7 +27,10 @@ It records:
 - the Catalog and release metadata locations and SHA-256 digests;
 - the exact Git repository and full commit ID for every source unit;
 - the Workspace-relative path for every collected source unit;
+- selected artifact identity, target, kind, format, layout, URI, size and SHA-256;
+- the Workspace-relative path and source provenance for every artifact package;
 - the resolved dependency and contract information.
+
 
 The Manifest lets a later operation verify the recorded selection without
 asking the Resolver to choose versions again.
