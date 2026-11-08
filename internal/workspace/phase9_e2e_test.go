@@ -1,7 +1,10 @@
 package workspace
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"fmt"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -14,6 +17,173 @@ import (
 	"github.com/cdin-editor/registry/internal/resolver"
 	"github.com/cdin-editor/registry/internal/validation"
 )
+
+
+type phase9ArtifactFetcher struct {
+	payload  []byte
+	cache    map[string][]byte
+	offline  bool
+	requests int
+}
+
+func (f *phase9ArtifactFetcher) FetchWithDigest(context.Context, string, string) ([]byte, error) {
+	return nil, fmt.Errorf("artifact replay fixture expected the full immutable artifact identity")
+}
+
+func (f *phase9ArtifactFetcher) FetchArtifact(ctx context.Context, releaseMetadataSHA string, descriptor catalog.Artifact) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	key, err := catalog.ArtifactCacheKey(releaseMetadataSHA, descriptor)
+	if err != nil {
+		return nil, err
+	}
+	if cached, ok := f.cache[key]; ok {
+		return append([]byte(nil), cached...), nil
+	}
+	if f.offline {
+		return nil, fmt.Errorf("ARTIFACT_OFFLINE_MISS: fixture has no cached bytes for the immutable identity")
+	}
+	if manifest.Digest(f.payload) != descriptor.SHA256 || int64(len(f.payload)) != descriptor.SizeBytes {
+		return nil, fmt.Errorf("fixture artifact bytes do not match the declared digest and size")
+	}
+	f.requests++
+	f.cache[key] = append([]byte(nil), f.payload...)
+	return append([]byte(nil), f.payload...), nil
+}
+
+func phase9NativePackageZIP(t *testing.T) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	entry, err := writer.Create("include/engine.h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("#define ENGINE_VERSION 1\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+// TestRegistryArtifactPrepareOfflineReplay proves that artifact preparation
+// records an immutable package identity, warms a digest-addressed cache, and
+// replays the exact package bytes without an online lookup or source checkout.
+// A changed artifact identity must fail closed and must not publish a workspace.
+func TestRegistryArtifactPrepareOfflineReplay(t *testing.T) {
+	artifactBytes := phase9NativePackageZIP(t)
+	target := catalog.Target{OS: "linux", Architecture: "x86_64", ABI: "gnu-glibc-2.28"}
+	descriptor := catalog.Artifact{
+		ID:            "engine-linux-x86_64",
+		Kind:          "native-development-package",
+		Target:        target,
+		Format:        "zip",
+		FileName:      "engine-linux-x86_64.zip",
+		URI:           "https://packages.example.invalid/engine/1.0.0/linux-x86_64.zip",
+		SHA256:        manifest.Digest(artifactBytes),
+		SizeBytes:     int64(len(artifactBytes)),
+		Layout:        "cmake-prefix-v1",
+		SourceUnitIDs: []string{"source"},
+		Build: catalog.ArtifactBuild{
+			Recipe:    catalog.ArtifactRecipe{SourceUnitID: "source", Path: "CMakeLists.txt"},
+			Toolchain: []catalog.ToolchainEntry{{Name: "CMake", Version: "3.30.0"}},
+			Runner:    "ubuntu-24.04",
+		},
+	}
+
+	resolution := successfulResolution(t.TempDir(), strings.Repeat("a", 40))
+	resolution.Graph.SchemaVersion = "1.1.0"
+	resolution.Graph.Resolution = resolver.ResolutionPolicy{DeliveryMode: "artifact", Target: &target}
+	component := &resolution.Graph.Components[0]
+	component.Delivery = "artifact"
+	component.Artifacts = []catalog.Artifact{descriptor}
+	selected := descriptor
+	component.SelectedArtifact = &selected
+
+	fetcher := &phase9ArtifactFetcher{payload: artifactBytes, cache: make(map[string][]byte)}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparedPath := filepath.Join(t.TempDir(), "prepared-artifact")
+	prepareOptions := workspaceOptions(preparedPath)
+	prepareOptions.ArtifactFetcher = fetcher
+	prepared, err := Prepare(context.Background(), resolution, prepareOptions)
+	if err != nil {
+		t.Fatalf("prepare immutable artifact: %v", err)
+	}
+	if fetcher.requests != 1 {
+		t.Fatalf("online artifact fetches = %d, want exactly one", fetcher.requests)
+	}
+	manifestBytes, err := os.ReadFile(prepared.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manifest.Verify(manifestBytes, prepared.ManifestSHA256, validator); err != nil {
+		t.Fatalf("verify artifact Manifest: %v", err)
+	}
+
+	packageRelative := filepath.Join("components", "engine", "default", "package", "include", "engine.h")
+	preparedPackage, err := os.ReadFile(filepath.Join(prepared.WorkspacePath, packageRelative))
+	if err != nil {
+		t.Fatalf("read prepared artifact package: %v", err)
+	}
+	if string(preparedPackage) != "#define ENGINE_VERSION 1\n" {
+		t.Fatalf("prepared package bytes = %q", preparedPackage)
+	}
+
+	fetcher.offline = true
+	replayedPath := filepath.Join(t.TempDir(), "replayed-artifact")
+	replayOptions := workspaceOptions(replayedPath)
+	replayOptions.ArtifactFetcher = fetcher
+	replayed, err := Replay(context.Background(), manifestBytes, prepared.ManifestSHA256, ReplayOptions{Workspace: replayOptions})
+	if err != nil {
+		t.Fatalf("offline artifact replay: %v", err)
+	}
+	if fetcher.requests != 1 {
+		t.Fatalf("offline replay made an online request; fetches=%d, want one initial request", fetcher.requests)
+	}
+	replayedManifest, err := os.ReadFile(replayed.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(manifestBytes, replayedManifest) || replayed.ManifestSHA256 != prepared.ManifestSHA256 {
+		t.Fatal("offline replay did not preserve canonical Manifest bytes and digest")
+	}
+	replayedPackage, err := os.ReadFile(filepath.Join(replayed.WorkspacePath, packageRelative))
+	if err != nil {
+		t.Fatalf("read replayed artifact package: %v", err)
+	}
+	if !reflect.DeepEqual(preparedPackage, replayedPackage) {
+		t.Fatal("offline replay did not reproduce exact artifact package bytes")
+	}
+
+	var changed manifest.Document
+	if err := json.Unmarshal(manifestBytes, &changed); err != nil {
+		t.Fatal(err)
+	}
+	if len(changed.Components) != 1 || changed.Components[0].SelectedArtifact == nil {
+		t.Fatal("artifact replay fixture Manifest has no single selected artifact")
+	}
+	changed.Components[0].SelectedArtifact.ID = "different-artifact-identity"
+	changedBytes, err := manifest.MarshalCanonical(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejectedPath := filepath.Join(t.TempDir(), "rejected-artifact-replay")
+	rejectedOptions := workspaceOptions(rejectedPath)
+	rejectedOptions.ArtifactFetcher = fetcher
+	_, err = Replay(context.Background(), changedBytes, manifest.Digest(changedBytes), ReplayOptions{Workspace: rejectedOptions})
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_OFFLINE_MISS") {
+		t.Fatalf("replay with changed artifact identity error = %v, want ARTIFACT_OFFLINE_MISS", err)
+	}
+	if _, err := os.Lstat(rejectedPath); !os.IsNotExist(err) {
+		t.Fatalf("changed artifact replay published a partial workspace: %v", err)
+	}
+}
 
 type phase9MetadataFetcher map[string][]byte
 
