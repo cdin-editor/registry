@@ -21,9 +21,15 @@ type DigestFetcher interface {
 // Materialize retrieves an immutable package, verifies size and digest, then
 // extracts it into an existing empty private staging directory.
 func Materialize(ctx context.Context, fetcher DigestFetcher, descriptor catalog.Artifact, destination string, limits Limits) error {
-	if ctx == nil { return fmt.Errorf("ARTIFACT_FETCH_FAILED: context is required") }
-	if err := ctx.Err(); err != nil { return err }
-	if fetcher == nil { return fmt.Errorf("ARTIFACT_FETCH_FAILED: digest-aware HTTPS fetcher is required") }
+	if ctx == nil {
+		return fmt.Errorf("ARTIFACT_FETCH_FAILED: context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if fetcher == nil {
+		return fmt.Errorf("ARTIFACT_FETCH_FAILED: digest-aware HTTPS fetcher is required")
+	}
 	maxCompressedBytes := limits.MaxCompressedBytes
 	if maxCompressedBytes <= 0 {
 		maxCompressedBytes = DefaultMaxCompressedBytes
@@ -32,8 +38,12 @@ func Materialize(ctx context.Context, fetcher DigestFetcher, descriptor catalog.
 		return fmt.Errorf("ARTIFACT_LIMIT_EXCEEDED: declared artifact size exceeds configured compressed limit")
 	}
 	data, err := fetcher.FetchWithDigest(ctx, descriptor.URI, descriptor.SHA256)
-	if err != nil { return fmt.Errorf("ARTIFACT_FETCH_FAILED: immutable asset retrieval failed: %w", err) }
-	if err := ctx.Err(); err != nil { return err }
+	if err != nil {
+		return fmt.Errorf("ARTIFACT_FETCH_FAILED: immutable asset retrieval failed: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if int64(len(data)) != descriptor.SizeBytes {
 		return fmt.Errorf("ARTIFACT_SIZE_MISMATCH: downloaded byte count differs from release metadata")
 	}
@@ -45,6 +55,8 @@ func Materialize(ctx context.Context, fetcher DigestFetcher, descriptor catalog.
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("ARTIFACT_EXTRACTION_FAILED: destination staging directory is unsafe")
 	}
-	if err := Extract(data, descriptor.Format, destination, limits); err != nil { return err }
+	if err := Extract(data, descriptor.Format, destination, limits); err != nil {
+		return err
+	}
 	return nil
 }
