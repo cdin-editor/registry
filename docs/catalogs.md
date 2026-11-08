@@ -41,7 +41,32 @@ A release may declare dependencies, provided/required contracts, and multiple so
 
 A release with `status: "withdrawn"` is excluded from normal selection.
 
-## 2. Catalog Index
+## 2. Immutable package artifacts
+
+A Component Release may publish one or more prebuilt package descriptors in
+its `artifacts` array. Each descriptor identifies an exact target, archive
+format and layout, plus an immutable HTTPS URI, SHA-256 digest and byte size.
+It also records the source-unit IDs and build toolchain used to produce the
+package.
+
+The release still records its source units even when consumers choose artifact
+delivery. Those commits are provenance for the package; Registry does not
+clone or build them on the artifact-delivery path.
+
+Artifact kinds and layout IDs are closed contracts: the current runtime
+package uses `runtime-module-archive` with the universal target and
+`lua-module-tree-v1`; native development and SDK packages use a concrete
+target, `native-development-package` or `sdk-package`, and
+`cmake-prefix-v1`. Supported archive formats are `zip` and `tar.gz`.
+
+Publishers must compute `size_bytes` and `sha256` from the exact final
+archive bytes. Registry checks both before safe extraction and writes the
+selected descriptor to the Manifest. It never executes archive content or
+the recorded build recipe.
+
+See [Immutable artifact delivery](artifact-delivery.md) for the full release
+fragment and target-selection rules.
+
 
 A Catalog Index points to Release Metadata and records its integrity digest:
 
