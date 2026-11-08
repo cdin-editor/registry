@@ -164,6 +164,101 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, metadataURI string) ([]byte, er
 	return f.fetch(ctx, metadataURI)
 }
 
+// DownloadReceipt describes exact bytes streamed to a private destination file.
+type DownloadReceipt struct {
+	SizeBytes int64
+	SHA256    string
+}
+
+// DownloadTo streams an HTTPS asset to a new file while enforcing the same
+// allow-list, redirect, DNS/IP and connection policy as Catalog metadata.
+// The caller must compare the receipt with the immutable Release Metadata.
+func (f *HTTPFetcher) DownloadTo(ctx context.Context, assetURI, destination string, maxBytes int64) (DownloadReceipt, error) {
+	if f == nil || f.client == nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: HTTP fetcher is not initialized")
+	}
+	if ctx == nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact download context is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return DownloadReceipt{}, err
+	}
+	if maxBytes <= 0 || maxBytes > f.maxBytes {
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact size limit is invalid")
+	}
+	parsed, err := url.Parse(assetURI)
+	if err != nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: invalid artifact URI")
+	}
+	if err := f.validateURL(parsed); err != nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact URI rejected: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: create artifact request: %w", err)
+	}
+	request.Header.Set("Accept", "application/octet-stream")
+	request.Header.Set("Accept-Encoding", "identity")
+	request.Header.Set("User-Agent", "cdin-registry/1")
+	response, err := f.client.Do(request)
+	if err != nil {
+		if ctx.Err() != nil {
+			return DownloadReceipt{}, ctx.Err()
+		}
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact request failed: %w", scrubURLError(err))
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact server returned HTTP status %d", response.StatusCode)
+	}
+	if encoding := strings.TrimSpace(strings.ToLower(response.Header.Get("Content-Encoding"))); encoding != "" && encoding != "identity" {
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact server returned an unsupported content encoding")
+	}
+	if response.ContentLength > maxBytes {
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact response exceeds declared size limit")
+	}
+	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: create private artifact staging file: %w", err)
+	}
+	removeOnFailure := true
+	defer func() {
+		if removeOnFailure {
+			_ = os.Remove(destination)
+		}
+	}()
+	digest := sha256.New()
+	written, copyErr := io.Copy(io.MultiWriter(file, digest), io.LimitReader(response.Body, maxBytes+1))
+	if copyErr != nil {
+		_ = file.Close()
+		if ctx.Err() != nil {
+			return DownloadReceipt{}, ctx.Err()
+		}
+		return DownloadReceipt{}, fmt.Errorf("catalog: stream artifact response: %w", scrubURLError(copyErr))
+	}
+	if written > maxBytes {
+		_ = file.Close()
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact response exceeds declared size limit")
+	}
+	if response.ContentLength >= 0 && written != response.ContentLength {
+		_ = file.Close()
+		return DownloadReceipt{}, fmt.Errorf("catalog: artifact response length differs from Content-Length")
+	}
+	if err := ctx.Err(); err != nil {
+		_ = file.Close()
+		return DownloadReceipt{}, err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return DownloadReceipt{}, fmt.Errorf("catalog: sync staged artifact: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return DownloadReceipt{}, fmt.Errorf("catalog: close staged artifact: %w", err)
+	}
+	removeOnFailure = false
+	return DownloadReceipt{SizeBytes: written, SHA256: hex.EncodeToString(digest.Sum(nil))}, nil
+}
+
 // FetchWithDigest binds cache lookup and storage to both the immutable URI and
 // expected digest. Cached bytes are re-hashed before reuse; corrupt/stale files
 // are removed and fetched again. Catalog.Load independently verifies the bytes
