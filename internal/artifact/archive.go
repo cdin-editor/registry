@@ -47,7 +47,8 @@ type extractor struct {
 	expanded int64
 	seen     map[string]string
 	names    map[string]string
-	kinds    map[string]entryKind
+	kinds      map[string]entryKind
+	descendants map[string]struct{}
 }
 
 // Extract verifies archive structure and writes regular files/directories only.
@@ -86,7 +87,8 @@ func Extract(data []byte, format, destination string, limits Limits) error {
 		limits: limits,
 		seen:   make(map[string]string),
 		names:  make(map[string]string),
-		kinds:  make(map[string]entryKind),
+		kinds:       make(map[string]entryKind),
+		descendants: make(map[string]struct{}),
 	}
 	switch format {
 	case "tar.gz":
@@ -114,6 +116,12 @@ func (x *extractor) extractTarGzip(data []byte) error {
 	for {
 		header, err := reader.Next()
 		if err == io.EOF {
+			// tar.Reader stops after the archive end markers. Drain the gzip
+			// stream as well so its checksum and uncompressed-size trailer are
+			// verified before the package is accepted.
+			if _, err := io.Copy(io.Discard, gz); err != nil {
+				return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: invalid gzip checksum or trailer")
+			}
 			break
 		}
 		if err != nil {
@@ -201,12 +209,18 @@ func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, decla
 		return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: case-folded or normalized path collision")
 	}
 
-	// A file may never be a parent of another entry, independent of archive order.
-	for existing, existingKind := range x.kinds {
-		if existingKind == kindFile && strings.HasPrefix(folded, existing+"/") {
+	// Check only the candidate's ancestors and its descendant marker. This
+	// keeps validation bounded by path depth instead of scanning every prior
+	// archive entry (which would be quadratic for large but valid packages).
+	parts := strings.Split(folded, "/")
+	for index := 1; index < len(parts); index++ {
+		ancestor := strings.Join(parts[:index], "/")
+		if existing, ok := x.kinds[ancestor]; ok && existing == kindFile {
 			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: file/directory prefix collision")
 		}
-		if kind == kindFile && strings.HasPrefix(existing, folded+"/") {
+	}
+	if kind == kindFile {
+		if _, exists := x.descendants[folded]; exists {
 			return fmt.Errorf("ARTIFACT_ARCHIVE_REJECTED: file/directory prefix collision")
 		}
 	}
@@ -292,6 +306,9 @@ func (x *extractor) addEntry(raw string, kind entryKind, source io.Reader, decla
 	x.seen[folded] = name
 	x.names[folded] = name
 	x.kinds[folded] = kind
+	for index := 1; index < len(parts); index++ {
+		x.descendants[strings.Join(parts[:index], "/")] = struct{}{}
+	}
 	x.entries++
 	return nil
 }
