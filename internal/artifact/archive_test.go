@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"encoding/hex"
 	"hash/crc32"
 	"os"
@@ -148,6 +149,52 @@ func TestExtractTarGzipRejectsPrivilegedModeAndLinks(t *testing.T) {
 				t.Fatal("unsafe tar entry was accepted")
 			}
 		})
+	}
+}
+
+type cancelAfterErrChecksContext struct {
+	context.Context
+	cancel    context.CancelFunc
+	remaining int
+}
+
+func (ctx *cancelAfterErrChecksContext) Err() error {
+	ctx.remaining--
+	if ctx.remaining <= 0 {
+		ctx.cancel()
+	}
+	return ctx.Context.Err()
+}
+
+func TestExtractContextCancellationRemovesPartialExtraction(t *testing.T) {
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	entry, err := writer.CreateHeader(&zip.FileHeader{Name: "large/payload.bin", Method: zip.Store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := bytes.Repeat([]byte("x"), 1<<20)
+	if _, err := entry.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	destination := filepath.Join(t.TempDir(), "stage")
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	base, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx := &cancelAfterErrChecksContext{Context: base, cancel: cancel, remaining: 5}
+
+	err = ExtractContext(ctx, buffer.Bytes(), "zip", destination, Limits{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ExtractContext error = %v, want context.Canceled", err)
+	}
+	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+		t.Fatalf("canceled extraction left a partial destination: %v", err)
 	}
 }
 

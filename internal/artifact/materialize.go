@@ -88,7 +88,7 @@ func Materialize(ctx context.Context, fetcher DigestFetcher, releaseMetadataSHA 
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("ARTIFACT_EXTRACTION_FAILED: destination staging directory is unsafe")
 	}
-	if err := Extract(data, descriptor.Format, destination, limits); err != nil {
+	if err := ExtractContext(ctx, data, descriptor.Format, destination, limits); err != nil {
 		return err
 	}
 	return nil
