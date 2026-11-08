@@ -16,6 +16,7 @@ used Registry before.
 6. [Outputs](outputs.md) — read the prepared Workspace and its records.
 7. [Immutable artifact delivery](artifact-delivery.md) — publish and consume
    target-specific prebuilt packages, including digest-pinned offline replay.
+
 ## Look up a task
 
 - [Command reference](commands.md) — every supported CLI command.
