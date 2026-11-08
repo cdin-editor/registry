@@ -67,7 +67,6 @@ the recorded build recipe.
 See [Immutable artifact delivery](artifact-delivery.md) for the full release
 fragment and target-selection rules.
 
-
 A Catalog Index points to Release Metadata and records its integrity digest:
 
 ```json
