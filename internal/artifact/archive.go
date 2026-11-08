@@ -4,10 +4,10 @@ package artifact
 
 import (
 	"archive/tar"
-	"context"
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
