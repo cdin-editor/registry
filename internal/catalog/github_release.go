@@ -7,13 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -666,6 +664,207 @@ func githubReleaseSourceIdentity(source ReleaseSource) (string, error) {
 	return sha256Hex(encoded), nil
 }
 
+
+// loadGitHubReleaseSources resolves one Catalog's dynamic Release Sources into
+// the same immutable Release candidates consumed by static Catalog resolution.
+// The operation is all-or-nothing: one malformed or incomplete source prevents
+// publication of a partial candidate set.
+func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher, validator Validator) (*Catalog, error) {
+	discoveryFetcher, ok := fetcher.(ReleaseDiscoveryFetcher)
+	if !ok {
+		return nil, fmt.Errorf("catalog: fetcher does not support GitHub Release discovery")
+	}
+	if ctx == nil || validator == nil {
+		return nil, fmt.Errorf("catalog: context and validator are required for Release Source discovery")
+	}
+	if len(index.ReleaseSources) == 0 || len(index.ReleaseSources) > maxCatalogReleaseSources {
+		return nil, fmt.Errorf("catalog: invalid Release Source count")
+	}
+
+	sources := append([]ReleaseSource(nil), index.ReleaseSources...)
+	seenSourceIDs := make(map[string]bool, len(sources))
+	seenComponentVariants := make(map[string]bool, len(sources))
+	for i := range sources {
+		source := &sources[i]
+		if err := validateReleaseSource(*source); err != nil {
+			return nil, err
+		}
+		if source.Variant == "" {
+			source.Variant = "default"
+		}
+		if source.TagPrefix == "" {
+			source.TagPrefix = "v"
+		}
+		if seenSourceIDs[source.SourceID] {
+			return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: duplicate source_id %q", source.SourceID)
+		}
+		seenSourceIDs[source.SourceID] = true
+		key := source.ComponentID + "\x00" + source.Variant
+		if seenComponentVariants[key] {
+			return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: duplicate component/variant mapping %s/%s", source.ComponentID, source.Variant)
+		}
+		seenComponentVariants[key] = true
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		if sources[i].ComponentID != sources[j].ComponentID {
+			return sources[i].ComponentID < sources[j].ComponentID
+		}
+		if sources[i].Variant != sources[j].Variant {
+			return sources[i].Variant < sources[j].Variant
+		}
+		return sources[i].SourceID < sources[j].SourceID
+	})
+
+	out := &Catalog{ID: index.CatalogID}
+	seenReleases := make(map[identity]Release)
+	var totalMetadataBytes int64
+	for _, source := range sources {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		discovered, err := discoveryFetcher.DiscoverGitHubReleases(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		if len(discovered) > maxGitHubReleaseRecords {
+			return nil, fmt.Errorf("RELEASE_DISCOVERY_LIMIT: source %q returned too many metadata documents", source.SourceID)
+		}
+		for _, item := range discovered {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if len(item.Payload) == 0 || len(item.Payload) > maxReleaseMetadataBytes || item.MetadataSize != int64(len(item.Payload)) {
+				return nil, fmt.Errorf("RELEASE_METADATA_SIZE_MISMATCH: metadata bytes do not match the declared size")
+			}
+			nextTotal, sizeErr := accountCatalogMetadataBytes(totalMetadataBytes, int64(len(item.Payload)))
+			if sizeErr != nil {
+				return nil, sizeErr
+			}
+			totalMetadataBytes = nextTotal
+
+			actualDigest := sha256.Sum256(item.Payload)
+			actualSHA := hex.EncodeToString(actualDigest[:])
+			if !isSHA256(item.MetadataSHA) || strings.ToLower(item.MetadataSHA) != actualSHA {
+				return nil, fmt.Errorf("RELEASE_METADATA_DIGEST_MISMATCH: downloaded metadata bytes do not match the GitHub Release Asset digest")
+			}
+			if strings.TrimSpace(item.MetadataURI) == "" || item.Discovery.MetadataAssetName == "" {
+				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_MISSING: discovered metadata asset identity is incomplete")
+			}
+			if item.Discovery.SourceID != source.SourceID ||
+				item.Discovery.Provider != "github-releases-v1" ||
+				item.Discovery.RepositoryURI != source.RepositoryURI ||
+				item.Discovery.MetadataAssetName != releaseMetadataAssetName(source.ComponentID, source.Variant, strings.TrimSuffix(strings.TrimPrefix(item.Discovery.Tag, source.TagPrefix), "")) {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: discovery result does not match its Catalog Release Source")
+			}
+			if !isGitObjectID(item.Discovery.TagCommit) {
+				return nil, fmt.Errorf("RELEASE_TAG_INVALID: discovered tag commit is not a full Git object ID")
+			}
+			if item.Discovery.ReleaseID <= 0 || item.Discovery.ReleaseAPIURI == "" ||
+				item.Discovery.MetadataAssetSizeBytes != int64(len(item.Payload)) {
+				return nil, fmt.Errorf("RELEASE_API_UNAVAILABLE: discovered Release identity is incomplete")
+			}
+			if err := validator.Validate(validation.ComponentRelease, item.Payload, "component-release.json"); err != nil {
+				return nil, fmt.Errorf("catalog: validate discovered release %s: %w", item.Discovery.MetadataAssetName, err)
+			}
+			var release Release
+			if err := json.Unmarshal(item.Payload, &release); err != nil {
+				return nil, fmt.Errorf("catalog: decode discovered release metadata: %w", err)
+			}
+			if release.Variant == "" {
+				release.Variant = "default"
+			}
+			version, versionErr := semver.Parse(release.Version)
+			if versionErr != nil {
+				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: metadata version is not valid SemVer")
+			}
+			prefix := source.TagPrefix
+			if prefix == "" {
+				prefix = "v"
+			}
+			if item.Discovery.Tag != prefix+release.Version {
+				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: release tag and metadata version disagree")
+			}
+			expectedAsset := releaseMetadataAssetName(source.ComponentID, source.Variant, release.Version)
+			if item.Discovery.MetadataAssetName != expectedAsset {
+				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_MISSING: metadata asset name does not match the canonical component/variant/version name")
+			}
+			publication := release.Publication
+			if publication.Provider != "github-releases-v1" ||
+				publication.RepositoryURI != source.RepositoryURI ||
+				publication.Tag != item.Discovery.Tag ||
+				!strings.EqualFold(publication.TagCommit, item.Discovery.TagCommit) ||
+				publication.MetadataAssetName != expectedAsset {
+				return nil, fmt.Errorf("RELEASE_TAG_MOVED: publisher metadata does not match the discovered immutable GitHub Release identity")
+			}
+			publisherSources := 0
+			for _, sourceUnit := range release.SourceUnits {
+				canonicalRepo, repoErr := canonicalGitHubRepository(sourceUnit.RepositoryURI)
+				sourceRepo, sourceRepoErr := canonicalGitHubRepository(source.RepositoryURI)
+				if repoErr == nil && sourceRepoErr == nil && canonicalRepo == sourceRepo {
+					publisherSources++
+					if !strings.EqualFold(sourceUnit.Revision, item.Discovery.TagCommit) {
+						return nil, fmt.Errorf("RELEASE_SOURCE_REVISION_MISMATCH: publisher source unit does not match the Git tag commit")
+					}
+				}
+			}
+			if publisherSources != 1 {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: metadata must declare exactly one source unit for its publishing repository")
+			}
+			if release.ComponentID != source.ComponentID || release.Variant != source.Variant {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: metadata component/variant does not match its Catalog Release Source")
+			}
+			for artifactIndex := range release.Artifacts {
+				release.Artifacts[artifactIndex].Target = release.Artifacts[artifactIndex].Target.Normalize()
+			}
+			if err := ValidateReleaseArtifacts(release.SourceUnits, release.Artifacts); err != nil {
+				return nil, fmt.Errorf("catalog: validate artifacts for %s/%s@%s: %w", release.ComponentID, release.Variant, release.Version, err)
+			}
+
+			release.Raw = append([]byte(nil), item.Payload...)
+			release.MetadataURI = item.MetadataURI
+			release.MetadataSHA = actualSHA
+			discovery := item.Discovery
+			release.Discovery = &discovery
+
+			key := identity{component: release.ComponentID, variant: release.Variant, version: release.Version}
+			if previous, exists := seenReleases[key]; exists {
+				if previous.MetadataSHA != release.MetadataSHA ||
+					previous.Discovery == nil || previous.Discovery.ReleaseID != discovery.ReleaseID {
+					return nil, fmt.Errorf("RELEASE_VERSION_AMBIGUOUS: multiple immutable GitHub Releases publish %s/%s@%s", key.component, key.variant, key.version)
+				}
+				continue
+			}
+			seenReleases[key] = release
+			out.Releases = append(out.Releases, release)
+			_ = version // SemVer is validated here; ordering is owned by the resolver.
+		}
+	}
+	sort.Slice(out.Releases, func(i, j int) bool {
+		left, right := out.Releases[i], out.Releases[j]
+		if left.ComponentID != right.ComponentID {
+			return left.ComponentID < right.ComponentID
+		}
+		if left.Variant != right.Variant {
+			return left.Variant < right.Variant
+		}
+		if left.Version != right.Version {
+			leftVersion, _ := semver.Parse(left.Version)
+			rightVersion, _ := semver.Parse(right.Version)
+			return semver.ComparePrecedence(leftVersion, rightVersion) > 0
+		}
+		return left.MetadataSHA < right.MetadataSHA
+	})
+	return out, nil
+}
+
+func canonicalGitHubRepository(repositoryURI string) (string, error) {
+	owner, repository, err := parseGitHubRepository(repositoryURI)
+	if err != nil {
+		return "", err
+	}
+	return "https://github.com/" + strings.ToLower(owner) + "/" + strings.ToLower(repository), nil
+}
+
 func (f *HTTPFetcher) FetchGitHubAPIForRelease(ctx context.Context, endpoint string) ([]byte, error) {
 	if f == nil || f.offline {
 		return nil, fmt.Errorf("RELEASE_DISCOVERY_OFFLINE_MISS: GitHub API is unavailable in offline mode")
@@ -683,6 +882,3 @@ func (f *HTTPFetcher) fetchWithRetry(ctx context.Context, endpoint string) ([]by
 }
 
 var _ ReleaseDiscoveryFetcher = (*HTTPFetcher)(nil)
-var _ = strconv.Itoa
-var _ = io.EOF
-var _ = errors.Is
