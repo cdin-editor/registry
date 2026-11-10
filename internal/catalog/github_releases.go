@@ -143,6 +143,9 @@ func (f *HTTPFetcher) fetchGitHubAPI(ctx context.Context, endpoint string) ([]by
 	if f == nil || f.client == nil || ctx == nil {
 		return nil, fmt.Errorf("GITHUB_DISCOVERY_FAILED: GitHub API transport is unavailable")
 	}
+	if f.offline {
+		return nil, fmt.Errorf("GITHUB_DISCOVERY_OFFLINE_MISS: no verified paginated Release inventory snapshot is cached for this source")
+	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil || !parsed.IsAbs() || parsed.Scheme != "https" ||
 		parsed.Host != "api.github.com" || parsed.User != nil || parsed.Fragment != "" {
