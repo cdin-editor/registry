@@ -167,6 +167,45 @@ func TestLoadFromGitHubReleaseSourcesVerifiesAndRecordsPublication(t *testing.T)
 	}
 }
 
+func TestLoadFromGitHubReleaseSourcesRetainsWithdrawnReleaseHistory(t *testing.T) {
+	source, _, client := testADR0028Fixture(t, "1.2.0", "2026-11-10T18:00:00Z", 16)
+	var metadata Release
+	if err := json.Unmarshal(client.metadata, &metadata); err != nil {
+		t.Fatal(err)
+	}
+	metadata.Status = "withdrawn"
+	payload, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.metadata = payload
+	digest := sha256.Sum256(payload)
+	releases := client.releases[1]
+	releases[0].Assets[0].Size = int64(len(payload))
+	releases[0].Assets[0].Digest = "sha256:" + hex.EncodeToString(digest[:])
+	client.releases[1] = releases
+
+	loaded, err := loadFromGitHubReleaseSources(
+		context.Background(),
+		Index{SchemaVersion: "1.1.0", CatalogID: "test.catalog", ReleaseSources: []ReleaseSource{source}},
+		client,
+		&acceptingValidator{},
+		1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Releases) != 1 {
+		t.Fatalf("got %d releases, want withdrawn history retained", len(loaded.Releases))
+	}
+	withdrawn := loaded.Releases[0]
+	if withdrawn.Status != "withdrawn" || withdrawn.Discovery == nil ||
+		withdrawn.Discovery.ReleaseID != releases[0].ID ||
+		withdrawn.MetadataSHA != hex.EncodeToString(digest[:]) {
+		t.Fatalf("withdrawn release provenance was not retained: %#v", withdrawn)
+	}
+}
+
 func TestLoadFromGitHubReleaseSourcesRejectsMissingDigest(t *testing.T) {
 	source, _, client := testADR0028Fixture(t, "1.2.0", "2026-11-10T18:00:00Z", 11)
 	releases := client.releases[1]
