@@ -759,11 +759,59 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 		if len(discovered) > maxGitHubReleaseRecords {
 			return nil, fmt.Errorf("RELEASE_DISCOVERY_LIMIT: source %q returned too many metadata documents", source.SourceID)
 		}
+		owner, repository, repositoryErr := parseGitHubRepository(source.RepositoryURI)
+		if repositoryErr != nil {
+			return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: source repository is invalid")
+		}
 		for _, item := range discovered {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if len(item.Payload) == 0 || len(item.Payload) > maxReleaseMetadataBytes || item.MetadataSize != int64(len(item.Payload)) {
+			if item.Discovery.SourceID != source.SourceID ||
+				item.Discovery.Provider != "github-releases-v1" ||
+				item.Discovery.RepositoryURI != source.RepositoryURI {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: discovery result does not match its Catalog Release Source")
+			}
+			if !strings.HasPrefix(item.Discovery.Tag, source.TagPrefix) {
+				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: discovered tag does not use the configured tag prefix")
+			}
+			tagVersionText := strings.TrimPrefix(item.Discovery.Tag, source.TagPrefix)
+			tagVersion, tagVersionErr := semver.Parse(tagVersionText)
+			if tagVersionErr != nil {
+				return nil, fmt.Errorf("RELEASE_TAG_INVALID: discovered tag is not prefix + SemVer")
+			}
+			if source.MinimumVersion != "" {
+				minimum, minimumErr := semver.Parse(source.MinimumVersion)
+				if minimumErr != nil {
+					return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: minimum_version is not valid SemVer")
+				}
+				if semver.ComparePrecedence(tagVersion, minimum) < 0 {
+					// Enforce the migration floor at the Catalog boundary too;
+					// a Fetcher implementation cannot inject pre-adoption releases.
+					continue
+				}
+			}
+
+			expectedAsset := releaseMetadataAssetName(source.ComponentID, source.Variant, tagVersionText)
+			if item.Discovery.MetadataAssetName != expectedAsset {
+				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: discovered tag does not identify its canonical metadata asset")
+			}
+			if err := validateGitHubReleaseAssetURI(item.MetadataURI, owner, repository, item.Discovery.Tag, expectedAsset); err != nil {
+				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_URI_REJECTED: metadata URI does not match the expected GitHub Release asset")
+			}
+			if item.Discovery.ReleaseID <= 0 {
+				return nil, fmt.Errorf("RELEASE_API_UNAVAILABLE: discovered Release ID is invalid")
+			}
+			expectedAPIURI := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%d", owner, repository, item.Discovery.ReleaseID)
+			if item.Discovery.ReleaseAPIURI != expectedAPIURI {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: Release API URI does not match its source repository")
+			}
+			if !isGitObjectID(item.Discovery.TagCommit) {
+				return nil, fmt.Errorf("RELEASE_TAG_INVALID: discovered tag commit is not a full Git object ID")
+			}
+
+			if len(item.Payload) == 0 || len(item.Payload) > maxReleaseMetadataBytes || item.MetadataSize != int64(len(item.Payload)) ||
+				item.Discovery.MetadataAssetSizeBytes != int64(len(item.Payload)) {
 				return nil, fmt.Errorf("RELEASE_METADATA_SIZE_MISMATCH: metadata bytes do not match the declared size")
 			}
 			metadataBytes := int64(len(item.Payload))
@@ -777,43 +825,8 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 			if !isSHA256(item.MetadataSHA) || strings.ToLower(item.MetadataSHA) != actualSHA {
 				return nil, fmt.Errorf("RELEASE_METADATA_DIGEST_MISMATCH: downloaded metadata bytes do not match the GitHub Release Asset digest")
 			}
-			if strings.TrimSpace(item.MetadataURI) == "" || item.Discovery.MetadataAssetName == "" {
-				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_MISSING: discovered metadata asset identity is incomplete")
-			}
-			if item.Discovery.SourceID != source.SourceID ||
-				item.Discovery.Provider != "github-releases-v1" ||
-				item.Discovery.RepositoryURI != source.RepositoryURI {
-				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: discovery result does not match its Catalog Release Source")
-			}
-			owner, repository, repositoryErr := parseGitHubRepository(source.RepositoryURI)
-			if repositoryErr != nil {
-				return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: source repository is invalid")
-			}
-			prefix := source.TagPrefix
-			if prefix == "" {
-				prefix = "v"
-			}
-			tagVersion := strings.TrimPrefix(item.Discovery.Tag, prefix)
-			expectedName := releaseMetadataAssetName(source.ComponentID, source.Variant, tagVersion)
-			if !strings.HasPrefix(item.Discovery.Tag, prefix) || item.Discovery.MetadataAssetName != expectedName {
-				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: discovered tag does not identify its canonical metadata asset")
-			}
-			if err := validateGitHubReleaseAssetURI(item.MetadataURI, owner, repository, item.Discovery.Tag, expectedName); err != nil {
-				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_URI_REJECTED: metadata URI does not match the expected GitHub Release asset")
-			}
-			expectedAPIURI := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%d", owner, repository, item.Discovery.ReleaseID)
-			if item.Discovery.ReleaseAPIURI != expectedAPIURI {
-				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: Release API URI does not match its source repository")
-			}
-			if !isGitObjectID(item.Discovery.TagCommit) {
-				return nil, fmt.Errorf("RELEASE_TAG_INVALID: discovered tag commit is not a full Git object ID")
-			}
-			if item.Discovery.ReleaseID <= 0 || item.Discovery.ReleaseAPIURI == "" ||
-				item.Discovery.MetadataAssetSizeBytes != int64(len(item.Payload)) {
-				return nil, fmt.Errorf("RELEASE_API_UNAVAILABLE: discovered Release identity is incomplete")
-			}
 			if err := validator.Validate(validation.ComponentRelease, item.Payload, "component-release.json"); err != nil {
-				return nil, fmt.Errorf("catalog: validate discovered release %s: %w", item.Discovery.MetadataAssetName, err)
+				return nil, fmt.Errorf("catalog: validate discovered release %s: %w", expectedAsset, err)
 			}
 			var release Release
 			if err := json.Unmarshal(item.Payload, &release); err != nil {
@@ -823,19 +836,11 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 				release.Variant = "default"
 			}
 			version, versionErr := semver.Parse(release.Version)
-			if versionErr != nil {
-				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: metadata version is not valid SemVer")
-			}
-			prefix := source.TagPrefix
-			if prefix == "" {
-				prefix = "v"
-			}
-			if item.Discovery.Tag != prefix+release.Version {
+			if versionErr != nil || semver.ComparePrecedence(version, tagVersion) != 0 || release.Version != tagVersionText {
 				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: release tag and metadata version disagree")
 			}
-			expectedAsset := releaseMetadataAssetName(source.ComponentID, source.Variant, release.Version)
-			if item.Discovery.MetadataAssetName != expectedAsset {
-				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_MISSING: metadata asset name does not match the canonical component/variant/version name")
+			if release.ComponentID != source.ComponentID || release.Variant != source.Variant {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: metadata component/variant does not match its Catalog Release Source")
 			}
 			publication := release.Publication
 			if publication.Provider != "github-releases-v1" ||
@@ -858,9 +863,6 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 			}
 			if publisherSources != 1 {
 				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: metadata must declare exactly one source unit for its publishing repository")
-			}
-			if release.ComponentID != source.ComponentID || release.Variant != source.Variant {
-				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: metadata component/variant does not match its Catalog Release Source")
 			}
 			for artifactIndex := range release.Artifacts {
 				release.Artifacts[artifactIndex].Target = release.Artifacts[artifactIndex].Target.Normalize()
@@ -885,7 +887,6 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 			}
 			seenReleases[key] = release
 			out.Releases = append(out.Releases, release)
-			_ = version // SemVer is validated here; ordering is owned by the resolver.
 		}
 	}
 	sort.Slice(out.Releases, func(i, j int) bool {
