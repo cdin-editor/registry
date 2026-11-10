@@ -23,3 +23,16 @@ jobs:
       go-version: "1.27.3"
       pipeline-task: check
       pipeline-ref: c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+
+  release-catalog:
+    name: Registry immutable Catalog release preflight
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Test Catalog model and release identity validation
+        run: python scripts/prepare-release-catalog.py --self-test
