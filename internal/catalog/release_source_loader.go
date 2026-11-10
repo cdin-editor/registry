@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"time"
 	"sort"
 	"strings"
 
@@ -59,8 +61,17 @@ func loadFromGitHubReleaseSources(
 				if err != nil {
 					return nil, fmt.Errorf("catalog: invalid GitHub Release tag for source %s: %w", source.SourceID, err)
 				}
-				if githubRelease.ID <= 0 || githubRelease.URL == "" || githubRelease.HTMLURL == "" {
+				if githubRelease.ID <= 0 {
 					return nil, fmt.Errorf("catalog: GitHub Release identity is incomplete for source %s", source.SourceID)
+				}
+				owner, repository, repoErr := githubRepositoryParts(source.RepositoryURI)
+				if repoErr != nil {
+					return nil, repoErr
+				}
+				expectedReleaseAPIURI := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%d", owner, repository, githubRelease.ID)
+				expectedReleaseHTMLURI := fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s", owner, repository, githubRelease.TagName)
+				if githubRelease.URL != expectedReleaseAPIURI || githubRelease.HTMLURL != expectedReleaseHTMLURI {
+					return nil, fmt.Errorf("catalog: GitHub Release API/browser URI does not match the configured source")
 				}
 				if githubRelease.Prerelease != (len(version.Pre) > 0) {
 					return nil, fmt.Errorf("catalog: GitHub Release prerelease flag does not match SemVer for tag %s", githubRelease.TagName)
@@ -82,8 +93,19 @@ func loadFromGitHubReleaseSources(
 				if asset.ID <= 0 || asset.Size <= 0 || asset.Size > maxReleaseMetadataBytes {
 					return nil, fmt.Errorf("catalog: GitHub Release metadata asset identity or size is invalid for %s", githubRelease.TagName)
 				}
-				if !validArtifactHTTPSURI(asset.BrowserDownloadURL) || !validArtifactHTTPSURI(asset.URL) {
-					return nil, fmt.Errorf("catalog: GitHub Release metadata asset URI is not an absolute HTTPS URI")
+				expectedAssetAPIURI := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/assets/%d", owner, repository, asset.ID)
+				if asset.URL != expectedAssetAPIURI || !validArtifactHTTPSURI(asset.BrowserDownloadURL) {
+					return nil, fmt.Errorf("catalog: GitHub Release metadata asset URI does not match the configured source")
+				}
+				browserURL, _ := url.Parse(asset.BrowserDownloadURL)
+				expectedBrowserPath := fmt.Sprintf("/%s/%s/releases/download/%s/%s", owner, repository, githubRelease.TagName, expectedAsset)
+				if browserURL.Host != "github.com" || browserURL.Path != expectedBrowserPath || browserURL.RawQuery != "" || browserURL.Fragment != "" {
+					return nil, fmt.Errorf("catalog: GitHub Release metadata download URI does not match the asset identity")
+				}
+				if githubRelease.PublishedAt != "" {
+					if _, timeErr := time.Parse(time.RFC3339, githubRelease.PublishedAt); timeErr != nil {
+						return nil, fmt.Errorf("catalog: GitHub Release published_at timestamp is invalid")
+					}
 				}
 				expectedSHA, err := ValidateGitHubAssetDigest(asset.Digest)
 				if err != nil {
