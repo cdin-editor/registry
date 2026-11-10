@@ -87,6 +87,17 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		}
 		allowed[host] = struct{}{}
 	}
+	// GitHub's Release API and immutable download hosts are built-in provider
+	// endpoints for the accepted github-releases-v1 source. They remain exact
+	// host entries and still pass DNS/IP and redirect policy checks.
+	for _, host := range []string{
+		"api.github.com",
+		"github.com",
+		"release-assets.githubusercontent.com",
+		"objects.githubusercontent.com",
+	} {
+		allowed[host] = struct{}{}
+	}
 	if len(allowed) == 0 {
 		return nil, fmt.Errorf("catalog: at least one HTTPS metadata host must be allow-listed")
 	}
