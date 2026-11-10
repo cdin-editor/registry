@@ -119,7 +119,11 @@ func loadFromGitHubReleaseSources(
 					return nil, fmt.Errorf("catalog: GitHub tag %s did not resolve to a full commit SHA", githubRelease.TagName)
 				}
 				var payload []byte
-				if digestFetcher, supportsDigest := fetcher.(DigestFetcher); supportsDigest {
+				if identityFetcher, supportsIdentity := fetcher.(GitHubReleaseAssetIdentityFetcher); supportsIdentity {
+					payload, err = identityFetcher.FetchGitHubReleaseAssetWithIdentity(
+						ctx, source, githubRelease, tagCommit, asset, maxReleaseMetadataBytes,
+					)
+				} else if digestFetcher, supportsDigest := fetcher.(DigestFetcher); supportsDigest {
 					payload, err = digestFetcher.FetchWithDigest(ctx, asset.BrowserDownloadURL, expectedSHA)
 				} else {
 					payload, err = client.FetchGitHubReleaseAsset(ctx, asset.BrowserDownloadURL, maxReleaseMetadataBytes)
