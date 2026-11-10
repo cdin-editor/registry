@@ -218,8 +218,11 @@ func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, pac
 		Components:           make([]Component, 0, len(graph.Components)),
 		ResolutionOrder:      append([]resolver.Node(nil), graph.ResolutionOrder...),
 	}
-	if graph.Resolution.DeliveryMode != "" {
+	if graph.Resolution.DeliveryMode != "" || documentSchema == "1.2.0" {
 		resolution := graph.Resolution
+		if resolution.DeliveryMode == "" {
+			resolution.DeliveryMode = "source"
+		}
 		doc.Resolution = &resolution
 	}
 
