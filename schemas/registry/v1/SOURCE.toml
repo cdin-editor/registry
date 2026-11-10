@@ -1,8 +1,8 @@
 schema_version = 1
 contract_version = "1.4.0"
 repository = "cdin-editor/spec"
-revision = "de6098224eba98b8fc6c4e2f434be5548379f9c1"
-tree_sha = "0abfc56e44da103194f9a4a47f8a71d54faece8a"
+revision = "2ad9ca8cb14e0a68dac1763dc8359be0a2cf6008"
+tree_sha = "84f5cdb5987b4d0b6e8234fd62a5fbe18ee9e375"
 schema_directory = "schemas/registry/v1"
 files = [
   "product-definition.schema.json",
@@ -16,7 +16,7 @@ files = [
 # Each blob SHA pins the exact schema bytes independently of ref/raw URL resolution.
 schema_blobs = [
   { name = "product-definition.schema.json", blob_sha = "c554c8f546328c4f52505f2e9d06485e7a67e3c0" },
-  { name = "catalog-index.schema.json", blob_sha = "3c37be7cba6c67de5706d92d75b3a6dccee07a5c" },
+  { name = "catalog-index.schema.json", blob_sha = "ae8f76968f749afacb270d7ba71251709920d59f" },
   { name = "component-release.schema.json", blob_sha = "9d8dc2e31c3175f9daef621896c0487e9b9bb99e" },
   { name = "resolved-manifest.schema.json", blob_sha = "19b6048c9b333dd4af0c67171c7d1f8fbf35af7b" },
   { name = "resolution-report.schema.json", blob_sha = "cf376c49a2e0d9408114cbafc9941162c794e588" },
