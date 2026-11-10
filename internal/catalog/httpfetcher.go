@@ -306,7 +306,7 @@ func (f *HTTPFetcher) fetchWithCacheKey(ctx context.Context, metadataURI, expect
 }
 
 func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, error) {
-	return f.fetchBounded(ctx, metadataURI, "application/json", f.maxBytes)
+	return f.fetchBounded(ctx, metadataURI, "application/json", 0)
 }
 
 func (f *HTTPFetcher) fetchBounded(ctx context.Context, metadataURI, accept string, requestedLimit int64) ([]byte, error) {
@@ -388,7 +388,6 @@ func (f *HTTPFetcher) validateURL(parsed *url.URL) error {
 	if port := parsed.Port(); port != "" && port != "443" {
 		return fmt.Errorf("catalog: metadata URI must use HTTPS port 443")
 	}
-	host := strings.ToLower(parsed.Hostname())
 	if net.ParseIP(host) != nil {
 		return fmt.Errorf("catalog: metadata URI must use an allow-listed DNS hostname, not an IP literal")
 	}
