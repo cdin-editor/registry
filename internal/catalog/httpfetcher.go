@@ -323,6 +323,13 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 		return nil, fmt.Errorf("catalog: metadata request failed: %w", scrubURLError(err))
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusTooManyRequests {
+		if strings.EqualFold(response.Header.Get("X-RateLimit-Remaining"), "0") ||
+			response.StatusCode == http.StatusTooManyRequests ||
+			response.Header.Get("Retry-After") != "" {
+			return nil, newGitHubRateLimitError(response.Header)
+		}
+	}
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("catalog: metadata server returned HTTP status %d", response.StatusCode)
 	}
@@ -345,6 +352,32 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 	return data, nil
 }
 
+
+func newGitHubRateLimitError(headers http.Header) error {
+	delay := time.Duration(0)
+	if retryAfter := strings.TrimSpace(headers.Get("Retry-After")); retryAfter != "" {
+		if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds >= 0 {
+			delay = time.Duration(seconds) * time.Second
+		} else if when, err := http.ParseTime(retryAfter); err == nil {
+			delay = time.Until(when)
+		}
+	}
+	if delay <= 0 {
+		if reset := strings.TrimSpace(headers.Get("X-RateLimit-Reset")); reset != "" {
+			if unixSeconds, err := strconv.ParseInt(reset, 10, 64); err == nil {
+				delay = time.Until(time.Unix(unixSeconds, 0))
+			}
+		}
+	}
+	if delay < 0 {
+		delay = 0
+	}
+	if delay > 5*time.Second {
+		delay = 5*time.Second
+	}
+	return &githubRateLimitError{retryAfter: delay}
+}
+
 // validateURL is called before every request and for every redirect. Exact host
 // checks prevent a catalog entry from escalating into an arbitrary network fetch.
 func (f *HTTPFetcher) validateURL(parsed *url.URL) error {
@@ -354,13 +387,33 @@ func (f *HTTPFetcher) validateURL(parsed *url.URL) error {
 	if strings.ToLower(parsed.Scheme) != "https" || parsed.Hostname() == "" {
 		return fmt.Errorf("catalog: metadata URI must use HTTPS")
 	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("catalog: metadata URI must not contain credentials, query or fragment")
+	if parsed.User != nil || parsed.Fragment != "" {
+		return fmt.Errorf("catalog: metadata URI must not contain credentials or fragment")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if parsed.RawQuery != "" {
+		switch host {
+		case "api.github.com":
+			query := parsed.Query()
+			if len(query) != 2 || len(query["per_page"]) != 1 || len(query["page"]) != 1 ||
+				query.Get("per_page") != strconv.Itoa(githubReleasePageSize) {
+				return fmt.Errorf("catalog: GitHub API query is not a supported bounded pagination request")
+			}
+			page, err := strconv.Atoi(query.Get("page"))
+			if err != nil || page < 1 || page > maxGitHubReleasePages {
+				return fmt.Errorf("catalog: GitHub API page is outside the configured discovery budget")
+			}
+		case "release-assets.githubusercontent.com", "objects.githubusercontent.com":
+			// GitHub asset redirects may carry short-lived signed query
+			// parameters. The hostname still has to pass the exact allow-list
+			// and public-address checks below.
+		default:
+			return fmt.Errorf("catalog: metadata URI query is not permitted for this host")
+		}
 	}
 	if port := parsed.Port(); port != "" && port != "443" {
 		return fmt.Errorf("catalog: metadata URI must use HTTPS port 443")
 	}
-	host := strings.ToLower(parsed.Hostname())
 	if net.ParseIP(host) != nil {
 		return fmt.Errorf("catalog: metadata URI must use an allow-listed DNS hostname, not an IP literal")
 	}
