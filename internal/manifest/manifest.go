@@ -1231,6 +1231,7 @@ func safeWorkspacePath(value string) bool {
 		}
 	}
 	return true
+}
 
 func validateManifestReleaseDiscovery(component Component) error {
 	discovery := component.ReleaseDiscovery
@@ -1266,4 +1267,3 @@ func validateManifestReleaseDiscovery(component Component) error {
 	return nil
 }
 
-}
