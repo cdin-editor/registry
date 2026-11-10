@@ -101,17 +101,17 @@ type EnvironmentContract struct {
 
 // Component records one selected immutable Component Release.
 type Component struct {
-	ComponentID        string                             `json:"component_id"`
-	Variant            string                             `json:"variant"`
-	Version            string                             `json:"version"`
-	ReleaseMetadataURI string                             `json:"release_metadata_uri"`
-	ReleaseMetadataSHA string                             `json:"release_metadata_sha256"`
+	ComponentID        string                              `json:"component_id"`
+	Variant            string                              `json:"variant"`
+	Version            string                              `json:"version"`
+	ReleaseMetadataURI string                              `json:"release_metadata_uri"`
+	ReleaseMetadataSHA string                              `json:"release_metadata_sha256"`
 	ReleaseDiscovery   *catalog.ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
-	Delivery           string                             `json:"delivery,omitempty"`
-	SelectedArtifact   *SelectedArtifact                  `json:"selected_artifact,omitempty"`
-	SourceUnits        []SourceUnit                       `json:"source_units,omitempty"`
-	Dependencies       []Dependency                       `json:"dependencies"`
-	Contracts          catalog.Contracts                  `json:"contracts,omitempty"`
+	Delivery           string                              `json:"delivery,omitempty"`
+	SelectedArtifact   *SelectedArtifact                   `json:"selected_artifact,omitempty"`
+	SourceUnits        []SourceUnit                        `json:"source_units,omitempty"`
+	Dependencies       []Dependency                        `json:"dependencies"`
+	Contracts          catalog.Contracts                   `json:"contracts,omitempty"`
 }
 
 // ArtifactPackage is the verified package directory staged by Workspace.
