@@ -173,6 +173,72 @@ func TestKindsAreStableAndSorted(t *testing.T) {
 	}
 }
 
+func TestResolutionReportVersionGateRequiresActualReleaseDiscoveryEvidence(t *testing.T) {
+	validator := newTestValidator(t)
+	base := map[string]any{
+		"result": "failure",
+		"selected": []any{},
+		"applied_constraints": []any{},
+		"rejected_candidates": []any{},
+		"conflicts": []any{
+			map[string]any{
+				"code": "NO_COMPATIBLE_RELEASE",
+				"message": "no active release satisfies the requested constraint",
+			},
+		},
+		"warnings": []any{},
+	}
+	encode := func(version string, withDiscovery bool) []byte {
+		document := make(map[string]any, len(base)+1)
+		for key, value := range base {
+			document[key] = value
+		}
+		document["schema_version"] = version
+		if withDiscovery {
+			conflicts := []any{
+				map[string]any{
+					"code": "AMBIGUOUS_RELEASE",
+					"message": "two immutable candidates have equal precedence",
+					"candidate_evidence": []any{
+						map[string]any{
+							"component_id": "engine",
+							"variant": "default",
+							"version": "1.0.0",
+							"release_discovery": map[string]any{
+								"source_id": "engine-source",
+								"provider": "github-releases-v1",
+								"repository_uri": "https://github.com/example/engine",
+								"release_id": 123,
+								"release_api_uri": "https://api.github.com/repos/example/engine/releases/123",
+								"tag": "v1.0.0",
+								"tag_commit": "0123456789abcdef0123456789abcdef01234567",
+								"metadata_asset_name": "engine-1.0.0.json",
+								"metadata_asset_size_bytes": 456,
+							},
+						},
+					},
+				},
+			}
+			document["conflicts"] = conflicts
+		}
+		payload, err := json.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return payload
+	}
+
+	if err := validator.Validate(ResolutionReport, encode("1.1.0", false), "resolution-report.json"); err != nil {
+		t.Fatalf("legacy 1.1 report with an ordinary conflict was rejected: %v", err)
+	}
+	if err := validator.Validate(ResolutionReport, encode("1.1.0", true), "resolution-report.json"); err == nil {
+		t.Fatal("1.1 report containing ADR-0028 candidate evidence was accepted")
+	}
+	if err := validator.Validate(ResolutionReport, encode("1.2.0", true), "resolution-report.json"); err != nil {
+		t.Fatalf("1.2 report with ADR-0028 candidate evidence was rejected: %v", err)
+	}
+}
+
 func TestValidateUpdateDiscoveryReportAndCrossSchemaReference(t *testing.T) {
 	validator := newTestValidator(t)
 	resolution, err := os.ReadFile("../../examples/resolution-report.json")
