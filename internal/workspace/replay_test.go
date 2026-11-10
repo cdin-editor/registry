@@ -470,6 +470,7 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 
 	resolution := replayResolution(repository, repositoryURI, revision)
 	resolution.Graph.SchemaVersion = "1.2.0"
+	resolution.Graph.Resolution.DeliveryMode = "source"
 
 	releaseDocument := map[string]any{
 		"schema_version": "1.2.0",
