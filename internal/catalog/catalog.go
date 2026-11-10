@@ -41,9 +41,10 @@ type Validator interface {
 // Index is the validated Catalog Index document supplied by a catalog source.
 // Its entries reference immutable release metadata, not component source code.
 type Index struct {
-	SchemaVersion string  `json:"schema_version"`
-	CatalogID     string  `json:"catalog_id"`
-	Entries       []Entry `json:"entries"`
+	SchemaVersion  string          `json:"schema_version"`
+	CatalogID      string          `json:"catalog_id"`
+	Entries        []Entry         `json:"entries,omitempty"`
+	ReleaseSources []ReleaseSource `json:"release_sources,omitempty"`
 }
 
 // Entry identifies one immutable Component Release Metadata document and the
@@ -109,8 +110,10 @@ type Release struct {
 	SourceUnits   []SourceUnit `json:"source_units"`
 	Artifacts     []Artifact   `json:"artifacts,omitempty"`
 	Dependencies  []Dependency `json:"dependencies"`
-	Contracts     Contracts    `json:"contracts"`
-	Raw           []byte       `json:"-"`
+	Contracts       Contracts         `json:"contracts"`
+	Publication     ReleasePublication `json:"publication,omitempty"`
+	Discovery       *ReleaseDiscovery  `json:"-"`
+	Raw             []byte             `json:"-"`
 	MetadataURI   string       `json:"-"`
 	MetadataSHA   string       `json:"-"`
 }
@@ -163,6 +166,7 @@ const (
 	defaultReleaseMetadataFetches       = maxConcurrentReleaseMetadataFetches
 	maxCatalogIndexBytes                = 8 << 20
 	maxCatalogEntries                   = 4096
+	maxCatalogReleaseSources            = 256
 	maxReleaseMetadataBytes             = 8 << 20
 	maxCatalogMetadataBytes             = 256 << 20
 )
@@ -237,6 +241,15 @@ func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, va
 	}
 	if len(index.Entries) > maxCatalogEntries {
 		return nil, fmt.Errorf("catalog: Catalog entry count exceeds the limit of %d (got %d)", maxCatalogEntries, len(index.Entries))
+	}
+	if len(index.ReleaseSources) > maxCatalogReleaseSources {
+		return nil, fmt.Errorf("catalog: Release Source count exceeds the limit of %d", maxCatalogReleaseSources)
+	}
+	if len(index.ReleaseSources) > 0 {
+		if len(index.Entries) > 0 {
+			return nil, fmt.Errorf("catalog: static entries and release_sources cannot be mixed")
+		}
+		return loadGitHubReleaseSources(ctx, index, fetcher, validator)
 	}
 
 	out := &Catalog{ID: index.CatalogID}
