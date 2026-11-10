@@ -25,6 +25,7 @@ const (
 	maxGitHubTagPeelDepth       = 8
 	maxGitHubAPIRetries         = 3
 	maxGitHubDiscoveryCacheSize = 16 << 20
+	maxGitHubDiscoveryCacheEntries = 256
 )
 
 // ReleaseSource is a stable Catalog mapping from one logical component variant
@@ -643,6 +644,18 @@ func (c *MetadataCache) writeGitHubReleaseSnapshot(source ReleaseSource, release
 	}
 	key := sha256.Sum256([]byte(source.SourceID))
 	destination := filepath.Join(directory, hex.EncodeToString(key[:])+".json")
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return err
+	}
+	if len(entries) > maxGitHubDiscoveryCacheEntries {
+		return fmt.Errorf("Release Source cache entry count exceeds the configured limit")
+	}
+	if len(entries) == maxGitHubDiscoveryCacheEntries {
+		if _, statErr := os.Lstat(destination); errors.Is(statErr, os.ErrNotExist) {
+			return fmt.Errorf("Release Source cache is full")
+		}
+	}
 	temporary, err := os.CreateTemp(directory, ".release-source-*.tmp")
 	if err != nil {
 		return err
