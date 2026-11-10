@@ -167,22 +167,78 @@ func (f *HTTPFetcher) FetchGitHubReleaseAssetWithIdentity(
 		parsed.Port() != "" {
 		return nil, fmt.Errorf("catalog: GitHub Release asset URI is invalid")
 	}
+	discovery := ReleaseDiscoveryProvenance{
+		SourceID: source.SourceID,
+		Provider: source.Provider,
+		RepositoryURI: source.RepositoryURI,
+		ReleaseID: release.ID,
+		ReleaseAPIURI: release.URL,
+		Tag: release.TagName,
+		TagCommit: strings.ToLower(tagCommit),
+		MetadataAssetName: asset.Name,
+		MetadataAssetSize: asset.Size,
+		PublishedAt: release.PublishedAt,
+	}
+	cacheKey, err := GitHubReleaseAssetCacheKey(discovery, asset.BrowserDownloadURL, digest)
+	if err != nil {
+		return nil, err
+	}
+	return f.fetchWithCacheKey(ctx, asset.BrowserDownloadURL, digest, cacheKey)
+}
+
+// FetchGitHubReleaseAssetFromManifest reuses only the exact Release metadata
+// bytes named by an immutable Manifest. The cache key is derivable from the
+// public Manifest provenance, so replay can pin and reuse it offline without
+// querying GitHub for a replacement release or asset.
+func (f *HTTPFetcher) FetchGitHubReleaseAssetFromManifest(
+	ctx context.Context,
+	discovery ReleaseDiscoveryProvenance,
+	metadataURI string,
+	metadataSHA256 string,
+) ([]byte, error) {
+	if f == nil || f.client == nil {
+		return nil, fmt.Errorf("catalog: HTTP fetcher is not initialized")
+	}
+	cacheKey, err := GitHubReleaseAssetCacheKey(discovery, metadataURI, metadataSHA256)
+	if err != nil {
+		return nil, err
+	}
+	return f.fetchWithCacheKey(ctx, metadataURI, strings.ToLower(metadataSHA256), cacheKey)
+}
+
+// GitHubReleaseAssetCacheKey derives an immutable cache identity using only
+// fields that are persisted in Resolved Manifest schema 1.2.0.
+func GitHubReleaseAssetCacheKey(
+	discovery ReleaseDiscoveryProvenance,
+	metadataURI string,
+	metadataSHA256 string,
+) (string, error) {
+	digest := strings.ToLower(metadataSHA256)
+	if discovery.SourceID == "" || discovery.Provider != githubReleaseProvider ||
+		discovery.ReleaseID <= 0 || discovery.MetadataAssetName == "" ||
+		discovery.MetadataAssetSize <= 0 || !validGitRevision(discovery.TagCommit) ||
+		!isSHA256Value(digest) {
+		return "", fmt.Errorf("catalog: GitHub Release cache identity is incomplete")
+	}
+	repositoryURI, err := CanonicalGitHubRepositoryURI(discovery.RepositoryURI)
+	if err != nil || repositoryURI != discovery.RepositoryURI {
+		return "", fmt.Errorf("catalog: GitHub Release cache repository identity is invalid")
+	}
 	identity := strings.Join([]string{
 		"registry-github-release-asset-v1",
-		source.SourceID,
-		source.RepositoryURI,
-		strconv.FormatInt(release.ID, 10),
-		release.TagName,
-		strings.ToLower(tagCommit),
-		strconv.FormatInt(asset.ID, 10),
-		asset.Name,
-		asset.BrowserDownloadURL,
-		strconv.FormatInt(asset.Size, 10),
+		discovery.SourceID,
+		repositoryURI,
+		strconv.FormatInt(discovery.ReleaseID, 10),
+		discovery.ReleaseAPIURI,
+		discovery.Tag,
+		strings.ToLower(discovery.TagCommit),
+		discovery.MetadataAssetName,
+		strconv.FormatInt(discovery.MetadataAssetSize, 10),
+		metadataURI,
 		digest,
 	}, "\x00")
-	cacheSum := sha256.Sum256([]byte(identity))
-	cacheKey := hex.EncodeToString(cacheSum[:])
-	return f.fetchWithCacheKey(ctx, asset.BrowserDownloadURL, digest, cacheKey)
+	sum := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func (f *HTTPFetcher) fetchGitHubAPI(ctx context.Context, source ReleaseSource, requestURI string) ([]byte, error) {
