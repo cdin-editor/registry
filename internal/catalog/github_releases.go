@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -148,27 +150,54 @@ func (f *HTTPFetcher) fetchGitHubAPI(ctx context.Context, endpoint string) ([]by
 	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil || !parsed.IsAbs() || parsed.Scheme != "https" ||
-		parsed.Host != "api.github.com" || parsed.User != nil || parsed.Fragment != "" {
+		parsed.Host != "api.github.com" || parsed.User != nil || parsed.Fragment != "" ||
+		!strings.HasPrefix(parsed.Path, "/repos/") {
 		return nil, fmt.Errorf("GITHUB_API_URI_REJECTED: GitHub API URI is invalid")
 	}
-	var lastErr error
+	if _, allowed := f.allowedHosts["api.github.com"]; !allowed {
+		return nil, fmt.Errorf("GITHUB_API_HOST_REJECTED: GitHub API host is not allow-listed")
+	}
+	const maxResponseBytes = int64(8 << 20)
 	for attempt := 0; attempt < githubAPIMaxAttempts; attempt++ {
-		payload, fetchErr := f.fetch(ctx, endpoint)
-		if fetchErr == nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+		if requestErr != nil {
+			return nil, fmt.Errorf("GITHUB_DISCOVERY_FAILED: could not create GitHub API request")
+		}
+		request.Header.Set("Accept", "application/vnd.github+json")
+		request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		request.Header.Set("User-Agent", githubAPIUserAgent)
+		response, requestErr := f.client.Do(request)
+		if requestErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, fmt.Errorf("GITHUB_DISCOVERY_FAILED: GitHub API transport failed")
+		}
+		payload, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || int64(len(payload)) > maxResponseBytes {
+			return nil, fmt.Errorf("GITHUB_DISCOVERY_LIMIT: GitHub API response could not be read within its byte budget")
+		}
+		if response.StatusCode == http.StatusOK {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			return payload, nil
 		}
-		lastErr = fetchErr
-		message := strings.ToLower(fetchErr.Error())
-		retryable := strings.Contains(message, "http status 403") ||
-			strings.Contains(message, "http status 429") ||
-			strings.Contains(message, "http status 500") ||
-			strings.Contains(message, "http status 502") ||
-			strings.Contains(message, "http status 503") ||
-			strings.Contains(message, "http status 504")
+		status := response.StatusCode
+		retryable := status == http.StatusForbidden || status == http.StatusTooManyRequests ||
+			status == http.StatusInternalServerError || status == http.StatusBadGateway ||
+			status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
 		if !retryable || attempt+1 == githubAPIMaxAttempts {
-			break
+			if status == http.StatusForbidden || status == http.StatusTooManyRequests {
+				return nil, fmt.Errorf("GITHUB_DISCOVERY_RATE_LIMIT: GitHub Release discovery retry budget exhausted")
+			}
+			return nil, fmt.Errorf("GITHUB_DISCOVERY_HTTP_FAILURE: GitHub API returned HTTP %d", status)
 		}
-		delay := time.Duration(attempt+1) * 200 * time.Millisecond
+		delay := time.Duration(attempt+1) * 250 * time.Millisecond
 		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
@@ -177,13 +206,7 @@ func (f *HTTPFetcher) fetchGitHubAPI(ctx context.Context, endpoint string) ([]by
 		case <-timer.C:
 		}
 	}
-	if lastErr != nil {
-		message := strings.ToLower(lastErr.Error())
-		if strings.Contains(message, "http status 403") || strings.Contains(message, "http status 429") {
-			return nil, fmt.Errorf("GITHUB_DISCOVERY_RATE_LIMIT: GitHub Release discovery retry budget exhausted")
-		}
-	}
-	return nil, fmt.Errorf("GITHUB_DISCOVERY_FAILED: GitHub Release API request failed")
+	return nil, fmt.Errorf("GITHUB_DISCOVERY_FAILED: GitHub Release API retry budget exhausted")
 }
 
 var _ GitHubReleaseClient = (*HTTPFetcher)(nil)
