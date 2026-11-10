@@ -6,9 +6,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
-	"strings"
 )
 
 func cacheManifestJSON(catalogURI, catalogSHA, releaseURI, releaseSHA string) []byte {
@@ -300,15 +300,19 @@ func containsKey(keys []string, expected string) bool {
 
 func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T) {
 	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	const repositoryURI = "https://github.com/acme/engine"
 	const metadataURI = "https://github.com/acme/engine/releases/download/v1.2.3/engine-1.2.3.json"
 	discovery := ReleaseDiscoveryProvenance{
 		SourceID: "engine-source", Provider: githubReleaseProvider,
 		RepositoryURI: repositoryURI, ReleaseID: 123,
 		ReleaseAPIURI: "https://api.github.com/repos/acme/engine/releases/123",
-		Tag: "v1.2.3", TagCommit: strings.Repeat("a", 40),
-		MetadataAssetName: "engine-1.2.3.json", MetadataAssetSize: 456,
+		Tag:               "v1.2.3",
+		TagCommit:         strings.Repeat("a", 40),
+		MetadataAssetName: "engine-1.2.3.json",
+		MetadataAssetSize: 456,
 		PublishedAt: "2026-11-10T18:00:00Z",
 	}
 	metadataSHA := expectedDigest("immutable-release-metadata")
@@ -318,12 +322,12 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 		SchemaVersion string `json:"schema_version"`
 		Catalogs []any `json:"catalogs"`
 		Components []struct {
-			ComponentID string `json:"component_id"`
-			Variant string `json:"variant"`
-			Version string `json:"version"`
-			ReleaseMetadataURI string `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
-			ReleaseDiscovery ReleaseDiscoveryProvenance `json:"release_discovery"`
+				ComponentID        string                      `json:"component_id"`
+			Variant            string                      `json:"variant"`
+			Version            string                      `json:"version"`
+			ReleaseMetadataURI string                      `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                      `json:"release_metadata_sha256"`
+			ReleaseDiscovery   ReleaseDiscoveryProvenance   `json:"release_discovery"`
 		} `json:"components"`
 	}{
 		SchemaVersion: "1.2.0",
@@ -336,7 +340,8 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 			ReleaseDiscovery ReleaseDiscoveryProvenance `json:"release_discovery"`
 		}{{
 			ComponentID: "engine", Variant: "default", Version: "1.2.3",
-			ReleaseMetadataURI: metadataURI, ReleaseMetadataSHA: metadataSHA, ReleaseDiscovery: discovery,
+			ReleaseMetadataURI: metadataURI, ReleaseMetadataSHA: metadataSHA,
+			ReleaseDiscovery: discovery,
 		}},
 	})
 	if err != nil { t.Fatal(err) }
@@ -348,8 +353,12 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 	old := time.Now().Add(-2 * time.Hour)
 	metadataPath := writeCacheFixture(t, cache, metadataURI, metadataSHA, "metadata", old)
 	assetPath := filepath.Join(cache.root, assetKey+".json")
-	if err := os.WriteFile(assetPath, []byte("immutable asset bytes"), 0o600); err != nil { t.Fatal(err) }
-	if err := os.Chtimes(assetPath, old, old); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(assetPath, []byte("immutable asset bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(assetPath, old, old); err != nil {
+		t.Fatal(err)
+	}
 	pinID, err := cache.RetainManifest(manifestBytes)
 	if err != nil { t.Fatal(err) }
 	result, err := cache.GarbageCollect(context.Background())
@@ -359,8 +368,12 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 			t.Fatalf("%s cache entry was removed despite Manifest pin: %v (GC %+v)", name, err, result)
 		}
 	}
-	if err := cache.ReleaseManifest(pinID); err != nil { t.Fatal(err) }
-	if _, err := cache.GarbageCollect(context.Background()); err != nil { t.Fatal(err) }
+	if err := cache.ReleaseManifest(pinID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.GarbageCollect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	for name, path := range map[string]string{"metadata": metadataPath, "identity-bound asset": assetPath} {
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("unpinned %s cache entry remains: %v", name, err)
