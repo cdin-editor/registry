@@ -460,7 +460,6 @@ func TestReplayRejectsRemoteReleaseSourceIdentityMismatch(t *testing.T) {
 	}
 }
 
-
 func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T) {
 	repository, revision := createSourceRepository(t)
 	const repositoryURI = "https://github.com/acme/engine"
@@ -474,34 +473,36 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 
 	releaseDocument := map[string]any{
 		"schema_version": "1.2.0",
-		"component_id": "engine",
-		"variant": "default",
-		"version": "1.0.0",
-		"status": "active",
+		"component_id":   "engine",
+		"variant":        "default",
+		"version":        "1.0.0",
+		"status":         "active",
 		"source_units": []any{
 			map[string]any{
 				"source_unit_id": "source",
 				"repository_uri": repositoryURI,
-				"revision": revision,
+				"revision":       revision,
 			},
 		},
 		"dependencies": []any{},
-		"contracts": map[string]any{"provides": []any{}, "requires": []any{}},
+		"contracts":    map[string]any{"provides": []any{}, "requires": []any{}},
 		"publication": map[string]any{
-			"provider": "github-releases-v1",
-			"repository_uri": repositoryURI,
-			"tag": tag,
-			"tag_commit": revision,
+			"provider":            "github-releases-v1",
+			"repository_uri":      repositoryURI,
+			"tag":                 tag,
+			"tag_commit":          revision,
 			"metadata_asset_name": "engine-1.0.0.json",
 		},
 	}
 	releaseBytes, err := json.Marshal(releaseDocument)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	releaseDigest := manifest.Digest(releaseBytes)
 
 	indexBytes, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.1.0",
-		CatalogID: "stable",
+		CatalogID:      "stable",
 		ReleaseSources: []catalog.ReleaseSource{{
 			SourceID: "engine-source", Provider: "github-releases-v1",
 			RepositoryURI: repositoryURI, ComponentID: "engine", Variant: "default", TagPrefix: "v",
@@ -513,21 +514,21 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 	resolution.Graph.Components[0].ReleaseMetadataURI = metadataURI
 	resolution.Graph.Components[0].ReleaseMetadataSHA = releaseDigest
 	resolution.Graph.Components[0].ReleaseDiscovery = &catalog.ReleaseDiscoveryProvenance{
-		SourceID: "engine-source",
-		Provider: "github-releases-v1",
-		RepositoryURI: repositoryURI,
-		ReleaseID: 123,
-		ReleaseAPIURI: "https://api.github.com/repos/acme/engine/releases/123",
-		Tag: tag,
-		TagCommit: revision,
+		SourceID:          "engine-source",
+		Provider:          "github-releases-v1",
+		RepositoryURI:     repositoryURI,
+		ReleaseID:         123,
+		ReleaseAPIURI:     "https://api.github.com/repos/acme/engine/releases/123",
+		Tag:               tag,
+		TagCommit:         revision,
 		MetadataAssetName: "engine-1.0.0.json",
 		MetadataAssetSize: int64(len(releaseBytes)),
-		PublishedAt: "2026-11-10T18:00:00Z",
+		PublishedAt:       "2026-11-10T18:00:00Z",
 	}
 	encoded, manifestDigest := buildReplayManifest(t, resolution)
 
 	fetcher := &replayFixtureFetcher{payloads: map[string][]byte{
-		indexURI: indexBytes,
+		indexURI:    indexBytes,
 		metadataURI: releaseBytes,
 	}}
 	destination := filepath.Join(t.TempDir(), "adr0028-replay")
@@ -535,8 +536,8 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 	git := &replayCountingGitRunner{delegate: replayGitRunner{repositoryURI: repositoryURI, localPath: repository}}
 	options.Git = git
 	replayed, err := Replay(context.Background(), encoded, manifestDigest, ReplayOptions{
-		Workspace: options,
-		MetadataFetcher: fetcher,
+		Workspace:            options,
+		MetadataFetcher:      fetcher,
 		VerifyRemoteMetadata: true,
 	})
 	if err != nil { t.Fatal(err) }
@@ -572,8 +573,8 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 	badGit := &replayCountingGitRunner{delegate: replayGitRunner{repositoryURI: repositoryURI, localPath: repository}}
 	badOptions.Git = badGit
 	if _, err := Replay(context.Background(), encoded, manifestDigest, ReplayOptions{
-		Workspace: badOptions,
-		MetadataFetcher: badFetcher,
+		Workspace:            badOptions,
+		MetadataFetcher:      badFetcher,
 		VerifyRemoteMetadata: true,
 	}); err == nil {
 		t.Fatal("replay accepted a Release Asset whose publisher tag commit differs from the Manifest")
