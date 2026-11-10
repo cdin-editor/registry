@@ -7,7 +7,8 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Added
 
-- Add optional Spec 1.3.0 target-specific artifact delivery with explicit delivery policy/target selection, digest-verified package materialization, secure archive extraction, artifact provenance in Resolved Manifests, and exact selected-artifact replay. Source delivery remains the default for existing Product Definitions.
+- Add optional Registry Data Contracts 1.3.0 target-specific artifact delivery (defined by Spec release 1.4.0), with explicit delivery policy/target selection, digest-verified package materialization, secure archive extraction, artifact provenance in Resolved Manifests, and exact selected-artifact replay. Source delivery remains the default for existing Product Definitions.
+- Versioning boundary: `0.2.0-dev.1` is the Registry CLI/package version; Registry Data Contract schema versions and the overall Spec release version are independent compatibility tracks.
 
 ### Fixed
 
