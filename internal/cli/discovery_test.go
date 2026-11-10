@@ -265,7 +265,7 @@ func TestManifestDiscoverPreservesWithdrawalDecisionWhenMetadataDigestChanges(t 
 		t.Fatalf("discover exit=%d, want resolution failure; stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	if report.Result != manifest.UpdateResultResolutionFailed {
-		t.Fatalf("report result = %q, want resolution_failed", report.Result)
+		t.Fatalf("report result = %q, want resolution_failed; stdout=%q stderr=%q", report.Result, stdout.String(), stderr.String())
 	}
 	if len(report.Decisions) != 1 ||
 		report.Decisions[0].HistoricalReleaseState != "withdrawn" ||
