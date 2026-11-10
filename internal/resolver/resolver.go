@@ -196,9 +196,10 @@ type ContractProviderEvidence struct {
 	Version            string `json:"version"`
 	ComponentVersion   string `json:"component_version,omitempty"`
 	CatalogID          string `json:"catalog_id,omitempty"`
-	ReleaseMetadataURI string `json:"release_metadata_uri,omitempty"`
-	ReleaseMetadataSHA string `json:"release_metadata_sha256,omitempty"`
-	Compatible         bool   `json:"compatible"`
+	ReleaseMetadataURI string                  `json:"release_metadata_uri,omitempty"`
+	ReleaseMetadataSHA string                  `json:"release_metadata_sha256,omitempty"`
+	ReleaseDiscovery   *catalog.ReleaseDiscovery `json:"release_discovery,omitempty"`
+	Compatible         bool                    `json:"compatible"`
 }
 
 // ContractEvidence records the exact requirement and every declared provider,
@@ -916,7 +917,7 @@ func validateContracts(chosen map[key]candidate, environment []EnvironmentContra
 				evidence: ContractProviderEvidence{
 					Origin: "component", ComponentID: k.componentID, Variant: k.variant, Version: declaration.Version, ComponentVersion: release.Version,
 					CatalogID: selected.catalogID, ReleaseMetadataURI: release.MetadataURI,
-					ReleaseMetadataSHA: release.MetadataSHA,
+					ReleaseMetadataSHA: release.MetadataSHA, ReleaseDiscovery: release.Discovery,
 				},
 			})
 		}
@@ -1022,8 +1023,15 @@ func buildGraph(state *searchState, catalogs []CatalogReference, roots []Require
 	if cycle != nil {
 		return nil, nil, cycle
 	}
+	graphSchemaVersion := manifestSchemaVersion
+	for _, selectedCandidate := range state.chosen {
+		if selectedCandidate.release.Discovery != nil {
+			graphSchemaVersion = "1.2.0"
+			break
+		}
+	}
 	graph := &Graph{
-		SchemaVersion:        manifestSchemaVersion,
+		SchemaVersion:        graphSchemaVersion,
 		Catalogs:             append([]CatalogReference(nil), catalogs...),
 		Roots:                append([]Requirement(nil), roots...),
 		EnvironmentContracts: append([]EnvironmentContract(nil), environment...),
@@ -1218,6 +1226,7 @@ func identityOfCandidate(candidate candidate) ReleaseIdentity {
 		Version: candidate.release.Version, CatalogID: candidate.catalogID,
 		ReleaseMetadataURI: candidate.release.MetadataURI,
 		ReleaseMetadataSHA: candidate.release.MetadataSHA,
+		ReleaseDiscovery:   candidate.release.Discovery,
 	}
 }
 
