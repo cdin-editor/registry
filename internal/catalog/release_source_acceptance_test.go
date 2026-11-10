@@ -151,6 +151,8 @@ func TestLoadFromGitHubReleaseSourcesWalksEveryPageAndIgnoresDrafts(t *testing.T
 	source, newerRelease, newerPayload, newerCommit, _ := singleADR0028Script(t, "2.0.0", 21)
 	_, olderRelease, olderPayload, olderCommit, _ := singleADR0028Script(t, "1.0.0", 20)
 
+	newerRelease.PublishedAt = "2024-01-02T03:04:05Z"
+	olderRelease.PublishedAt = "2026-01-02T03:04:05Z"
 	firstPage := make([]GitHubRelease, 0, githubReleasePageSize)
 	for i := 0; i < githubReleasePageSize-1; i++ {
 		firstPage = append(firstPage, GitHubRelease{
