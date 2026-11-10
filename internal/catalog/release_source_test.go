@@ -129,7 +129,11 @@ func TestDynamicCatalogRejectsMixedStaticAndReleaseSources(t *testing.T) {
 		Entries: []Entry{{ComponentID: "editor", Version: "1.0.0", MetadataURI: "https://example.invalid/release.json", MetadataSHA: strings.Repeat("a", 64)}},
 		ReleaseSources: []ReleaseSource{{SourceID: "editor-source", Provider: githubReleaseProvider, RepositoryURI: "https://github.com/acme/editor", ComponentID: "editor"}},
 	}
-	_, err := loadFromGitHubReleaseSources(context.Background(), index, nil, &acceptingValidator{}, 1)
+	indexBytes, marshalErr := json.Marshal(index)
+	if marshalErr != nil {
+		t.Fatal(marshalErr)
+	}
+	_, err := Load(context.Background(), indexBytes, &fakeGitHubReleaseClient{}, &acceptingValidator{})
 	if err == nil {
 		t.Fatal("expected mixed catalog models to be rejected by loader dispatch boundary")
 	}
@@ -208,5 +212,28 @@ func TestLoadFromGitHubReleaseSourcesRejectsNonCanonicalAssetURI(t *testing.T) {
 		client, &acceptingValidator{}, 1)
 	if err == nil {
 		t.Fatal("expected non-canonical release asset URI to fail closed")
+	}
+}
+
+
+func TestADR0028SpecSchemasAcceptPublicationAndReleaseSources(t *testing.T) {
+	source, _, client := testADR0028Fixture(t, "1.2.0", "2026-11-10T18:00:00Z", 15)
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(validation.ComponentRelease, client.metadata, "component-release.json"); err != nil {
+		t.Fatalf("Spec Component Release Metadata schema rejected ADR-0028 fixture: %v", err)
+	}
+	index, err := json.Marshal(Index{
+		SchemaVersion: "1.1.0",
+		CatalogID: "test.catalog",
+		ReleaseSources: []ReleaseSource{source},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(validation.CatalogIndex, index, "catalog-index.json"); err != nil {
+		t.Fatalf("Spec Catalog Index schema rejected release_sources: %v", err)
 	}
 }
