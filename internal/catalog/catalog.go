@@ -41,9 +41,9 @@ type Validator interface {
 // Index is the validated Catalog Index document supplied by a catalog source.
 // Its entries reference immutable release metadata, not component source code.
 type Index struct {
-	SchemaVersion  string         `json:"schema_version"`
-	CatalogID      string         `json:"catalog_id"`
-	Entries        []Entry        `json:"entries,omitempty"`
+	SchemaVersion  string          `json:"schema_version"`
+	CatalogID      string          `json:"catalog_id"`
+	Entries        []Entry         `json:"entries,omitempty"`
 	ReleaseSources []ReleaseSource `json:"release_sources,omitempty"`
 }
 
@@ -102,16 +102,16 @@ type Contracts struct {
 // Release is a parsed Component Release Metadata document plus the verified
 // metadata location/digest. Raw retains the exact bytes that passed REG-019.
 type Release struct {
-	SchemaVersion string       `json:"schema_version"`
-	ComponentID   string       `json:"component_id"`
-	Variant       string       `json:"variant"`
-	Version       string       `json:"version"`
-	Status        string       `json:"status"`
-	SourceUnits   []SourceUnit `json:"source_units"`
-	Artifacts     []Artifact   `json:"artifacts,omitempty"`
-	Dependencies  []Dependency `json:"dependencies"`
-	Contracts     Contracts    `json:"contracts"`
-	Publication   *Publication `json:"publication,omitempty"`
+	SchemaVersion string                      `json:"schema_version"`
+	ComponentID   string                      `json:"component_id"`
+	Variant       string                      `json:"variant"`
+	Version       string                      `json:"version"`
+	Status        string                      `json:"status"`
+	SourceUnits   []SourceUnit                `json:"source_units"`
+	Artifacts     []Artifact                  `json:"artifacts,omitempty"`
+	Dependencies  []Dependency                `json:"dependencies"`
+	Contracts     Contracts                   `json:"contracts"`
+	Publication   *Publication                `json:"publication,omitempty"`
 	Raw           []byte       `json:"-"`
 	MetadataURI   string       `json:"-"`
 	MetadataSHA   string       `json:"-"`
@@ -121,11 +121,11 @@ type Release struct {
 // Catalog is one fully loaded index and its validated release records. Load
 // never returns a partial Catalog after a fetch/validation failure.
 type Catalog struct {
-	ID            string
-	MetadataURI   string
-	MetadataSHA   string
+	ID             string
+	MetadataURI    string
+	MetadataSHA    string
 	ReleaseSources []ReleaseSource
-	Releases      []Release
+	Releases       []Release
 }
 
 // LoadFromSource is the production entry point when the caller knows the
