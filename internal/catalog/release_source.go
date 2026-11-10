@@ -232,7 +232,6 @@ func ValidateGitHubAssetDigest(value string) (string, error) {
 	return strings.ToLower(parts[1]), nil
 }
 
-
 // githubRepositoryParts returns owner/repository path components from a
 // canonical GitHub repository URI. It never accepts arbitrary API base URLs.
 func githubRepositoryParts(repositoryURI string) (string, string, error) {
