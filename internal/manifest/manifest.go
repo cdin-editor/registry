@@ -1264,5 +1264,41 @@ func validateManifestReleaseDiscovery(component Component) error {
 	if discovery.ReleaseAPIURI != expectedAPIURI || component.ReleaseMetadataURI != expectedDownloadURI {
 		return fmt.Errorf("release discovery API/asset URI does not match the immutable repository/release/name identity")
 	}
+
+	// Bind the Release tag to the exact publisher source revision retained in
+	// the Manifest. A syntactically valid but substituted tag commit must never
+	// be accepted as equivalent provenance.
+	publisherUnits := 0
+	checkPublisherUnit := func(sourceUnitID, sourceRepository, revision string) error {
+		canonicalRepository, canonicalErr := catalog.CanonicalGitHubRepositoryURI(sourceRepository)
+		if canonicalErr != nil || canonicalRepository != repositoryURI {
+			return nil
+		}
+		publisherUnits++
+		if sourceUnitID == "" || !fullGitObjectID(revision) ||
+			revision != discovery.TagCommit {
+			return fmt.Errorf("release discovery tag commit does not match its publisher source revision")
+		}
+		return nil
+	}
+	if component.Delivery == "artifact" {
+		if component.SelectedArtifact == nil {
+			return fmt.Errorf("release discovery has no selected artifact source provenance")
+		}
+		for _, source := range component.SelectedArtifact.SourceProvenance {
+			if err := checkPublisherUnit(source.SourceUnitID, source.RepositoryURI, source.Revision); err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, source := range component.SourceUnits {
+			if err := checkPublisherUnit(source.SourceUnitID, source.RepositoryURI, source.Revision); err != nil {
+				return err
+			}
+		}
+	}
+	if publisherUnits != 1 {
+		return fmt.Errorf("release discovery requires exactly one publisher source unit in Manifest provenance")
+	}
 	return nil
 }
