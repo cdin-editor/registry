@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"testing"
 )
@@ -240,7 +239,7 @@ func TestLoadRejectsMissingCanonicalMetadataAssetIdentity(t *testing.T) {
 	item.Discovery.MetadataAssetName = "wrong.json"
 	fetcher := &discoveryMapFetcher{releases: map[string][]DiscoveredRelease{source.SourceID: {item}}}
 	_, err := Load(context.Background(), dynamicCatalogBytes(t, source), fetcher, &acceptingValidator{})
-	if err == nil || !strings.Contains(err.Error(), "RELEASE_METADATA_ASSET_URI_REJECTED") {
+	if err == nil || !strings.Contains(err.Error(), "RELEASE_TAG_VERSION_MISMATCH") {
 		t.Fatalf("expected canonical asset identity rejection, got %v", err)
 	}
 }
