@@ -252,7 +252,7 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	encoded, digest := buildReplayManifest(t, resolution)
 
 	fetcher := &replayFixtureFetcher{payloads: map[string][]byte{
-		indexURI:    indexBytes, releaseURI: releaseBytes,
+		indexURI: indexBytes, releaseURI: releaseBytes,
 	}}
 	destination := filepath.Join(t.TempDir(), "verified-replay")
 	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
@@ -565,7 +565,9 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 	// A payload with a different tag commit at the same immutable URI/digest
 	// identity must be rejected before any source checkout or destination publish.
 	var changed map[string]any
-	if err := json.Unmarshal(releaseBytes, &changed); err != nil { t.Fatal(err) }
+	if err := json.Unmarshal(releaseBytes, &changed); err != nil {
+		t.Fatal(err)
+	}
 	publication := changed["publication"].(map[string]any)
 	publication["tag_commit"] = strings.Repeat("0", 40)
 	changedBytes, err := json.Marshal(changed)
@@ -573,7 +575,7 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 		t.Fatal(err)
 	}
 	badFetcher := &replayFixtureFetcher{payloads: map[string][]byte{
-		indexURI: indexBytes,
+		indexURI:    indexBytes,
 		metadataURI: changedBytes,
 	}}
 	badDestination := filepath.Join(t.TempDir(), "rejected-adr0028-replay")
