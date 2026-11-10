@@ -324,33 +324,40 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 	}
 	manifestBytes, err := json.Marshal(struct {
 		SchemaVersion string `json:"schema_version"`
-		Catalogs []any `json:"catalogs"`
+		Catalogs   []any `json:"catalogs"`
 		Components []struct {
-				ComponentID        string                      `json:"component_id"`
-			Variant            string                      `json:"variant"`
-			Version            string                      `json:"version"`
-			ReleaseMetadataURI string                      `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string                      `json:"release_metadata_sha256"`
-			ReleaseDiscovery   ReleaseDiscoveryProvenance   `json:"release_discovery"`
+			ComponentID        string                     `json:"component_id"`
+			Variant            string                     `json:"variant"`
+			Version            string                     `json:"version"`
+			ReleaseMetadataURI string                     `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                     `json:"release_metadata_sha256"`
+			ReleaseDiscovery   ReleaseDiscoveryProvenance `json:"release_discovery"`
 		} `json:"components"`
 	}{
 		SchemaVersion: "1.2.0",
 		Components: []struct {
-			ComponentID string `json:"component_id"`
-			Variant string `json:"variant"`
-			Version string `json:"version"`
-			ReleaseMetadataURI string `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
-			ReleaseDiscovery ReleaseDiscoveryProvenance `json:"release_discovery"`
+			ComponentID        string                     `json:"component_id"`
+			Variant            string                     `json:"variant"`
+			Version            string                     `json:"version"`
+			ReleaseMetadataURI string                     `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                     `json:"release_metadata_sha256"`
+			ReleaseDiscovery   ReleaseDiscoveryProvenance `json:"release_discovery"`
 		}{{
-			ComponentID: "engine", Variant: "default", Version: "1.2.3",
-			ReleaseMetadataURI: metadataURI, ReleaseMetadataSHA: metadataSHA,
+			ComponentID:        "engine",
+			Variant:            "default",
+			Version:            "1.2.3",
+			ReleaseMetadataURI: metadataURI,
+			ReleaseMetadataSHA: metadataSHA,
 			ReleaseDiscovery: discovery,
 		}},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	keys, err := metadataKeysFromManifest(manifestBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !containsKey(keys, metadataCacheKey(metadataURI, metadataSHA)) || !containsKey(keys, assetKey) {
 		t.Fatalf("Manifest cache pins = %v; want URI/digest and ADR-0028 identity keys", keys)
 	}
@@ -364,9 +371,13 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 		t.Fatal(err)
 	}
 	pinID, err := cache.RetainManifest(manifestBytes)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := cache.GarbageCollect(context.Background())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, path := range map[string]string{"metadata": metadataPath, "identity-bound asset": assetPath} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("%s cache entry was removed despite Manifest pin: %v (GC %+v)", name, err, result)
@@ -387,11 +398,15 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 
 func TestMetadataCacheGCCanEvictExpiredGitHubAPISnapshots(t *testing.T) {
 	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	fetcher, err := NewHTTPFetcher(HTTPFetcherOptions{
 		AllowedHosts: []string{"github.com"}, CacheDir: cache.root, MaxBytes: 1 << 20,
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	source := ReleaseSource{
 		SourceID: "engine-source", Provider: githubReleaseProvider,
 		RepositoryURI: "https://github.com/acme/engine", ComponentID: "engine",
@@ -410,7 +425,9 @@ func TestMetadataCacheGCCanEvictExpiredGitHubAPISnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := cache.GarbageCollect(context.Background())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if result.RemovedEntries != 1 {
 		t.Fatalf("GC removed %d entries, want one expired GitHub API snapshot", result.RemovedEntries)
 	}
