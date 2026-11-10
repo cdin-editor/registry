@@ -141,9 +141,10 @@ func (k key) String() string { return k.componentID + "/" + k.variant }
 
 // SelectedCandidate is the report projection of one chosen immutable release.
 type SelectedCandidate struct {
-	ComponentID string `json:"component_id"`
-	Variant     string `json:"variant"`
-	Version     string `json:"version"`
+	ComponentID      string                              `json:"component_id"`
+	Variant          string                              `json:"variant"`
+	Version          string                              `json:"version"`
+	ReleaseDiscovery *catalog.ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
 }
 
 // ConstraintSource identifies the source of one applied version constraint.
@@ -1058,7 +1059,10 @@ func buildGraph(state *searchState, catalogs []CatalogReference, roots []Require
 			Artifacts:        append([]catalog.Artifact(nil), r.Artifacts...),
 			Dependencies:     dependencies, Contracts: r.Contracts,
 		})
-		selected = append(selected, SelectedCandidate{ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version})
+		selected = append(selected, SelectedCandidate{
+			ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version,
+			ReleaseDiscovery: r.Discovery,
+		})
 	}
 	return graph, selected, nil
 }
