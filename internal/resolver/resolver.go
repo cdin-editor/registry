@@ -364,8 +364,23 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 	}
 	reportVersion := reportSchemaVersion
 	for _, catalogInput := range catalogs {
-		if catalogInput != nil && len(catalogInput.ReleaseSources) > 0 {
+		if catalogInput == nil {
+			continue
+		}
+		if len(catalogInput.ReleaseSources) > 0 {
 			reportVersion = "1.2.0"
+			break
+		}
+		// A Catalog may preserve an already-discovered immutable Release even
+		// when its current index is static. The Report schema must follow the
+		// provenance actually emitted, not only the source declaration mode.
+		for _, release := range catalogInput.Releases {
+			if release.Discovery != nil {
+				reportVersion = "1.2.0"
+				break
+			}
+		}
+		if reportVersion == "1.2.0" {
 			break
 		}
 	}
