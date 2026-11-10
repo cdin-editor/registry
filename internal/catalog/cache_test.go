@@ -324,8 +324,8 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 	}
 	manifestBytes, err := json.Marshal(struct {
 		SchemaVersion string `json:"schema_version"`
-		Catalogs   []any `json:"catalogs"`
-		Components []struct {
+		Catalogs      []any  `json:"catalogs"`
+		Components    []struct {
 			ComponentID        string                     `json:"component_id"`
 			Variant            string                     `json:"variant"`
 			Version            string                     `json:"version"`
@@ -348,7 +348,7 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 			Version:            "1.2.3",
 			ReleaseMetadataURI: metadataURI,
 			ReleaseMetadataSHA: metadataSHA,
-			ReleaseDiscovery: discovery,
+			ReleaseDiscovery:   discovery,
 		}},
 	})
 	if err != nil {
