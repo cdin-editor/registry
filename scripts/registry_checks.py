@@ -445,8 +445,8 @@ def run_release_binary_self_test() -> None:
     else:
         raise SystemExit("Registry target self-test failed: wrong ELF machine was accepted")
     elf_arm64 = bytearray(64)
-    elf_arm64[:4] = b"\\x7fELF"
-    elf_arm64[4:6] = b"\\x02\\x01"
+    elf_arm64[:4] = b"\x7fELF"
+    elf_arm64[4:6] = b"\x02\x01"
     elf_arm64[18:20] = (183).to_bytes(2, "little")
     validate_executable_header(bytes(elf_arm64), "linux", "arm64")
 
