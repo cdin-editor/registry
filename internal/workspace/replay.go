@@ -156,8 +156,15 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		})
 	}
 
+	reportSchemaVersion := "1.1.0"
+	for _, component := range document.Components {
+		if component.ReleaseDiscovery != nil {
+			reportSchemaVersion = "1.2.0"
+			break
+		}
+	}
 	report := resolver.Report{
-		SchemaVersion:      "1.1.0",
+		SchemaVersion:      reportSchemaVersion,
 		Result:             "success",
 		Selected:           make([]resolver.SelectedCandidate, 0, len(document.Components)),
 		AppliedConstraints: []resolver.AppliedConstraint{},
@@ -175,6 +182,7 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 			Version:            item.Version,
 			ReleaseMetadataURI: item.ReleaseMetadataURI,
 			ReleaseMetadataSHA: item.ReleaseMetadataSHA,
+			ReleaseDiscovery:   item.ReleaseDiscovery,
 			Delivery:           item.Delivery,
 			SourceUnits:        make([]catalog.SourceUnit, 0, len(item.SourceUnits)),
 			Dependencies:       make([]resolver.ResolvedDependency, 0, len(item.Dependencies)),
@@ -240,6 +248,7 @@ type replayReleaseIdentity struct {
 
 func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetcher catalog.Fetcher, validator *validation.Validator) error {
 	entries := make(map[replayReleaseIdentity][]catalog.Entry)
+	dynamicSources := make(map[string]catalog.ReleaseSource)
 	for _, recorded := range document.Catalogs {
 		payload, err := fetchReplayBytes(ctx, fetcher, recorded.MetadataURI, recorded.MetadataSHA)
 		if err != nil {
@@ -255,6 +264,21 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 		if index.CatalogID != recorded.CatalogID {
 			return fmt.Errorf("workspace: replay Catalog identity mismatch")
 		}
+		if len(index.Entries) > 0 && len(index.ReleaseSources) > 0 {
+			return fmt.Errorf("workspace: replay Catalog mixes static entries and dynamic Release Sources")
+		}
+		if len(index.ReleaseSources) > 0 {
+			sources, err := catalog.ValidateReleaseSources(index.ReleaseSources)
+			if err != nil {
+				return fmt.Errorf("workspace: replay Catalog Release Source declarations are invalid")
+			}
+			for _, source := range sources {
+				if prior, exists := dynamicSources[source.SourceID]; exists && !reflect.DeepEqual(prior, source) {
+					return fmt.Errorf("workspace: replay Catalog Release Source ID is ambiguous")
+				}
+				dynamicSources[source.SourceID] = source
+			}
+		}
 		for _, entry := range index.Entries {
 			variant := entry.Variant
 			if variant == "" {
@@ -269,14 +293,20 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 	for _, component := range document.Components {
 		key := replayReleaseIdentity{componentID: component.ComponentID, variant: component.Variant, version: component.Version}
 		selected[key] = component
-		matches := entries[key]
-		if len(matches) == 0 {
-			return fmt.Errorf("workspace: replay selected release is absent from recorded Catalog metadata")
-		}
-		for _, entry := range matches {
-			if entry.MetadataURI != component.ReleaseMetadataURI || !strings.EqualFold(entry.MetadataSHA, component.ReleaseMetadataSHA) {
-				return fmt.Errorf("workspace: replay selected release provenance differs from recorded Catalog metadata")
+		if component.ReleaseDiscovery == nil {
+			matches := entries[key]
+			if len(matches) == 0 {
+				return fmt.Errorf("workspace: replay selected release is absent from recorded Catalog metadata")
 			}
+			for _, entry := range matches {
+				if entry.MetadataURI != component.ReleaseMetadataURI || !strings.EqualFold(entry.MetadataSHA, component.ReleaseMetadataSHA) {
+					return fmt.Errorf("workspace: replay selected release provenance differs from recorded Catalog metadata")
+				}
+			}
+			continue
+		}
+		if err := validateReplayReleaseSource(component, *component.ReleaseDiscovery, dynamicSources); err != nil {
+			return err
 		}
 	}
 
@@ -293,6 +323,12 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 			if err != nil {
 				return fmt.Errorf("workspace: replay release metadata verification failed: %w", err)
 			}
+			if int64(len(payload)) == 0 {
+				return fmt.Errorf("workspace: replay release metadata is empty")
+			}
+			if component.ReleaseDiscovery != nil && int64(len(payload)) != component.ReleaseDiscovery.MetadataAssetSize {
+				return fmt.Errorf("workspace: replay metadata byte size differs from the recorded GitHub Release asset")
+			}
 			if err := validator.Validate(validation.ComponentRelease, payload, "component-release.json"); err != nil {
 				return fmt.Errorf("workspace: replay release metadata schema mismatch")
 			}
@@ -308,6 +344,11 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 		if release.ComponentID != component.ComponentID || release.Variant != component.Variant || release.Version != component.Version {
 			return fmt.Errorf("workspace: replay release identity mismatch")
 		}
+		if component.ReleaseDiscovery != nil {
+			if err := validateReplayReleasePublication(component, release, *component.ReleaseDiscovery); err != nil {
+				return err
+			}
+		}
 		if err := catalog.ValidateReleaseArtifacts(release.SourceUnits, release.Artifacts); err != nil {
 			return fmt.Errorf("workspace: replay release artifact metadata is invalid")
 		}
@@ -316,6 +357,95 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 		}
 	}
 	return nil
+}
+
+func validateReplayReleaseSource(
+	component manifest.Component,
+	discovery catalog.ReleaseDiscoveryProvenance,
+	sources map[string]catalog.ReleaseSource,
+) error {
+	source, ok := sources[discovery.SourceID]
+	if !ok {
+		return fmt.Errorf("workspace: replay dynamic Catalog does not contain the recorded Release Source ID")
+	}
+	repositoryURI, err := catalog.CanonicalGitHubRepositoryURI(discovery.RepositoryURI)
+	if err != nil || source.Provider != discovery.Provider ||
+		discovery.Provider != "github-releases-v1" ||
+		source.RepositoryURI != repositoryURI ||
+		source.ComponentID != component.ComponentID ||
+		source.Variant != component.Variant {
+		return fmt.Errorf("workspace: replay Release Source identity differs from the recorded Manifest")
+	}
+	versionText, _, err := catalog.ValidateGitHubReleaseTag(source, discovery.Tag)
+	if err != nil || versionText != component.Version {
+		return fmt.Errorf("workspace: replay GitHub tag does not identify the recorded component version")
+	}
+	expectedAssetName, err := catalog.ExpectedMetadataAssetName(source, component.Version)
+	if err != nil || discovery.MetadataAssetName != expectedAssetName {
+		return fmt.Errorf("workspace: replay metadata asset name differs from the canonical ADR-0028 name")
+	}
+	if discovery.ReleaseID <= 0 || discovery.MetadataAssetSize <= 0 || !validReplayGitRevision(discovery.TagCommit) {
+		return fmt.Errorf("workspace: replay GitHub Release provenance is incomplete")
+	}
+	repositoryPath := strings.TrimPrefix(repositoryURI, "https://github.com")
+	expectedAPIURI := fmt.Sprintf("https://api.github.com/repos%s/releases/%d", repositoryPath, discovery.ReleaseID)
+	expectedDownloadURI := fmt.Sprintf("https://github.com%s/releases/download/%s/%s", repositoryPath, discovery.Tag, expectedAssetName)
+	if discovery.ReleaseAPIURI != expectedAPIURI || component.ReleaseMetadataURI != expectedDownloadURI {
+		return fmt.Errorf("workspace: replay GitHub Release or metadata asset URI differs from the recorded identity")
+	}
+	if !strings.EqualFold(discovery.TagCommit, strings.ToLower(discovery.TagCommit)) {
+		return fmt.Errorf("workspace: replay GitHub tag commit is not canonical lowercase")
+	}
+	return nil
+}
+
+func validateReplayReleasePublication(
+	component manifest.Component,
+	release catalog.Release,
+	discovery catalog.ReleaseDiscoveryProvenance,
+) error {
+	publication := release.Publication
+	if publication == nil {
+		return fmt.Errorf("workspace: replay ADR-0028 metadata has no publication identity")
+	}
+	repositoryURI, err := catalog.CanonicalGitHubRepositoryURI(publication.RepositoryURI)
+	if err != nil || publication.Provider != discovery.Provider ||
+		repositoryURI != discovery.RepositoryURI ||
+		publication.Tag != discovery.Tag ||
+		!strings.EqualFold(publication.TagCommit, discovery.TagCommit) ||
+		publication.MetadataAssetName != discovery.MetadataAssetName {
+		return fmt.Errorf("workspace: replay ADR-0028 publication differs from the exact recorded Release")
+	}
+	publisherUnits := 0
+	for _, unit := range release.SourceUnits {
+		unitRepository, unitErr := catalog.CanonicalGitHubRepositoryURI(unit.RepositoryURI)
+		if unitErr == nil && unitRepository == discovery.RepositoryURI {
+			publisherUnits++
+			if !strings.EqualFold(unit.Revision, discovery.TagCommit) {
+				return fmt.Errorf("workspace: replay publisher source unit differs from the recorded Git tag commit")
+			}
+		}
+	}
+	if publisherUnits != 1 {
+		return fmt.Errorf("workspace: replay metadata does not contain exactly one source unit for the publisher repository")
+	}
+	if release.ComponentID != component.ComponentID || release.Variant != component.Variant ||
+		release.Version != component.Version {
+		return fmt.Errorf("workspace: replay ADR-0028 release identity differs from the Manifest")
+	}
+	return nil
+}
+
+func validReplayGitRevision(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func fetchReplayBytes(ctx context.Context, fetcher catalog.Fetcher, uri, expectedSHA256 string) ([]byte, error) {
