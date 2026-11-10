@@ -355,3 +355,38 @@ func TestLoadFromGitHubReleaseSourcesRejectsMalformedMetadataAndPublisherRevisio
 		})
 	}
 }
+
+
+func TestValidateReleaseSourcesRejectsDuplicateSourceIDAndUnsafeTagPrefix(t *testing.T) {
+	base := ReleaseSource{
+		SourceID: "shared-source", Provider: githubReleaseProvider,
+		RepositoryURI: "https://github.com/acme/engine", ComponentID: "engine", Variant: "default",
+	}
+	duplicateID := base
+	duplicateID.RepositoryURI = "https://github.com/acme/other"
+	duplicateID.ComponentID = "other"
+	if _, err := ValidateReleaseSources([]ReleaseSource{base, duplicateID}); err == nil ||
+		!strings.Contains(err.Error(), "duplicate Release Source ID") {
+		t.Fatalf("duplicate source ID error = %v", err)
+	}
+
+	unsafePrefix := base
+	unsafePrefix.TagPrefix = "v/"
+	if _, err := ValidateReleaseSources([]ReleaseSource{unsafePrefix}); err == nil {
+		t.Fatal("unsafe Release Source tag prefix unexpectedly passed validation")
+	}
+}
+
+func TestLoadFromGitHubReleaseSourcesRejectsTagAndMetadataVersionMismatch(t *testing.T) {
+	source, release, payload, _, client := singleADR0028Script(t, "1.0.0", 27)
+	changed := mutateReleaseMetadata(t, payload, func(document map[string]any) {
+		document["version"] = "1.0.1"
+	})
+	setScriptedAssetPayload(&release, client, changed)
+	client.pages[1] = []GitHubRelease{release}
+
+	_, err := loadScriptedReleaseSource(context.Background(), source, client)
+	if err == nil || !strings.Contains(err.Error(), "identity does not match source/tag") {
+		t.Fatalf("error = %v, want tag/metadata version mismatch", err)
+	}
+}
