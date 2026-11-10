@@ -105,8 +105,9 @@ type Component struct {
 	Variant            string            `json:"variant"`
 	Version            string            `json:"version"`
 	ReleaseMetadataURI string            `json:"release_metadata_uri"`
-	ReleaseMetadataSHA string            `json:"release_metadata_sha256"`
-	Delivery           string            `json:"delivery,omitempty"`
+	ReleaseMetadataSHA string                  `json:"release_metadata_sha256"`
+	ReleaseDiscovery   *catalog.ReleaseDiscovery `json:"release_discovery,omitempty"`
+	Delivery           string                  `json:"delivery,omitempty"`
 	SelectedArtifact   *SelectedArtifact `json:"selected_artifact,omitempty"`
 	SourceUnits        []SourceUnit      `json:"source_units,omitempty"`
 	Dependencies       []Dependency      `json:"dependencies"`
@@ -284,6 +285,7 @@ func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, pac
 			Version:            resolved.Version,
 			ReleaseMetadataURI: resolved.ReleaseMetadataURI,
 			ReleaseMetadataSHA: strings.ToLower(resolved.ReleaseMetadataSHA),
+			ReleaseDiscovery:   resolved.ReleaseDiscovery,
 			Dependencies:       make([]Dependency, 0, len(resolved.Dependencies)),
 			Contracts:          contracts,
 		}
@@ -529,10 +531,10 @@ func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.
 }
 
 func validateDocument(document Document) error {
-	if document.SchemaVersion != schemaVersion && document.SchemaVersion != "1.1.0" {
+	if document.SchemaVersion != schemaVersion && document.SchemaVersion != "1.1.0" && document.SchemaVersion != "1.2.0" {
 		return fmt.Errorf("unsupported Manifest schema version %q", document.SchemaVersion)
 	}
-	artifactManifest := document.SchemaVersion == "1.1.0"
+	artifactManifest := document.SchemaVersion == "1.1.0" || document.SchemaVersion == "1.2.0"
 	if artifactManifest {
 		if document.Resolution == nil {
 			return fmt.Errorf("artifact Manifest is missing its resolution policy")
@@ -614,6 +616,14 @@ func validateDocument(document Document) error {
 		}
 		if err := validateMetadataURI(component.ReleaseMetadataURI); err != nil {
 			return fmt.Errorf("component %s/%s release metadata URI: %w", component.ComponentID, component.Variant, err)
+		}
+		if component.ReleaseDiscovery != nil {
+			if document.SchemaVersion != "1.2.0" {
+				return fmt.Errorf("component %s/%s has GitHub Release provenance in an older Manifest schema", component.ComponentID, component.Variant)
+			}
+			if err := validateReleaseDiscoveryComponent(component); err != nil {
+				return fmt.Errorf("component %s/%s release discovery: %w", component.ComponentID, component.Variant, err)
+			}
 		}
 		delivery := "source"
 		if artifactManifest {
@@ -736,6 +746,82 @@ func validateDocument(document Document) error {
 				return fmt.Errorf("resolution order places dependency %s before its dependent %s incorrectly", dependencyKey, key)
 			}
 		}
+	}
+	return nil
+}
+
+
+func validateReleaseDiscoveryComponent(component Component) error {
+	discovery := component.ReleaseDiscovery
+	if discovery == nil {
+		return nil
+	}
+	if discovery.SourceID == "" || discovery.Provider != "github-releases-v1" ||
+		discovery.ReleaseID <= 0 || discovery.Tag == "" || !fullGitObjectID(discovery.TagCommit) ||
+		discovery.MetadataAssetSizeBytes <= 0 || discovery.MetadataAssetName == "" {
+		return fmt.Errorf("Release identity is incomplete")
+	}
+	repository, err := url.Parse(discovery.RepositoryURI)
+	if err != nil || repository.Scheme != "https" || strings.ToLower(repository.Hostname()) != "github.com" ||
+		repository.User != nil || repository.Port() != "" || repository.RawQuery != "" || repository.Fragment != "" {
+		return fmt.Errorf("publisher repository URI is not canonical HTTPS GitHub")
+	}
+	parts := strings.Split(strings.Trim(repository.Path, "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("publisher repository URI must identify owner/repository")
+	}
+	owner, repo := parts[0], strings.TrimSuffix(parts[1], ".git")
+	if owner == "" || repo == "" {
+		return fmt.Errorf("publisher repository identity is invalid")
+	}
+	expectedAsset := component.ComponentID + "-"
+	if component.Variant != "" && component.Variant != "default" {
+		expectedAsset += component.Variant + "-"
+	}
+	expectedAsset += component.Version + ".json"
+	if discovery.MetadataAssetName != expectedAsset || !strings.HasSuffix(discovery.Tag, component.Version) {
+		return fmt.Errorf("metadata asset or tag does not identify the selected component version")
+	}
+	metadataURI, err := url.Parse(component.ReleaseMetadataURI)
+	if err != nil || metadataURI.Scheme != "https" || strings.ToLower(metadataURI.Hostname()) != "github.com" ||
+		metadataURI.User != nil || metadataURI.Port() != "" || metadataURI.RawQuery != "" || metadataURI.Fragment != "" {
+		return fmt.Errorf("metadata asset URI is not canonical HTTPS GitHub")
+	}
+	expectedMetadataPath := path.Join("/", owner, repo, "releases", "download", discovery.Tag, expectedAsset)
+	if metadataURI.Path != expectedMetadataPath {
+		return fmt.Errorf("metadata asset URI path does not match the recorded Release")
+	}
+	expectedReleaseAPI := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%d", owner, repo, discovery.ReleaseID)
+	if discovery.ReleaseAPIURI != expectedReleaseAPI {
+		return fmt.Errorf("GitHub Release API URI does not match the recorded repository and Release ID")
+	}
+	if discovery.PublishedAt != "" {
+		if _, err := time.Parse(time.RFC3339, discovery.PublishedAt); err != nil {
+			return fmt.Errorf("published_at is not RFC3339")
+		}
+	}
+	matches := 0
+	check := func(repositoryURI, revision string) {
+		parsed, parseErr := url.Parse(repositoryURI)
+		if parseErr == nil && parsed.Scheme == "https" && strings.EqualFold(parsed.Hostname(), "github.com") &&
+			strings.EqualFold(strings.Trim(parsed.Path, "/"), owner+"/"+repo) {
+			matches++
+			if !strings.EqualFold(revision, discovery.TagCommit) {
+				matches += 1000
+			}
+		}
+	}
+	if component.SelectedArtifact != nil {
+		for _, source := range component.SelectedArtifact.SourceProvenance {
+			check(source.RepositoryURI, source.Revision)
+		}
+	} else {
+		for _, source := range component.SourceUnits {
+			check(source.RepositoryURI, source.Revision)
+		}
+	}
+	if matches != 1 {
+		return fmt.Errorf("exactly one publisher source provenance entry must match the Git tag commit")
 	}
 	return nil
 }
