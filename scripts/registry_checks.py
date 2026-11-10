@@ -310,7 +310,7 @@ def sync_schemas(mode: str) -> None:
     print(f"Registry v1 schemas and embedded copies match {repository}@{revision} (tree and Git blob-pinned)")
 
 
-_GO_BUILD_SETTING = re.compile(r"^\\s*build\\s+(GOOS|GOARCH|CGO_ENABLED)=(\\S+)\\s*$")
+_GO_BUILD_SETTING = re.compile(r"^\s*build\s+(GOOS|GOARCH|CGO_ENABLED)=(\S+)\s*$")
 
 def parse_go_build_info(output: str) -> dict[str, str]:
     """Extract target settings from `go version -m` without trusting filenames."""
@@ -348,7 +348,7 @@ def validate_go_build_info(settings: dict[str, str], goos: str, goarch: str) -> 
 def validate_executable_header(data: bytes, goos: str, goarch: str) -> None:
     """Verify the executable container and machine field from the built bytes."""
     if goos == "linux":
-        if len(data) < 20 or data[:4] != b"\\x7fELF":
+        if len(data) < 20 or data[:4] != b"\x7fELF":
             raise ValueError("Linux Registry artifact is not an ELF executable")
         if data[4] != 2 or data[5] != 1:
             raise ValueError("Linux Registry artifact must be 64-bit little-endian ELF")
@@ -373,7 +373,7 @@ def validate_executable_header(data: bytes, goos: str, goarch: str) -> None:
         pe_offset = int.from_bytes(data[0x3C:0x40], "little")
         if pe_offset < 0x40 or pe_offset > len(data) - 6:
             raise ValueError("Windows Registry artifact has an invalid PE header offset")
-        if data[pe_offset:pe_offset + 4] != b"PE\\x00\\x00":
+        if data[pe_offset:pe_offset + 4] != b"PE\x00\x00":
             raise ValueError("Windows Registry artifact has an invalid PE signature")
         machine = int.from_bytes(data[pe_offset + 4:pe_offset + 6], "little")
         if machine != 0x8664:
@@ -405,11 +405,11 @@ def verify_release_binary_target(binary: Path, goos: str, goarch: str) -> None:
 def run_release_binary_self_test() -> None:
     """Exercise Go build-info and executable-header checks with synthetic fixtures."""
     sample = (
-        "registry: go1.27.3\\n"
-        " path\\tgithub.com/cdin-editor/registry/cmd/registry\\n"
-        " build\\tCGO_ENABLED=0\\n"
-        " build\\tGOARCH=amd64\\n"
-        " build\\tGOOS=linux\\n"
+        "registry: go1.27.3\n"
+        " path\tgithub.com/cdin-editor/registry/cmd/registry\n"
+        " build\tCGO_ENABLED=0\n"
+        " build\tGOARCH=amd64\n"
+        " build\tGOOS=linux\n"
     )
     settings = parse_go_build_info(sample)
     validate_go_build_info(settings, "linux", "amd64")
@@ -420,7 +420,7 @@ def run_release_binary_self_test() -> None:
             {"GOOS": "linux", "GOARCH": "arm64", "CGO_ENABLED": "0"}, "linux", "amd64"
         )),
         ("conflicting metadata", lambda: parse_go_build_info(
-            " build\\tGOOS=linux\\n build\\tGOOS=darwin\\n"
+            " build\tGOOS=linux\n build\tGOOS=darwin\n"
         )),
     ]
     for label, check in checks:
@@ -431,8 +431,8 @@ def run_release_binary_self_test() -> None:
         raise SystemExit(f"Registry target self-test failed: {label} was accepted")
 
     elf = bytearray(64)
-    elf[:4] = b"\\x7fELF"
-    elf[4:6] = b"\\x02\\x01"
+    elf[:4] = b"\x7fELF"
+    elf[4:6] = b"\x02\x01"
     elf[18:20] = (62).to_bytes(2, "little")
     validate_executable_header(bytes(elf), "linux", "amd64")
     try:
@@ -450,7 +450,7 @@ def run_release_binary_self_test() -> None:
     pe = bytearray(0x90)
     pe[:2] = b"MZ"
     pe[0x3C:0x40] = (0x80).to_bytes(4, "little")
-    pe[0x80:0x84] = b"PE\\x00\\x00"
+    pe[0x80:0x84] = b"PE\x00\x00"
     pe[0x84:0x86] = (0x8664).to_bytes(2, "little")
     validate_executable_header(bytes(pe), "windows", "amd64")
     print("Registry executable target self-tests: OK")
