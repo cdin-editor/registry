@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -262,6 +263,11 @@ func mustGlob(t *testing.T, pattern string) []string {
 }
 
 func TestGitHubAPISnapshotEnvelopeIsNotWorldReadable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows ACLs are not represented by os.FileMode.Perm(); the cache
+		// directory inherits the caller's Windows security descriptor instead.
+		t.Skip("POSIX permission bits do not model Windows ACLs")
+	}
 	cacheDir := filepath.Join(t.TempDir(), "cache")
 	fetcher := githubTestFetcher(t, HTTPFetcherOptions{AllowedHosts: []string{"github.com"}, CacheDir: cacheDir}, nil)
 	source := ReleaseSource{
