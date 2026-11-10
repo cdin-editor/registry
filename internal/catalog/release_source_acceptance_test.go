@@ -390,3 +390,88 @@ func TestLoadFromGitHubReleaseSourcesRejectsTagAndMetadataVersionMismatch(t *tes
 		t.Fatalf("error = %v, want tag/metadata version mismatch", err)
 	}
 }
+
+
+func TestLoadFromGitHubReleaseSourcesRejectsInvalidAPIAssetIdentityAndSize(t *testing.T) {
+	tests := []struct {
+		name      string
+		mutate    func(*GitHubRelease)
+		wantError string
+	}{
+		{
+			name: "zero API asset size",
+			mutate: func(release *GitHubRelease) {
+				release.Assets[0].Size = 0
+			},
+			wantError: "asset identity or size is invalid",
+		},
+		{
+			name: "substituted API asset URI",
+			mutate: func(release *GitHubRelease) {
+				release.Assets[0].URL = "https://api.github.com/repos/attacker/engine/releases/assets/1"
+			},
+			wantError: "asset URI does not match the configured source",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			source, release, _, _, client := singleADR0028Script(t, "1.0.0", 28)
+			testCase.mutate(&release)
+			client.pages[1] = []GitHubRelease{release}
+			_, err := loadScriptedReleaseSource(context.Background(), source, client)
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantError)
+			}
+			if len(client.assetCalls) != 0 {
+				t.Fatalf("invalid API asset identity reached asset download: %v", client.assetCalls)
+			}
+		})
+	}
+}
+
+func TestLoadFromGitHubReleaseSourcesRejectsPublisherRepositoryMismatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(map[string]any)
+		wantErr string
+	}{
+		{
+			name: "publication repository mismatch",
+			mutate: func(document map[string]any) {
+				publication := document["publication"].(map[string]any)
+				publication["repository_uri"] = "https://github.com/acme/attacker"
+			},
+			wantErr: "ADR-0028 publication identity does not match",
+		},
+		{
+			name: "publisher source unit repository mismatch",
+			mutate: func(document map[string]any) {
+				units := document["source_units"].([]any)
+				units[0].(map[string]any)["repository_uri"] = "https://github.com/acme/attacker"
+			},
+			wantErr: "must contain exactly one publisher source unit",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			source, release, original, _, client := singleADR0028Script(t, "1.0.0", 29)
+			payload := mutateReleaseMetadata(t, original, testCase.mutate)
+			setScriptedAssetPayload(&release, client, payload)
+			client.pages[1] = []GitHubRelease{release}
+			_, err := loadScriptedReleaseSource(context.Background(), source, client)
+			if err == nil || !strings.Contains(err.Error(), testCase.wantErr) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateReleaseSourcesRejectsUnsupportedProvider(t *testing.T) {
+	_, err := ValidateReleaseSources([]ReleaseSource{{
+		SourceID: "engine-source", Provider: "generic-git-tags",
+		RepositoryURI: "https://github.com/acme/engine", ComponentID: "engine", Variant: "default",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "unsupported Release Source provider") {
+		t.Fatalf("error = %v, want unsupported provider rejection", err)
+	}
+}
