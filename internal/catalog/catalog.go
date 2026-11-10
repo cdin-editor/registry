@@ -112,9 +112,9 @@ type Release struct {
 	Dependencies  []Dependency                `json:"dependencies"`
 	Contracts     Contracts                   `json:"contracts"`
 	Publication   *Publication                `json:"publication,omitempty"`
-	Raw           []byte       `json:"-"`
-	MetadataURI   string       `json:"-"`
-	MetadataSHA   string       `json:"-"`
+	Raw           []byte                      `json:"-"`
+	MetadataURI   string                      `json:"-"`
+	MetadataSHA   string                      `json:"-"`
 	Discovery     *ReleaseDiscoveryProvenance `json:"-"`
 }
 
