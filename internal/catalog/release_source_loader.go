@@ -259,4 +259,3 @@ func validGitRevision(value string) bool {
 	}
 	return true
 }
-
