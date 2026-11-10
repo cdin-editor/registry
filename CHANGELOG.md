@@ -3,6 +3,15 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- Inspect every cross-compiled Registry executable before upload, verifying
+  its embedded Go GOOS/GOARCH/CGO settings and actual ELF, Mach-O or PE
+  machine identity. Add deterministic positive/negative target-verification
+  self-tests to the release quality gate.
+
 ## [0.2.0-dev.1] - 2026-11-10
 
 ### Added

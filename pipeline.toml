@@ -93,7 +93,7 @@ timeout_seconds = 900
 [tasks.release-check]
 description = "Run the cross-platform release verification gate"
 command = ["git", "diff", "--check"]
-depends_on = ["modules", "format", "vet", "test", "fuzz-smoke", "performance-smoke", "governance", "gix-config", "build", "boundary", "schema-sync", "structure"]
+depends_on = ["modules", "format", "vet", "test", "fuzz-smoke", "performance-smoke", "governance", "gix-config", "build", "boundary", "schema-sync", "structure", "release-binary-self-test"]
 timeout_seconds = 900
 
 [tasks.check]
@@ -101,3 +101,7 @@ description = "Run the complete CI quality gate, including race detection"
 command = ["git", "diff", "--check"]
 depends_on = ["release-check", "race"]
 timeout_seconds = 1200
+
+[tasks.release-binary-self-test]
+description = "Verify Registry release executable build metadata and ELF/Mach-O/PE target identity checks"
+command = ["python", "scripts/registry_checks.py", "release-binary-self-test"]
