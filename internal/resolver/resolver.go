@@ -165,24 +165,26 @@ type AppliedConstraint struct {
 
 // ReleaseIdentity is the deterministic public identity/provenance projection of a candidate.
 type ReleaseIdentity struct {
-	ComponentID        string `json:"component_id"`
-	Variant            string `json:"variant"`
-	Version            string `json:"version"`
-	CatalogID          string `json:"catalog_id,omitempty"`
-	ReleaseMetadataURI string `json:"release_metadata_uri,omitempty"`
-	ReleaseMetadataSHA string `json:"release_metadata_sha256,omitempty"`
+	ComponentID        string                             `json:"component_id"`
+	Variant            string                             `json:"variant"`
+	Version            string                             `json:"version"`
+	CatalogID          string                             `json:"catalog_id,omitempty"`
+	ReleaseMetadataURI string                             `json:"release_metadata_uri,omitempty"`
+	ReleaseMetadataSHA string                             `json:"release_metadata_sha256,omitempty"`
+	ReleaseDiscovery   *catalog.ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
 }
 
 // RejectedCandidate explains why a catalog candidate was not selected.
 type RejectedCandidate struct {
-	ComponentID        string              `json:"component_id"`
-	Variant            string              `json:"variant"`
-	Version            string              `json:"version"`
-	ReasonCode         RejectionReasonCode `json:"reason_code"`
-	Detail             string              `json:"detail,omitempty"`
-	CatalogID          string              `json:"catalog_id,omitempty"`
-	ReleaseMetadataURI string              `json:"release_metadata_uri,omitempty"`
-	ReleaseMetadataSHA string              `json:"release_metadata_sha256,omitempty"`
+	ComponentID        string                             `json:"component_id"`
+	Variant            string                             `json:"variant"`
+	Version            string                             `json:"version"`
+	ReasonCode         RejectionReasonCode                 `json:"reason_code"`
+	Detail             string                             `json:"detail,omitempty"`
+	CatalogID          string                             `json:"catalog_id,omitempty"`
+	ReleaseMetadataURI string                             `json:"release_metadata_uri,omitempty"`
+	ReleaseMetadataSHA string                             `json:"release_metadata_sha256,omitempty"`
+	ReleaseDiscovery   *catalog.ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
 }
 
 // ContractProviderEvidence identifies one declared provider and whether it
@@ -256,17 +258,18 @@ type ResolvedDependency struct {
 // ResolvedComponent is the selected release projection needed by the Collector
 // and Manifest writer. Raw metadata bytes remain owned by Catalog.
 type ResolvedComponent struct {
-	ComponentID        string               `json:"component_id"`
-	Variant            string               `json:"variant"`
-	Version            string               `json:"version"`
-	ReleaseMetadataURI string               `json:"release_metadata_uri"`
-	ReleaseMetadataSHA string               `json:"release_metadata_sha256"`
-	Delivery           string               `json:"delivery,omitempty"`
-	SelectedArtifact   *catalog.Artifact    `json:"selected_artifact,omitempty"`
-	Artifacts          []catalog.Artifact   `json:"-"`
-	SourceUnits        []catalog.SourceUnit `json:"source_units"`
-	Dependencies       []ResolvedDependency `json:"dependencies"`
-	Contracts          catalog.Contracts    `json:"contracts"`
+	ComponentID        string                             `json:"component_id"`
+	Variant            string                             `json:"variant"`
+	Version            string                             `json:"version"`
+	ReleaseMetadataURI string                             `json:"release_metadata_uri"`
+	ReleaseMetadataSHA string                             `json:"release_metadata_sha256"`
+	ReleaseDiscovery   *catalog.ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
+	Delivery           string                             `json:"delivery,omitempty"`
+	SelectedArtifact   *catalog.Artifact                  `json:"selected_artifact,omitempty"`
+	Artifacts          []catalog.Artifact                 `json:"-"`
+	SourceUnits        []catalog.SourceUnit               `json:"source_units"`
+	Dependencies       []ResolvedDependency               `json:"dependencies"`
+	Contracts          catalog.Contracts                  `json:"contracts"`
 }
 
 // Graph is the immutable selection result consumed by collection/workspace
@@ -358,8 +361,15 @@ func resolveWithMaxSearchStates(def ProductDefinition, catalogs []*catalog.Catal
 	if maxSearchStates < 1 {
 		maxSearchStates = defaultMaxSearchStates
 	}
+	reportVersion := reportSchemaVersion
+	for _, catalogInput := range catalogs {
+		if catalogInput != nil && len(catalogInput.ReleaseSources) > 0 {
+			reportVersion = "1.2.0"
+			break
+		}
+	}
 	result := Result{Report: Report{
-		SchemaVersion:      reportSchemaVersion,
+		SchemaVersion:      reportVersion,
 		Result:             "failure",
 		Selected:           []SelectedCandidate{},
 		AppliedConstraints: []AppliedConstraint{},
@@ -726,6 +736,7 @@ func (s *solver) candidatesFor(k key, constraints []constraintSource) ([]candida
 				ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version,
 				ReasonCode: reason, Detail: detail, CatalogID: candidate.catalogID,
 				ReleaseMetadataURI: r.MetadataURI, ReleaseMetadataSHA: r.MetadataSHA,
+				ReleaseDiscovery: r.Discovery,
 			})
 			continue
 		}
@@ -1010,8 +1021,15 @@ func buildGraph(state *searchState, catalogs []CatalogReference, roots []Require
 	if cycle != nil {
 		return nil, nil, cycle
 	}
+	graphVersion := manifestSchemaVersion
+	for _, selectedCandidate := range state.chosen {
+		if selectedCandidate.release.Discovery != nil {
+			graphVersion = "1.2.0"
+			break
+		}
+	}
 	graph := &Graph{
-		SchemaVersion:        manifestSchemaVersion,
+		SchemaVersion:        graphVersion,
 		Catalogs:             append([]CatalogReference(nil), catalogs...),
 		Roots:                append([]Requirement(nil), roots...),
 		EnvironmentContracts: append([]EnvironmentContract(nil), environment...),
@@ -1035,6 +1053,7 @@ func buildGraph(state *searchState, catalogs []CatalogReference, roots []Require
 		graph.Components = append(graph.Components, ResolvedComponent{
 			ComponentID: r.ComponentID, Variant: r.Variant, Version: r.Version,
 			ReleaseMetadataURI: r.MetadataURI, ReleaseMetadataSHA: r.MetadataSHA,
+			ReleaseDiscovery: r.Discovery,
 			SourceUnits:  append([]catalog.SourceUnit(nil), r.SourceUnits...),
 			Artifacts:    append([]catalog.Artifact(nil), r.Artifacts...),
 			Dependencies: dependencies, Contracts: r.Contracts,
@@ -1115,6 +1134,7 @@ func rejectedBranchCandidate(candidate candidate, failure ConflictCode) Rejected
 		CatalogID:          candidate.catalogID,
 		ReleaseMetadataURI: candidate.release.MetadataURI,
 		ReleaseMetadataSHA: candidate.release.MetadataSHA,
+		ReleaseDiscovery:   candidate.release.Discovery,
 	}
 }
 
@@ -1204,6 +1224,7 @@ func identityOfCandidate(candidate candidate) ReleaseIdentity {
 		Version: candidate.release.Version, CatalogID: candidate.catalogID,
 		ReleaseMetadataURI: candidate.release.MetadataURI,
 		ReleaseMetadataSHA: candidate.release.MetadataSHA,
+		ReleaseDiscovery:   candidate.release.Discovery,
 	}
 }
 
