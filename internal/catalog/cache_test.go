@@ -306,18 +306,22 @@ func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T)
 	const repositoryURI = "https://github.com/acme/engine"
 	const metadataURI = "https://github.com/acme/engine/releases/download/v1.2.3/engine-1.2.3.json"
 	discovery := ReleaseDiscoveryProvenance{
-		SourceID: "engine-source", Provider: githubReleaseProvider,
-		RepositoryURI: repositoryURI, ReleaseID: 123,
-		ReleaseAPIURI: "https://api.github.com/repos/acme/engine/releases/123",
+		SourceID:          "engine-source",
+		Provider:          githubReleaseProvider,
+		RepositoryURI:     repositoryURI,
+		ReleaseID:         123,
+		ReleaseAPIURI:     "https://api.github.com/repos/acme/engine/releases/123",
 		Tag:               "v1.2.3",
 		TagCommit:         strings.Repeat("a", 40),
 		MetadataAssetName: "engine-1.2.3.json",
 		MetadataAssetSize: 456,
-		PublishedAt: "2026-11-10T18:00:00Z",
+		PublishedAt:       "2026-11-10T18:00:00Z",
 	}
 	metadataSHA := expectedDigest("immutable-release-metadata")
 	assetKey, err := GitHubReleaseAssetCacheKey(discovery, metadataURI, metadataSHA)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	manifestBytes, err := json.Marshal(struct {
 		SchemaVersion string `json:"schema_version"`
 		Catalogs []any `json:"catalogs"`
@@ -394,13 +398,23 @@ func TestMetadataCacheGCCanEvictExpiredGitHubAPISnapshots(t *testing.T) {
 		Variant: "default", TagPrefix: "v",
 	}
 	requestURI := "https://api.github.com/repos/acme/engine/releases?page=1&per_page=100"
-	if err := fetcher.writeGitHubAPISnapshot(source, requestURI, []byte("[]")); err != nil { t.Fatal(err) }
+	if err := fetcher.writeGitHubAPISnapshot(source, requestURI, []byte("[]")); err != nil {
+		t.Fatal(err)
+	}
 	files, err := filepath.Glob(filepath.Join(cache.root, "github-*.snapshot.json"))
-	if err != nil || len(files) != 1 { t.Fatalf("snapshot files = %v, err = %v", files, err) }
+	if err != nil || len(files) != 1 {
+		t.Fatalf("snapshot files = %v, err = %v", files, err)
+	}
 	expired := time.Now().Add(-2 * time.Hour)
-	if err := os.Chtimes(files[0], expired, expired); err != nil { t.Fatal(err) }
+	if err := os.Chtimes(files[0], expired, expired); err != nil {
+		t.Fatal(err)
+	}
 	result, err := cache.GarbageCollect(context.Background())
 	if err != nil { t.Fatal(err) }
-	if result.RemovedEntries != 1 { t.Fatalf("GC removed %d entries, want one expired GitHub API snapshot", result.RemovedEntries) }
-	if _, err := os.Stat(files[0]); !errors.Is(err, os.ErrNotExist) { t.Fatalf("expired API snapshot remains after GC: %v", err) }
+	if result.RemovedEntries != 1 {
+		t.Fatalf("GC removed %d entries, want one expired GitHub API snapshot", result.RemovedEntries)
+	}
+	if _, err := os.Stat(files[0]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expired API snapshot remains after GC: %v", err)
+	}
 }
