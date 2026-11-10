@@ -80,6 +80,12 @@ type GitHubReleaseClient interface {
 	FetchGitHubReleaseAsset(context.Context, string, int64) ([]byte, error)
 }
 
+// GitHubReleaseAssetIdentityFetcher binds downloaded bytes and their cache key
+// to the Release Source, Release ID, tag commit and immutable asset identity.
+type GitHubReleaseAssetIdentityFetcher interface {
+	FetchGitHubReleaseAssetWithIdentity(context.Context, ReleaseSource, GitHubRelease, string, GitHubReleaseAsset, int64) ([]byte, error)
+}
+
 // ReleaseDiscoveryProvenance preserves the exact publication identity used to
 // construct a candidate. It is copied into the Resolved Manifest for replay.
 type ReleaseDiscoveryProvenance struct {
@@ -224,4 +230,23 @@ func ValidateGitHubAssetDigest(value string) (string, error) {
 		return "", fmt.Errorf("catalog: GitHub Release metadata asset has no valid SHA-256 digest")
 	}
 	return strings.ToLower(parts[1]), nil
+}
+
+
+// githubRepositoryParts returns owner/repository path components from a
+// canonical GitHub repository URI. It never accepts arbitrary API base URLs.
+func githubRepositoryParts(repositoryURI string) (string, string, error) {
+	canonical, err := CanonicalGitHubRepositoryURI(repositoryURI)
+	if err != nil {
+		return "", "", fmt.Errorf("catalog: invalid GitHub repository identity")
+	}
+	parsed, err := url.Parse(canonical)
+	if err != nil {
+		return "", "", fmt.Errorf("catalog: invalid GitHub repository identity")
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) != 2 || !validGitHubPathSegment(parts[0]) || !validGitHubPathSegment(parts[1]) {
+		return "", "", fmt.Errorf("catalog: invalid GitHub repository identity")
+	}
+	return parts[0], parts[1], nil
 }
