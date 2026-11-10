@@ -135,7 +135,7 @@ func ValidateReleaseSources(sources []ReleaseSource) ([]ReleaseSource, error) {
 		if len(source.TagPrefix) > 32 || !releaseTagPrefixPattern.MatchString(source.TagPrefix) {
 			return nil, fmt.Errorf("catalog: Release Source tag_prefix is invalid")
 		}
-		mapping := source.RepositoryURI + "\x00" + source.ComponentID + "\x00" + source.Variant
+		mapping := source.ComponentID + "\x00" + source.Variant
 		if _, exists := seenMappings[mapping]; exists {
 			return nil, fmt.Errorf("catalog: duplicate component/variant Release Source mapping")
 		}
