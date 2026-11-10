@@ -79,7 +79,7 @@ type HTTPFetcher struct {
 // NewHTTPFetcher creates a bounded HTTPS Fetcher with an exact host allow-list.
 // A cache is optional; when configured it is content-addressed by URI+digest.
 func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
-	allowed := make(map[string]struct{}, len(options.AllowedHosts))
+	allowed := make(map[string]struct{}, len(options.AllowedHosts)+4)
 	for _, host := range options.AllowedHosts {
 		host = strings.ToLower(strings.TrimSpace(host))
 		if !validHostname(host) {
@@ -87,19 +87,21 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		}
 		allowed[host] = struct{}{}
 	}
-	// GitHub's Release API and immutable download hosts are built-in provider
-	// endpoints for the accepted github-releases-v1 source. They remain exact
-	// host entries and still pass DNS/IP and redirect policy checks.
-	for _, host := range []string{
-		"api.github.com",
-		"github.com",
-		"release-assets.githubusercontent.com",
-		"objects.githubusercontent.com",
-	} {
-		allowed[host] = struct{}{}
-	}
 	if len(allowed) == 0 {
 		return nil, fmt.Errorf("catalog: at least one HTTPS metadata host must be allow-listed")
+	}
+	// The GitHub provider's fixed API and release-download endpoints are trusted
+	// only when the caller explicitly allow-lists github.com. They remain exact
+	// host entries and still pass DNS/IP and redirect checks; this does not grant
+	// trust in arbitrary GitHub repositories or bypass the configured host policy.
+	if _, githubTrusted := allowed["github.com"]; githubTrusted {
+		for _, host := range []string{
+			"api.github.com",
+			"release-assets.githubusercontent.com",
+			"objects.githubusercontent.com",
+		} {
+			allowed[host] = struct{}{}
+		}
 	}
 	timeout := options.Timeout
 	if timeout <= 0 {
