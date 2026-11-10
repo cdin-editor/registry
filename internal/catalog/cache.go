@@ -494,9 +494,9 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 			MetadataSHA string `json:"metadata_sha256"`
 		} `json:"catalogs"`
 		Components []struct {
-			ReleaseMetadataURI string                            `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string                            `json:"release_metadata_sha256"`
-			ReleaseDiscovery   *ReleaseDiscoveryProvenance        `json:"release_discovery,omitempty"`
+			ReleaseMetadataURI string                      `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                      `json:"release_metadata_sha256"`
+			ReleaseDiscovery   *ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
 			SelectedArtifact   *struct {
 				ID     string `json:"artifact_id"`
 				Target Target `json:"target"`
