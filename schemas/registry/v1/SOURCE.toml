@@ -1,8 +1,8 @@
 schema_version = 1
-contract_version = "1.3.0"
+contract_version = "1.4.0"
 repository = "cdin-editor/spec"
-revision = "42ba5edf3f26069e8dbe1fb38b70bcddd2687a2e"
-tree_sha = "524e27fd3529de7083c11385bfae8252d498d9b2"
+revision = "274f84f0ca08378db9c4a5cf6820065256f31d5a"
+tree_sha = "9b6bd08ed8be29a968a559c18269eb88ec3dd9f6"
 schema_directory = "schemas/registry/v1"
 files = [
   "product-definition.schema.json",
@@ -16,9 +16,9 @@ files = [
 # Each blob SHA pins the exact schema bytes independently of ref/raw URL resolution.
 schema_blobs = [
   { name = "product-definition.schema.json", blob_sha = "c554c8f546328c4f52505f2e9d06485e7a67e3c0" },
-  { name = "catalog-index.schema.json", blob_sha = "29008460e708b1202031cce28d8f85971ffabd1a" },
-  { name = "component-release.schema.json", blob_sha = "91c2d02682ee78c2f55b5d5736cddf498998ee33" },
-  { name = "resolved-manifest.schema.json", blob_sha = "651a1c5c2eb6cc504c28c7e353a7ec3ed688388b" },
-  { name = "resolution-report.schema.json", blob_sha = "fcd9416a7aa3bedd74d1579fa08764c0ae118d5b" },
+  { name = "catalog-index.schema.json", blob_sha = "3c37be7cba6c67de5706d92d75b3a6dccee07a5c" },
+  { name = "component-release.schema.json", blob_sha = "9d8dc2e31c3175f9daef621896c0487e9b9bb99e" },
+  { name = "resolved-manifest.schema.json", blob_sha = "19b6048c9b333dd4af0c67171c7d1f8fbf35af7b" },
+  { name = "resolution-report.schema.json", blob_sha = "5924fcb373acf05e4fc4d43fb612c823f9ce9c67" },
   { name = "update-discovery-report.schema.json", blob_sha = "b1ec154817a0e3249f68ff38e13577b8781955f3" },
 ]
