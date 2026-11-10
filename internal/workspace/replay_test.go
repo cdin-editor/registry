@@ -34,10 +34,12 @@ func (g replayGitRunner) Run(ctx context.Context, dir string, env []string, args
 type replayFixtureFetcher struct {
 	payloads map[string][]byte
 	calls    int
+	uris     []string
 }
 
 func (f *replayFixtureFetcher) Fetch(ctx context.Context, uri string) ([]byte, error) {
 	f.calls++
+	f.uris = append(f.uris, uri)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -455,5 +457,130 @@ func TestReplayRejectsRemoteReleaseSourceIdentityMismatch(t *testing.T) {
 	}
 	if _, err := os.Stat(destination); !os.IsNotExist(err) {
 		t.Fatalf("source identity mismatch published a destination: stat err=%v", err)
+	}
+}
+
+
+func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T) {
+	repository, revision := createSourceRepository(t)
+	const repositoryURI = "https://github.com/acme/engine"
+	const indexURI = "https://metadata.example.invalid/catalog-index.json"
+	const tag = "v1.0.0"
+	const metadataURI = "https://github.com/acme/engine/releases/download/v1.0.0/engine-1.0.0.json"
+
+	resolution := replayResolution(repository, repositoryURI, revision)
+	resolution.Graph.SchemaVersion = "1.2.0"
+
+	releaseDocument := map[string]any{
+		"schema_version": "1.2.0",
+		"component_id": "engine",
+		"variant": "default",
+		"version": "1.0.0",
+		"status": "active",
+		"source_units": []any{
+			map[string]any{
+				"source_unit_id": "source",
+				"repository_uri": repositoryURI,
+				"revision": revision,
+			},
+		},
+		"dependencies": []any{},
+		"contracts": map[string]any{"provides": []any{}, "requires": []any{}},
+		"publication": map[string]any{
+			"provider": "github-releases-v1",
+			"repository_uri": repositoryURI,
+			"tag": tag,
+			"tag_commit": revision,
+			"metadata_asset_name": "engine-1.0.0.json",
+		},
+	}
+	releaseBytes, err := json.Marshal(releaseDocument)
+	if err != nil { t.Fatal(err) }
+	releaseDigest := manifest.Digest(releaseBytes)
+
+	indexBytes, err := json.Marshal(catalog.Index{
+		SchemaVersion: "1.1.0",
+		CatalogID: "stable",
+		ReleaseSources: []catalog.ReleaseSource{{
+			SourceID: "engine-source", Provider: "github-releases-v1",
+			RepositoryURI: repositoryURI, ComponentID: "engine", Variant: "default", TagPrefix: "v",
+		}},
+	})
+	if err != nil { t.Fatal(err) }
+	resolution.Graph.Catalogs[0].MetadataURI = indexURI
+	resolution.Graph.Catalogs[0].MetadataSHA = manifest.Digest(indexBytes)
+	resolution.Graph.Components[0].ReleaseMetadataURI = metadataURI
+	resolution.Graph.Components[0].ReleaseMetadataSHA = releaseDigest
+	resolution.Graph.Components[0].ReleaseDiscovery = &catalog.ReleaseDiscoveryProvenance{
+		SourceID: "engine-source",
+		Provider: "github-releases-v1",
+		RepositoryURI: repositoryURI,
+		ReleaseID: 123,
+		ReleaseAPIURI: "https://api.github.com/repos/acme/engine/releases/123",
+		Tag: tag,
+		TagCommit: revision,
+		MetadataAssetName: "engine-1.0.0.json",
+		MetadataAssetSize: int64(len(releaseBytes)),
+		PublishedAt: "2026-11-10T18:00:00Z",
+	}
+	encoded, manifestDigest := buildReplayManifest(t, resolution)
+
+	fetcher := &replayFixtureFetcher{payloads: map[string][]byte{
+		indexURI: indexBytes,
+		metadataURI: releaseBytes,
+	}}
+	destination := filepath.Join(t.TempDir(), "adr0028-replay")
+	options := replayOptions(destination, repositoryURI, repository)
+	git := &replayCountingGitRunner{delegate: replayGitRunner{repositoryURI: repositoryURI, localPath: repository}}
+	options.Git = git
+	replayed, err := Replay(context.Background(), encoded, manifestDigest, ReplayOptions{
+		Workspace: options,
+		MetadataFetcher: fetcher,
+		VerifyRemoteMetadata: true,
+	})
+	if err != nil { t.Fatal(err) }
+	if fetcher.calls != 2 {
+		t.Fatalf("replay fetched %d metadata documents, want only the pinned Catalog and exact Release Asset", fetcher.calls)
+	}
+	if len(fetcher.uris) != 2 || fetcher.uris[0] != indexURI || fetcher.uris[1] != metadataURI {
+		t.Fatalf("replay metadata requests = %v; want exact immutable Catalog and Release Asset URIs", fetcher.uris)
+	}
+	if replayed.ManifestSHA256 != manifestDigest {
+		t.Fatalf("replay Manifest digest = %s, want %s", replayed.ManifestSHA256, manifestDigest)
+	}
+	reportBytes, err := os.ReadFile(replayed.ReportPath)
+	if err != nil { t.Fatal(err) }
+	if !strings.Contains(string(reportBytes), "release_discovery") || !strings.Contains(string(reportBytes), "engine-1.0.0.json") {
+		t.Fatalf("replay report did not preserve selected Release provenance: %s", reportBytes)
+	}
+
+	// A payload with a different tag commit at the same immutable URI/digest
+	// identity must be rejected before any source checkout or destination publish.
+	var changed map[string]any
+	if err := json.Unmarshal(releaseBytes, &changed); err != nil { t.Fatal(err) }
+	publication := changed["publication"].(map[string]any)
+	publication["tag_commit"] = strings.Repeat("0", 40)
+	changedBytes, err := json.Marshal(changed)
+	if err != nil { t.Fatal(err) }
+	badFetcher := &replayFixtureFetcher{payloads: map[string][]byte{
+		indexURI: indexBytes,
+		metadataURI: changedBytes,
+	}}
+	badDestination := filepath.Join(t.TempDir(), "rejected-adr0028-replay")
+	badOptions := replayOptions(badDestination, repositoryURI, repository)
+	badGit := &replayCountingGitRunner{delegate: replayGitRunner{repositoryURI: repositoryURI, localPath: repository}}
+	badOptions.Git = badGit
+	if _, err := Replay(context.Background(), encoded, manifestDigest, ReplayOptions{
+		Workspace: badOptions,
+		MetadataFetcher: badFetcher,
+		VerifyRemoteMetadata: true,
+	}); err == nil {
+		t.Fatal("replay accepted a Release Asset whose publisher tag commit differs from the Manifest")
+	}
+	if badGit.calls != 0 {
+		t.Fatalf("invalid Release Asset reached Git retrieval %d times", badGit.calls)
+	}
+	if _, err := os.Stat(badDestination); !os.IsNotExist(err) {
+		t.Fatalf("rejected Release Asset replay published a destination: %v", err)
 	}
 }
