@@ -86,6 +86,10 @@ type GitHubReleaseAssetIdentityFetcher interface {
 	FetchGitHubReleaseAssetWithIdentity(context.Context, ReleaseSource, GitHubRelease, string, GitHubReleaseAsset, int64) ([]byte, error)
 }
 
+type GitHubReleaseManifestAssetFetcher interface {
+	FetchGitHubReleaseAssetFromManifest(context.Context, ReleaseDiscoveryProvenance, string, string) ([]byte, error)
+}
+
 // ReleaseDiscoveryProvenance preserves the exact publication identity used to
 // construct a candidate. It is copied into the Resolved Manifest for replay.
 type ReleaseDiscoveryProvenance struct {
