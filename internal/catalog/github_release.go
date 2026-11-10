@@ -36,7 +36,8 @@ type ReleaseSource struct {
 	RepositoryURI string `json:"repository_uri"`
 	ComponentID  string `json:"component_id"`
 	Variant      string `json:"variant,omitempty"`
-	TagPrefix    string `json:"tag_prefix,omitempty"`
+	TagPrefix     string `json:"tag_prefix,omitempty"`
+	MinimumVersion string `json:"minimum_version,omitempty"`
 }
 
 // ReleasePublication is the publisher-authored, self-contained part of the
@@ -288,6 +289,17 @@ func (f *HTTPFetcher) discoverGitHubReleaseSnapshot(ctx context.Context, source 
 		if version.HasPrerelease() != release.Prerelease {
 			return nil, fmt.Errorf("RELEASE_PRERELEASE_FLAG_MISMATCH: tag %q and GitHub Release prerelease flag disagree", release.TagName)
 		}
+		if source.MinimumVersion != "" {
+			minimum, minimumErr := semver.Parse(source.MinimumVersion)
+			if minimumErr != nil {
+				return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: minimum_version is not valid SemVer")
+			}
+			if semver.ComparePrecedence(version, minimum) < 0 {
+				// Migration boundary: older Releases are deliberately outside
+				// this source's publication contract and need not be backfilled.
+				continue
+			}
+		}
 		if release.PublishedAt != "" {
 			if _, err := time.Parse(time.RFC3339, release.PublishedAt); err != nil {
 				return nil, fmt.Errorf("RELEASE_API_UNAVAILABLE: Release published_at is invalid")
@@ -437,6 +449,11 @@ func validateReleaseSource(source ReleaseSource) error {
 	}
 	if len(source.TagPrefix) > 32 {
 		return fmt.Errorf("RELEASE_SOURCE_INVALID: tag_prefix is too long")
+	}
+	if source.MinimumVersion != "" {
+		if _, err := semver.Parse(source.MinimumVersion); err != nil {
+			return fmt.Errorf("RELEASE_SOURCE_INVALID: minimum_version is not valid SemVer")
+		}
 	}
 	for _, character := range source.TagPrefix {
 		if !((character >= 'a' && character <= 'z') ||
