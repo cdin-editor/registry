@@ -19,9 +19,10 @@ jobs:
     with:
       pipeline-ref: main
       go-version: "1.27.3"
-      test-command: "PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
+      test-command: "python scripts/prepare-release-catalog.py --self-test && PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
       build-command: "python scripts/registry_checks.py release-build"
       artifact-path: "dist/*"
+      asset-preparation-command: "python scripts/prepare-release-catalog.py"
       changelog-path: "CHANGELOG.md"
       working-directory: "."
       # Pipeline's release target inherits PIPELINE_TARGET_* from the command
