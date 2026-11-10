@@ -13,9 +13,11 @@ import (
 )
 
 type fakeGitHubReleaseClient struct {
-	metadata []byte
-	releases map[int][]GitHubRelease
-	commits  map[string]string
+	metadata           []byte
+	metadataByAssetID  map[int64][]byte
+	releases           map[int][]GitHubRelease
+	commits            map[string]string
+	pageCalls          []int
 }
 
 func (f *fakeGitHubReleaseClient) Fetch(context.Context, string) ([]byte, error) {
@@ -26,6 +28,7 @@ func (f *fakeGitHubReleaseClient) ListGitHubReleases(_ context.Context, _ Releas
 	if perPage != githubReleasePageSize {
 		return nil, fmt.Errorf("unexpected page size %d", perPage)
 	}
+	f.pageCalls = append(f.pageCalls, page)
 	return append([]GitHubRelease(nil), f.releases[page]...), nil
 }
 
@@ -37,7 +40,10 @@ func (f *fakeGitHubReleaseClient) ResolveGitHubTagCommit(_ context.Context, _ Re
 	return commit, nil
 }
 
-func (f *fakeGitHubReleaseClient) FetchGitHubReleaseAsset(_ context.Context, _ string, _ int64) ([]byte, error) {
+func (f *fakeGitHubReleaseClient) FetchGitHubReleaseAsset(_ context.Context, _ string, assetID int64) ([]byte, error) {
+	if payload, ok := f.metadataByAssetID[assetID]; ok {
+		return append([]byte(nil), payload...), nil
+	}
 	return append([]byte(nil), f.metadata...), nil
 }
 
@@ -164,6 +170,57 @@ func TestLoadFromGitHubReleaseSourcesVerifiesAndRecordsPublication(t *testing.T)
 		selected.Discovery.MetadataAssetSize != release.Assets[0].Size ||
 		selected.Discovery.MetadataAssetSize <= 0 {
 		t.Fatalf("incomplete release provenance: %#v", selected.Discovery)
+	}
+}
+
+func TestLoadFromGitHubReleaseSourcesRetrievesEveryReleasePage(t *testing.T) {
+	const releaseCount = githubReleasePageSize + 1
+	var source ReleaseSource
+	pages := map[int][]GitHubRelease{1: {}, 2: {}}
+	metadataByAssetID := make(map[int64][]byte, releaseCount)
+	commits := make(map[string]string, releaseCount)
+
+	for index := 0; index < releaseCount; index++ {
+		version := fmt.Sprintf("1.0.%d", index)
+		fixtureSource, release, fixtureClient := testADR0028Fixture(
+			t, version, "2026-11-10T18:00:00Z", int64(100+index),
+		)
+		if index == 0 {
+			source = fixtureSource
+		}
+		page := 1
+		if index >= githubReleasePageSize {
+			page = 2
+		}
+		pages[page] = append(pages[page], release)
+		assetID := release.Assets[0].ID
+		metadataByAssetID[assetID] = fixtureClient.metadata
+		commits[release.TagName] = fixtureClient.commits[release.TagName]
+	}
+
+	client := &fakeGitHubReleaseClient{
+		releases:          pages,
+		metadataByAssetID: metadataByAssetID,
+		commits:           commits,
+	}
+	loaded, err := loadFromGitHubReleaseSources(
+		context.Background(),
+		Index{SchemaVersion: "1.1.0", CatalogID: "pagination.catalog", ReleaseSources: []ReleaseSource{source}},
+		client,
+		&acceptingValidator{},
+		1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Releases) != releaseCount {
+		t.Fatalf("loaded %d releases, want all %d across two pages", len(loaded.Releases), releaseCount)
+	}
+	if len(client.pageCalls) != 2 || client.pageCalls[0] != 1 || client.pageCalls[1] != 2 {
+		t.Fatalf("GitHub Release pages requested = %v, want [1 2]", client.pageCalls)
+	}
+	if loaded.Releases[len(loaded.Releases)-1].Version != "1.0.100" {
+		t.Fatalf("highest SemVer candidate = %s, want 1.0.100", loaded.Releases[len(loaded.Releases)-1].Version)
 	}
 }
 
