@@ -752,9 +752,28 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 			}
 			if item.Discovery.SourceID != source.SourceID ||
 				item.Discovery.Provider != "github-releases-v1" ||
-				item.Discovery.RepositoryURI != source.RepositoryURI ||
-				item.Discovery.MetadataAssetName != releaseMetadataAssetName(source.ComponentID, source.Variant, strings.TrimSuffix(strings.TrimPrefix(item.Discovery.Tag, source.TagPrefix), "")) {
+				item.Discovery.RepositoryURI != source.RepositoryURI {
 				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: discovery result does not match its Catalog Release Source")
+			}
+			owner, repository, repositoryErr := parseGitHubRepository(source.RepositoryURI)
+			if repositoryErr != nil {
+				return nil, fmt.Errorf("RELEASE_SOURCE_INVALID: source repository is invalid")
+			}
+			prefix := source.TagPrefix
+			if prefix == "" {
+				prefix = "v"
+			}
+			tagVersion := strings.TrimPrefix(item.Discovery.Tag, prefix)
+			expectedName := releaseMetadataAssetName(source.ComponentID, source.Variant, tagVersion)
+			if !strings.HasPrefix(item.Discovery.Tag, prefix) || item.Discovery.MetadataAssetName != expectedName {
+				return nil, fmt.Errorf("RELEASE_TAG_VERSION_MISMATCH: discovered tag does not identify its canonical metadata asset")
+			}
+			if err := validateGitHubReleaseAssetURI(item.MetadataURI, owner, repository, item.Discovery.Tag, expectedName); err != nil {
+				return nil, fmt.Errorf("RELEASE_METADATA_ASSET_URI_REJECTED: metadata URI does not match the expected GitHub Release asset")
+			}
+			expectedAPIURI := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/%d", owner, repository, item.Discovery.ReleaseID)
+			if item.Discovery.ReleaseAPIURI != expectedAPIURI {
+				return nil, fmt.Errorf("RELEASE_REPOSITORY_MISMATCH: Release API URI does not match its source repository")
 			}
 			if !isGitObjectID(item.Discovery.TagCommit) {
 				return nil, fmt.Errorf("RELEASE_TAG_INVALID: discovered tag commit is not a full Git object ID")
