@@ -216,9 +216,10 @@ func loadFromGitHubReleaseSources(
 					PublishedAt:       githubRelease.PublishedAt,
 				}
 				seen[key] = release
-				if release.Status != "withdrawn" {
-					out.Releases = append(out.Releases, release)
-				}
+				// Preserve withdrawn metadata as audit history. Resolver rejects it
+				// for new selections, while Manifest update discovery still needs
+				// the record to explain why a historical version is no longer valid.
+				out.Releases = append(out.Releases, release)
 			}
 			if len(releases) < githubReleasePageSize {
 				pagesComplete = true
@@ -233,7 +234,7 @@ func loadFromGitHubReleaseSources(
 		}
 	}
 	if len(out.Releases) == 0 {
-		return nil, fmt.Errorf("catalog: GitHub Release sources produced no active compatible release candidates")
+		return nil, fmt.Errorf("catalog: GitHub Release sources produced no verified metadata candidates")
 	}
 	sort.Slice(out.Releases, func(i, j int) bool {
 		left, _ := semver.Parse(out.Releases[i].Version)
