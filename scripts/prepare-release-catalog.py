@@ -16,14 +16,14 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "catalogs" / "cdin-components" / "catalog-index.json"
 REPOSITORY_URI = "https://github.com/cdin-editor/registry"
 VERSION_PATTERN = re.compile(
-    r"^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)"
-    r"(?:-(?:dev(?:\\.[0-9]+)?|(?:alpha|beta|rc)\\.[0-9]+))?$"
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-(?:dev(?:\.[0-9]+)?|(?:alpha|beta|rc)\.[0-9]+))?$"
 )
 GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COMPONENT_PATTERN = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 REPOSITORY_PATTERN = re.compile(
-    r"^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$"
+    r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$"
 )
 
 
@@ -61,7 +61,7 @@ def validate_catalog(document: dict[str, Any]) -> None:
         raise CatalogReleaseError("Catalog catalog_id is missing or invalid")
     if not isinstance(schema_version, str):
         raise CatalogReleaseError("Catalog schema_version is missing or invalid")
-    match = re.fullmatch(r"1\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)", schema_version)
+    match = re.fullmatch(r"1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", schema_version)
     if match is None:
         raise CatalogReleaseError(f"unsupported Catalog schema version: {schema_version!r}")
 
