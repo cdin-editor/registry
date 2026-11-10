@@ -182,7 +182,7 @@ func TestResolutionReportVersionGateRequiresActualReleaseDiscoveryEvidence(t *te
 		"rejected_candidates": []any{},
 		"conflicts": []any{
 			map[string]any{
-				"code": "NO_COMPATIBLE_RELEASE",
+				"code":    "NO_COMPATIBLE_RELEASE",
 				"message": "no active release satisfies the requested constraint",
 			},
 		},
@@ -197,22 +197,22 @@ func TestResolutionReportVersionGateRequiresActualReleaseDiscoveryEvidence(t *te
 		if withDiscovery {
 			conflicts := []any{
 				map[string]any{
-					"code": "AMBIGUOUS_RELEASE",
+					"code":    "AMBIGUOUS_RELEASE",
 					"message": "two immutable candidates have equal precedence",
 					"candidate_evidence": []any{
 						map[string]any{
 							"component_id": "engine",
-							"variant": "default",
-							"version": "1.0.0",
+							"variant":      "default",
+							"version":      "1.0.0",
 							"release_discovery": map[string]any{
-								"source_id": "engine-source",
-								"provider": "github-releases-v1",
-								"repository_uri": "https://github.com/example/engine",
-								"release_id": 123,
-								"release_api_uri": "https://api.github.com/repos/example/engine/releases/123",
-								"tag": "v1.0.0",
-								"tag_commit": "0123456789abcdef0123456789abcdef01234567",
-								"metadata_asset_name": "engine-1.0.0.json",
+								"source_id":                 "engine-source",
+								"provider":                  "github-releases-v1",
+								"repository_uri":            "https://github.com/example/engine",
+								"release_id":                123,
+								"release_api_uri":           "https://api.github.com/repos/example/engine/releases/123",
+								"tag":                       "v1.0.0",
+								"tag_commit":                "0123456789abcdef0123456789abcdef01234567",
+								"metadata_asset_name":       "engine-1.0.0.json",
 								"metadata_asset_size_bytes": 456,
 							},
 						},
