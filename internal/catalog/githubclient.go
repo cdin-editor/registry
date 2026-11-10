@@ -19,11 +19,11 @@ import (
 const maxGitHubAPIResponseBytes = int64(8 << 20)
 
 type githubAPISnapshot struct {
-	SourceID     string `json:"source_id"`
+	SourceID      string `json:"source_id"`
 	RepositoryURI string `json:"repository_uri"`
-	RequestURI   string `json:"request_uri"`
-	SHA256       string `json:"sha256"`
-	Data         []byte `json:"data"`
+	RequestURI    string `json:"request_uri"`
+	SHA256        string `json:"sha256"`
+	Data          []byte `json:"data"`
 }
 
 // ListGitHubReleases implements the bounded, paginated GitHub Releases API
