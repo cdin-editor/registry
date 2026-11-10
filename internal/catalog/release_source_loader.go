@@ -168,7 +168,7 @@ func loadFromGitHubReleaseSources(
 				key := identity{release.ComponentID, variant, release.Version}
 				if prior, exists := seen[key]; exists {
 					if prior.MetadataSHA != actualSHA || prior.Discovery == nil ||
-						prior.Discovery.GitHubReleaseID != githubRelease.ID ||
+						prior.Discovery.ReleaseID != githubRelease.ID ||
 						prior.Discovery.TagCommit != tagCommit {
 						return nil, fmt.Errorf("catalog: ambiguous GitHub Release identity for %s/%s@%s", key.component, key.variant, key.version)
 					}
@@ -181,14 +181,12 @@ func loadFromGitHubReleaseSources(
 					SourceID:             source.SourceID,
 					Provider:             githubReleaseProvider,
 					RepositoryURI:        source.RepositoryURI,
-					GitHubReleaseID:      githubRelease.ID,
-					GitHubReleaseAPIURI:  githubRelease.URL,
+					ReleaseID:            githubRelease.ID,
+					ReleaseAPIURI:        githubRelease.URL,
 					Tag:                  githubRelease.TagName,
 					TagCommit:            strings.ToLower(tagCommit),
 					MetadataAssetName:    expectedAsset,
-					MetadataAssetURI:     asset.BrowserDownloadURL,
 					MetadataAssetSize:    asset.Size,
-					MetadataAssetSHA256:  actualSHA,
 					PublishedAt:          githubRelease.PublishedAt,
 				}
 				seen[key] = release
