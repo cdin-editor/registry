@@ -753,11 +753,11 @@ func loadGitHubReleaseSources(ctx context.Context, index Index, fetcher Fetcher,
 			if len(item.Payload) == 0 || len(item.Payload) > maxReleaseMetadataBytes || item.MetadataSize != int64(len(item.Payload)) {
 				return nil, fmt.Errorf("RELEASE_METADATA_SIZE_MISMATCH: metadata bytes do not match the declared size")
 			}
-			nextTotal, sizeErr := accountCatalogMetadataBytes(totalMetadataBytes, int64(len(item.Payload)))
-			if sizeErr != nil {
-				return nil, sizeErr
+			metadataBytes := int64(len(item.Payload))
+			if metadataBytes > maxCatalogMetadataBytes || totalMetadataBytes > maxCatalogMetadataBytes-metadataBytes {
+				return nil, fmt.Errorf("RELEASE_DISCOVERY_LIMIT: discovered metadata exceeds the Catalog byte budget")
 			}
-			totalMetadataBytes = nextTotal
+			totalMetadataBytes += metadataBytes
 
 			actualDigest := sha256.Sum256(item.Payload)
 			actualSHA := hex.EncodeToString(actualDigest[:])
