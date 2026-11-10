@@ -176,8 +176,8 @@ func TestKindsAreStableAndSorted(t *testing.T) {
 func TestResolutionReportVersionGateRequiresActualReleaseDiscoveryEvidence(t *testing.T) {
 	validator := newTestValidator(t)
 	base := map[string]any{
-		"result": "failure",
-		"selected": []any{},
+		"result":              "failure",
+		"selected":            []any{},
 		"applied_constraints": []any{},
 		"rejected_candidates": []any{},
 		"conflicts": []any{
