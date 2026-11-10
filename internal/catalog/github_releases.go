@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	githubAPIBaseURL = "https://api.github.com"
-	githubAPIUserAgent = "cdin-registry/1"
+	githubAPIBaseURL     = "https://api.github.com"
+	githubAPIUserAgent   = "cdin-registry/1"
 	githubAPIMaxAttempts = 3
 )
 
