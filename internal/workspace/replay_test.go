@@ -252,7 +252,7 @@ func TestReplayRequiresRecordedCatalogAndReleaseMetadataWhenEnabled(t *testing.T
 	encoded, digest := buildReplayManifest(t, resolution)
 
 	fetcher := &replayFixtureFetcher{payloads: map[string][]byte{
-		indexURI: indexBytes, releaseURI: releaseBytes,
+		indexURI:    indexBytes, releaseURI: releaseBytes,
 	}}
 	destination := filepath.Join(t.TempDir(), "verified-replay")
 	if _, err := Replay(context.Background(), encoded, digest, ReplayOptions{
@@ -502,13 +502,15 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 
 	indexBytes, err := json.Marshal(catalog.Index{
 		SchemaVersion: "1.1.0",
-		CatalogID:      "stable",
+		CatalogID:     "stable",
 		ReleaseSources: []catalog.ReleaseSource{{
 			SourceID: "engine-source", Provider: "github-releases-v1",
 			RepositoryURI: repositoryURI, ComponentID: "engine", Variant: "default", TagPrefix: "v",
 		}},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	resolution.Graph.Catalogs[0].MetadataURI = indexURI
 	resolution.Graph.Catalogs[0].MetadataSHA = manifest.Digest(indexBytes)
 	resolution.Graph.Components[0].ReleaseMetadataURI = metadataURI
@@ -540,7 +542,9 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 		MetadataFetcher:      fetcher,
 		VerifyRemoteMetadata: true,
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if fetcher.calls != 2 {
 		t.Fatalf("replay fetched %d metadata documents, want only the pinned Catalog and exact Release Asset", fetcher.calls)
 	}
@@ -551,7 +555,9 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 		t.Fatalf("replay Manifest digest = %s, want %s", replayed.ManifestSHA256, manifestDigest)
 	}
 	reportBytes, err := os.ReadFile(replayed.ReportPath)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(string(reportBytes), "release_discovery") || !strings.Contains(string(reportBytes), "engine-1.0.0.json") {
 		t.Fatalf("replay report did not preserve selected Release provenance: %s", reportBytes)
 	}
@@ -563,7 +569,9 @@ func TestReplayVerifiesExactADR0028ReleaseAssetAndDoesNotRediscover(t *testing.T
 	publication := changed["publication"].(map[string]any)
 	publication["tag_commit"] = strings.Repeat("0", 40)
 	changedBytes, err := json.Marshal(changed)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	badFetcher := &replayFixtureFetcher{payloads: map[string][]byte{
 		indexURI: indexBytes,
 		metadataURI: changedBytes,
