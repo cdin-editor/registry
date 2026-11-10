@@ -12,13 +12,13 @@ import (
 )
 
 type scriptedReleaseDiscoveryClient struct {
-	pages        map[int][]GitHubRelease
-	payloads     map[string][]byte
-	commits      map[string]string
-	listErrors   map[int]error
-	pageCalls    []int
-	tagCalls     []string
-	assetCalls   []string
+	pages      map[int][]GitHubRelease
+	payloads   map[string][]byte
+	commits    map[string]string
+	listErrors map[int]error
+	pageCalls  []int
+	tagCalls   []string
+	assetCalls []string
 }
 
 func (c *scriptedReleaseDiscoveryClient) Fetch(context.Context, string) ([]byte, error) {
@@ -73,7 +73,7 @@ func singleADR0028Script(t *testing.T, version string, id int64) (
 		payloads: map[string][]byte{
 			release.Assets[0].BrowserDownloadURL: payload,
 		},
-		commits: map[string]string{release.TagName: commit},
+		commits:    map[string]string{release.TagName: commit},
 		listErrors: make(map[int]error),
 	}
 	return source, release, payload, commit, client
@@ -202,9 +202,9 @@ func TestLoadFromGitHubReleaseSourcesFailsWhenPageBudgetPreventsCompleteInventor
 		fullDraftPage[i] = GitHubRelease{ID: int64(i + 1), Draft: true}
 	}
 	client := &scriptedReleaseDiscoveryClient{
-		pages: map[int][]GitHubRelease{},
-		payloads: map[string][]byte{},
-		commits: map[string]string{},
+		pages:      map[int][]GitHubRelease{},
+		payloads:   map[string][]byte{},
+		commits:    map[string]string{},
 		listErrors: make(map[int]error),
 	}
 	for page := 1; page <= maxGitHubReleasePages; page++ {
@@ -226,9 +226,9 @@ func TestLoadFromGitHubReleaseSourcesRejectsOversizedPage(t *testing.T) {
 		oversized[i] = GitHubRelease{ID: int64(i + 1), Draft: true}
 	}
 	client := &scriptedReleaseDiscoveryClient{
-		pages: map[int][]GitHubRelease{1: oversized},
-		payloads: map[string][]byte{},
-		commits: map[string]string{},
+		pages:      map[int][]GitHubRelease{1: oversized},
+		payloads:   map[string][]byte{},
+		commits:    map[string]string{},
 		listErrors: make(map[int]error),
 	}
 	_, err := loadScriptedReleaseSource(context.Background(), source, client)
