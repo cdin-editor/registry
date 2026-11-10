@@ -112,7 +112,9 @@ func TestHTTPFetcherResolvesAnnotatedGitHubTagToCommit(t *testing.T) {
 func TestHTTPFetcherFailsClosedOnGitHubRateLimit(t *testing.T) {
 	headers := make(http.Header)
 	headers.Set("X-RateLimit-Remaining", "0")
+	requests := 0
 	fetcher := githubTestFetcher(t, HTTPFetcherOptions{AllowedHosts: []string{"github.com"}}, githubRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests++
 		return githubResponse(http.StatusForbidden, headers, `{"message":"API rate limit exceeded"}`), nil
 	}))
 	_, err := fetcher.ListGitHubReleases(context.Background(), ReleaseSource{
@@ -120,6 +122,29 @@ func TestHTTPFetcherFailsClosedOnGitHubRateLimit(t *testing.T) {
 	}, 1, 100)
 	if err == nil || !strings.Contains(err.Error(), "GITHUB_RATE_LIMIT_EXHAUSTED") {
 		t.Fatalf("error = %v, want explicit GitHub rate-limit exhaustion", err)
+	}
+	if requests != 3 {
+		t.Fatalf("rate-limited GitHub API attempts = %d, want bounded retry count 3", requests)
+	}
+}
+
+func TestHTTPFetcherRetriesTransientGitHubAPIError(t *testing.T) {
+	requests := 0
+	fetcher := githubTestFetcher(t, HTTPFetcherOptions{AllowedHosts: []string{"github.com"}}, githubRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests++
+		if requests == 1 {
+			return githubResponse(http.StatusServiceUnavailable, nil, `{"message":"temporarily unavailable"}`), nil
+		}
+		return githubResponse(http.StatusOK, nil, "[]"), nil
+	}))
+	releases, err := fetcher.ListGitHubReleases(context.Background(), ReleaseSource{
+		SourceID: "engine", Provider: githubReleaseProvider, RepositoryURI: "https://github.com/acme/engine",
+	}, 1, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(releases) != 0 || requests != 2 {
+		t.Fatalf("releases=%v, API attempts=%d; want empty inventory after one retry", releases, requests)
 	}
 }
 
