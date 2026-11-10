@@ -870,25 +870,25 @@ func TestREG024CanonicalRejectsCyclicValues(t *testing.T) {
 	}
 }
 
-
 func TestADR0028ManifestRecordsAndValidatesExactGitHubReleaseIdentity(t *testing.T) {
 	graph, sources := resolvedFixture()
 	const repositoryURI = "https://github.com/example/engine"
 	const tag = "v1.0.0"
 	const metadataURI = "https://github.com/example/engine/releases/download/v1.0.0/engine-1.0.0.json"
 	graph.SchemaVersion = "1.2.0"
+	graph.Resolution.DeliveryMode = "source"
 	graph.Components[0].ReleaseMetadataURI = metadataURI
 	graph.Components[0].ReleaseDiscovery = &catalogModel.ReleaseDiscoveryProvenance{
-		SourceID: "engine-source",
-		Provider: "github-releases-v1",
-		RepositoryURI: repositoryURI,
-		ReleaseID: 123,
-		ReleaseAPIURI: "https://api.github.com/repos/example/engine/releases/123",
-		Tag: tag,
-		TagCommit: testRevision,
+		SourceID:          "engine-source",
+		Provider:          "github-releases-v1",
+		RepositoryURI:     repositoryURI,
+		ReleaseID:         123,
+		ReleaseAPIURI:     "https://api.github.com/repos/example/engine/releases/123",
+		Tag:               tag,
+		TagCommit:         testRevision,
 		MetadataAssetName: "engine-1.0.0.json",
 		MetadataAssetSize: 456,
-		PublishedAt: "2026-11-10T18:00:00Z",
+		PublishedAt:       "2026-11-10T18:00:00Z",
 	}
 	document, err := Build(graph, sources, "1.2.3")
 	if err != nil {
@@ -925,36 +925,45 @@ func TestADR0028ManifestRejectsIncompleteOrSubstitutedReleaseIdentity(t *testing
 		mutate func(*Document)
 	}{
 		{
-			name: "missing Release ID",
+			name:   "missing Release ID",
 			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.ReleaseID = 0 },
 		},
 		{
-			name: "wrong tag commit",
+			name:   "wrong tag commit",
 			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.TagCommit = strings.Repeat("0", 40) },
 		},
 		{
-			name: "non-canonical metadata asset name",
+			name:   "non-canonical metadata asset name",
 			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.MetadataAssetName = "other.json" },
 		},
 		{
 			name: "substituted GitHub Release API URI",
-			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.ReleaseAPIURI = "https://api.github.com/repos/attacker/engine/releases/123" },
+			mutate: func(document *Document) {
+				document.Components[0].ReleaseDiscovery.ReleaseAPIURI = "https://api.github.com/repos/attacker/engine/releases/123"
+			},
 		},
 		{
 			name: "substituted asset download URI",
-			mutate: func(document *Document) { document.Components[0].ReleaseMetadataURI = "https://github.com/attacker/engine/releases/download/v1.0.0/engine-1.0.0.json" },
+			mutate: func(document *Document) {
+				document.Components[0].ReleaseMetadataURI = "https://github.com/attacker/engine/releases/download/v1.0.0/engine-1.0.0.json"
+			},
 		},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			graph, sources := resolvedFixture()
 			graph.SchemaVersion = "1.2.0"
+			graph.Resolution.DeliveryMode = "source"
 			graph.Components[0].ReleaseMetadataURI = "https://github.com/example/engine/releases/download/v1.0.0/engine-1.0.0.json"
 			graph.Components[0].ReleaseDiscovery = &catalogModel.ReleaseDiscoveryProvenance{
-				SourceID: "engine-source", Provider: "github-releases-v1",
-				RepositoryURI: "https://github.com/example/engine", ReleaseID: 123,
-				ReleaseAPIURI: "https://api.github.com/repos/example/engine/releases/123",
-				Tag: "v1.0.0", TagCommit: testRevision, MetadataAssetName: "engine-1.0.0.json",
+				SourceID:          "engine-source",
+				Provider:          "github-releases-v1",
+				RepositoryURI:     "https://github.com/example/engine",
+				ReleaseID:         123,
+				ReleaseAPIURI:     "https://api.github.com/repos/example/engine/releases/123",
+				Tag:               "v1.0.0",
+				TagCommit:         testRevision,
+				MetadataAssetName: "engine-1.0.0.json",
 				MetadataAssetSize: 456,
 			}
 			document, buildErr := Build(graph, sources, "1.2.3")
