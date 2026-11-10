@@ -169,16 +169,16 @@ func (f *HTTPFetcher) FetchGitHubReleaseAssetWithIdentity(
 		return nil, fmt.Errorf("catalog: GitHub Release asset URI is invalid")
 	}
 	discovery := ReleaseDiscoveryProvenance{
-		SourceID: source.SourceID,
-		Provider: source.Provider,
-		RepositoryURI: source.RepositoryURI,
-		ReleaseID: release.ID,
-		ReleaseAPIURI: release.URL,
-		Tag: release.TagName,
-		TagCommit: strings.ToLower(tagCommit),
+		SourceID:          source.SourceID,
+		Provider:          source.Provider,
+		RepositoryURI:     source.RepositoryURI,
+		ReleaseID:         release.ID,
+		ReleaseAPIURI:     release.URL,
+		Tag:               release.TagName,
+		TagCommit:         strings.ToLower(tagCommit),
 		MetadataAssetName: asset.Name,
 		MetadataAssetSize: asset.Size,
-		PublishedAt: release.PublishedAt,
+		PublishedAt:       release.PublishedAt,
 	}
 	cacheKey, err := GitHubReleaseAssetCacheKey(discovery, asset.BrowserDownloadURL, digest)
 	if err != nil {
