@@ -40,8 +40,19 @@ func (f *fakeGitHubReleaseClient) ResolveGitHubTagCommit(_ context.Context, _ Re
 	return commit, nil
 }
 
-func (f *fakeGitHubReleaseClient) FetchGitHubReleaseAsset(_ context.Context, _ string, assetID int64) ([]byte, error) {
-	if payload, ok := f.metadataByAssetID[assetID]; ok {
+func (f *fakeGitHubReleaseClient) FetchGitHubReleaseAsset(_ context.Context, _ string, _ int64) ([]byte, error) {
+	return append([]byte(nil), f.metadata...), nil
+}
+
+func (f *fakeGitHubReleaseClient) FetchGitHubReleaseAssetWithIdentity(
+	_ context.Context,
+	_ ReleaseSource,
+	_ GitHubRelease,
+	_ string,
+	asset GitHubReleaseAsset,
+	_ int64,
+) ([]byte, error) {
+	if payload, ok := f.metadataByAssetID[asset.ID]; ok {
 		return append([]byte(nil), payload...), nil
 	}
 	return append([]byte(nil), f.metadata...), nil
