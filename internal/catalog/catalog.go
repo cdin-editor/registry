@@ -41,9 +41,10 @@ type Validator interface {
 // Index is the validated Catalog Index document supplied by a catalog source.
 // Its entries reference immutable release metadata, not component source code.
 type Index struct {
-	SchemaVersion string  `json:"schema_version"`
-	CatalogID     string  `json:"catalog_id"`
-	Entries       []Entry `json:"entries"`
+	SchemaVersion  string          `json:"schema_version"`
+	CatalogID      string          `json:"catalog_id"`
+	Entries        []Entry         `json:"entries,omitempty"`
+	ReleaseSources []ReleaseSource `json:"release_sources,omitempty"`
 }
 
 // Entry identifies one immutable Component Release Metadata document and the
@@ -101,27 +102,30 @@ type Contracts struct {
 // Release is a parsed Component Release Metadata document plus the verified
 // metadata location/digest. Raw retains the exact bytes that passed REG-019.
 type Release struct {
-	SchemaVersion string       `json:"schema_version"`
-	ComponentID   string       `json:"component_id"`
-	Variant       string       `json:"variant"`
-	Version       string       `json:"version"`
-	Status        string       `json:"status"`
-	SourceUnits   []SourceUnit `json:"source_units"`
-	Artifacts     []Artifact   `json:"artifacts,omitempty"`
-	Dependencies  []Dependency `json:"dependencies"`
-	Contracts     Contracts    `json:"contracts"`
-	Raw           []byte       `json:"-"`
-	MetadataURI   string       `json:"-"`
-	MetadataSHA   string       `json:"-"`
+	SchemaVersion string                      `json:"schema_version"`
+	ComponentID   string                      `json:"component_id"`
+	Variant       string                      `json:"variant"`
+	Version       string                      `json:"version"`
+	Status        string                      `json:"status"`
+	SourceUnits   []SourceUnit                `json:"source_units"`
+	Artifacts     []Artifact                  `json:"artifacts,omitempty"`
+	Dependencies  []Dependency                `json:"dependencies"`
+	Contracts     Contracts                   `json:"contracts"`
+	Publication   *Publication                `json:"publication,omitempty"`
+	Raw           []byte                      `json:"-"`
+	MetadataURI   string                      `json:"-"`
+	MetadataSHA   string                      `json:"-"`
+	Discovery     *ReleaseDiscoveryProvenance `json:"-"`
 }
 
 // Catalog is one fully loaded index and its validated release records. Load
 // never returns a partial Catalog after a fetch/validation failure.
 type Catalog struct {
-	ID          string
-	MetadataURI string
-	MetadataSHA string
-	Releases    []Release
+	ID             string
+	MetadataURI    string
+	MetadataSHA    string
+	ReleaseSources []ReleaseSource
+	Releases       []Release
 }
 
 // LoadFromSource is the production entry point when the caller knows the
@@ -237,6 +241,15 @@ func LoadWithOptions(ctx context.Context, indexBytes []byte, fetcher Fetcher, va
 	}
 	if len(index.Entries) > maxCatalogEntries {
 		return nil, fmt.Errorf("catalog: Catalog entry count exceeds the limit of %d (got %d)", maxCatalogEntries, len(index.Entries))
+	}
+	if len(index.Entries) > 0 && len(index.ReleaseSources) > 0 {
+		return nil, fmt.Errorf("catalog: static entries and release_sources cannot be mixed")
+	}
+	if len(index.ReleaseSources) > 0 {
+		return loadFromGitHubReleaseSources(ctx, index, fetcher, validator, concurrency)
+	}
+	if len(index.Entries) == 0 {
+		return nil, fmt.Errorf("catalog: Catalog Index must declare entries or release_sources")
 	}
 
 	out := &Catalog{ID: index.CatalogID}

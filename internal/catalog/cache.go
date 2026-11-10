@@ -417,10 +417,16 @@ func (c *MetadataCache) readCacheEntries() ([]metadataCacheEntry, int64, error) 
 	entries := make([]metadataCacheEntry, 0, len(items))
 	var total int64
 	for _, item := range items {
-		if !strings.HasSuffix(item.Name(), ".json") {
+		name := item.Name()
+		var key string
+		switch {
+		case strings.HasPrefix(name, "github-") && strings.HasSuffix(name, ".snapshot.json"):
+			key = strings.TrimSuffix(strings.TrimPrefix(name, "github-"), ".snapshot.json")
+		case strings.HasSuffix(name, ".json"):
+			key = strings.TrimSuffix(name, ".json")
+		default:
 			continue
 		}
-		key := strings.TrimSuffix(item.Name(), ".json")
 		if !isSHA256(key) {
 			return nil, 0, fmt.Errorf("unexpected JSON file in cache root")
 		}
@@ -488,8 +494,9 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 			MetadataSHA string `json:"metadata_sha256"`
 		} `json:"catalogs"`
 		Components []struct {
-			ReleaseMetadataURI string `json:"release_metadata_uri"`
-			ReleaseMetadataSHA string `json:"release_metadata_sha256"`
+			ReleaseMetadataURI string                      `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                      `json:"release_metadata_sha256"`
+			ReleaseDiscovery   *ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
 			SelectedArtifact   *struct {
 				ID     string `json:"artifact_id"`
 				Target Target `json:"target"`
@@ -515,6 +522,15 @@ func metadataKeysFromManifest(data []byte) ([]string, error) {
 			return nil, err
 		}
 		keys = append(keys, key)
+		if item.ReleaseDiscovery != nil {
+			releaseKey, keyErr := GitHubReleaseAssetCacheKey(
+				*item.ReleaseDiscovery, item.ReleaseMetadataURI, item.ReleaseMetadataSHA,
+			)
+			if keyErr != nil {
+				return nil, fmt.Errorf("catalog: Manifest contains an invalid GitHub Release asset cache identity")
+			}
+			keys = append(keys, releaseKey)
+		}
 		if item.SelectedArtifact != nil {
 			artifactKey, artifactErr := ArtifactCacheKey(item.ReleaseMetadataSHA, Artifact{
 				ID:     item.SelectedArtifact.ID,

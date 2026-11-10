@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -295,4 +296,142 @@ func containsKey(keys []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+func TestMetadataCacheManifestPinsExactADR0028ReleaseAssetIdentity(t *testing.T) {
+	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const repositoryURI = "https://github.com/acme/engine"
+	const metadataURI = "https://github.com/acme/engine/releases/download/v1.2.3/engine-1.2.3.json"
+	discovery := ReleaseDiscoveryProvenance{
+		SourceID:          "engine-source",
+		Provider:          githubReleaseProvider,
+		RepositoryURI:     repositoryURI,
+		ReleaseID:         123,
+		ReleaseAPIURI:     "https://api.github.com/repos/acme/engine/releases/123",
+		Tag:               "v1.2.3",
+		TagCommit:         strings.Repeat("a", 40),
+		MetadataAssetName: "engine-1.2.3.json",
+		MetadataAssetSize: 456,
+		PublishedAt:       "2026-11-10T18:00:00Z",
+	}
+	metadataSHA := expectedDigest("immutable-release-metadata")
+	assetKey, err := GitHubReleaseAssetCacheKey(discovery, metadataURI, metadataSHA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestBytes, err := json.Marshal(struct {
+		SchemaVersion string `json:"schema_version"`
+		Catalogs      []any  `json:"catalogs"`
+		Components    []struct {
+			ComponentID        string                     `json:"component_id"`
+			Variant            string                     `json:"variant"`
+			Version            string                     `json:"version"`
+			ReleaseMetadataURI string                     `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                     `json:"release_metadata_sha256"`
+			ReleaseDiscovery   ReleaseDiscoveryProvenance `json:"release_discovery"`
+		} `json:"components"`
+	}{
+		SchemaVersion: "1.2.0",
+		Components: []struct {
+			ComponentID        string                     `json:"component_id"`
+			Variant            string                     `json:"variant"`
+			Version            string                     `json:"version"`
+			ReleaseMetadataURI string                     `json:"release_metadata_uri"`
+			ReleaseMetadataSHA string                     `json:"release_metadata_sha256"`
+			ReleaseDiscovery   ReleaseDiscoveryProvenance `json:"release_discovery"`
+		}{{
+			ComponentID:        "engine",
+			Variant:            "default",
+			Version:            "1.2.3",
+			ReleaseMetadataURI: metadataURI,
+			ReleaseMetadataSHA: metadataSHA,
+			ReleaseDiscovery:   discovery,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, err := metadataKeysFromManifest(manifestBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsKey(keys, metadataCacheKey(metadataURI, metadataSHA)) || !containsKey(keys, assetKey) {
+		t.Fatalf("Manifest cache pins = %v; want URI/digest and ADR-0028 identity keys", keys)
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	metadataPath := writeCacheFixture(t, cache, metadataURI, metadataSHA, "metadata", old)
+	assetPath := filepath.Join(cache.root, assetKey+".json")
+	if err := os.WriteFile(assetPath, []byte("immutable asset bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(assetPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	pinID, err := cache.RetainManifest(manifestBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := cache.GarbageCollect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{"metadata": metadataPath, "identity-bound asset": assetPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("%s cache entry was removed despite Manifest pin: %v (GC %+v)", name, err, result)
+		}
+	}
+	if err := cache.ReleaseManifest(pinID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.GarbageCollect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{"metadata": metadataPath, "identity-bound asset": assetPath} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("unpinned %s cache entry remains: %v", name, err)
+		}
+	}
+}
+
+func TestMetadataCacheGCCanEvictExpiredGitHubAPISnapshots(t *testing.T) {
+	cache, err := newMetadataCacheWithPolicy(t.TempDir(), 1<<20, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetcher, err := NewHTTPFetcher(HTTPFetcherOptions{
+		AllowedHosts: []string{"github.com"}, CacheDir: cache.root, MaxBytes: 1 << 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := ReleaseSource{
+		SourceID: "engine-source", Provider: githubReleaseProvider,
+		RepositoryURI: "https://github.com/acme/engine", ComponentID: "engine",
+		Variant: "default", TagPrefix: "v",
+	}
+	requestURI := "https://api.github.com/repos/acme/engine/releases?page=1&per_page=100"
+	if err := fetcher.writeGitHubAPISnapshot(source, requestURI, []byte("[]")); err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(cache.root, "github-*.snapshot.json"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("snapshot files = %v, err = %v", files, err)
+	}
+	expired := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(files[0], expired, expired); err != nil {
+		t.Fatal(err)
+	}
+	result, err := cache.GarbageCollect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RemovedEntries != 1 {
+		t.Fatalf("GC removed %d entries, want one expired GitHub API snapshot", result.RemovedEntries)
+	}
+	if _, err := os.Stat(files[0]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expired API snapshot remains after GC: %v", err)
+	}
 }

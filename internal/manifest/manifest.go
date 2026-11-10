@@ -101,16 +101,17 @@ type EnvironmentContract struct {
 
 // Component records one selected immutable Component Release.
 type Component struct {
-	ComponentID        string            `json:"component_id"`
-	Variant            string            `json:"variant"`
-	Version            string            `json:"version"`
-	ReleaseMetadataURI string            `json:"release_metadata_uri"`
-	ReleaseMetadataSHA string            `json:"release_metadata_sha256"`
-	Delivery           string            `json:"delivery,omitempty"`
-	SelectedArtifact   *SelectedArtifact `json:"selected_artifact,omitempty"`
-	SourceUnits        []SourceUnit      `json:"source_units,omitempty"`
-	Dependencies       []Dependency      `json:"dependencies"`
-	Contracts          catalog.Contracts `json:"contracts,omitempty"`
+	ComponentID        string                              `json:"component_id"`
+	Variant            string                              `json:"variant"`
+	Version            string                              `json:"version"`
+	ReleaseMetadataURI string                              `json:"release_metadata_uri"`
+	ReleaseMetadataSHA string                              `json:"release_metadata_sha256"`
+	ReleaseDiscovery   *catalog.ReleaseDiscoveryProvenance `json:"release_discovery,omitempty"`
+	Delivery           string                              `json:"delivery,omitempty"`
+	SelectedArtifact   *SelectedArtifact                   `json:"selected_artifact,omitempty"`
+	SourceUnits        []SourceUnit                        `json:"source_units,omitempty"`
+	Dependencies       []Dependency                        `json:"dependencies"`
+	Contracts          catalog.Contracts                   `json:"contracts,omitempty"`
 }
 
 // ArtifactPackage is the verified package directory staged by Workspace.
@@ -284,6 +285,7 @@ func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, pac
 			Version:            resolved.Version,
 			ReleaseMetadataURI: resolved.ReleaseMetadataURI,
 			ReleaseMetadataSHA: strings.ToLower(resolved.ReleaseMetadataSHA),
+			ReleaseDiscovery:   resolved.ReleaseDiscovery,
 			Dependencies:       make([]Dependency, 0, len(resolved.Dependencies)),
 			Contracts:          contracts,
 		}
@@ -529,10 +531,12 @@ func Verify(canonicalBytes []byte, expectedSHA256 string, validator *validation.
 }
 
 func validateDocument(document Document) error {
-	if document.SchemaVersion != schemaVersion && document.SchemaVersion != "1.1.0" {
+	if document.SchemaVersion != schemaVersion &&
+		document.SchemaVersion != "1.1.0" &&
+		document.SchemaVersion != "1.2.0" {
 		return fmt.Errorf("unsupported Manifest schema version %q", document.SchemaVersion)
 	}
-	artifactManifest := document.SchemaVersion == "1.1.0"
+	artifactManifest := document.SchemaVersion == "1.1.0" || document.SchemaVersion == "1.2.0"
 	if artifactManifest {
 		if document.Resolution == nil {
 			return fmt.Errorf("artifact Manifest is missing its resolution policy")
@@ -603,6 +607,7 @@ func validateDocument(document Document) error {
 
 	components := make(map[string]Component, len(document.Components))
 	workspacePaths := make(map[string]struct{})
+	hasReleaseDiscovery := false
 	for _, component := range document.Components {
 		key := componentKey(component.ComponentID, component.Variant)
 		if _, exists := components[key]; exists {
@@ -614,6 +619,15 @@ func validateDocument(document Document) error {
 		}
 		if err := validateMetadataURI(component.ReleaseMetadataURI); err != nil {
 			return fmt.Errorf("component %s/%s release metadata URI: %w", component.ComponentID, component.Variant, err)
+		}
+		if component.ReleaseDiscovery != nil {
+			if document.SchemaVersion != "1.2.0" {
+				return fmt.Errorf("component %s/%s contains release discovery provenance outside Manifest schema 1.2.0", component.ComponentID, component.Variant)
+			}
+			if err := validateManifestReleaseDiscovery(component); err != nil {
+				return fmt.Errorf("component %s/%s release discovery: %w", component.ComponentID, component.Variant, err)
+			}
+			hasReleaseDiscovery = true
 		}
 		delivery := "source"
 		if artifactManifest {
@@ -698,6 +712,9 @@ func validateDocument(document Document) error {
 			}
 			workspacePaths[source.WorkspacePath] = struct{}{}
 		}
+	}
+	if document.SchemaVersion == "1.2.0" && !hasReleaseDiscovery {
+		return fmt.Errorf("Manifest schema 1.2.0 does not contain GitHub Release discovery provenance")
 	}
 	for _, root := range document.Roots {
 		component, exists := components[componentKey(root.ComponentID, root.Variant)]
@@ -1214,4 +1231,74 @@ func safeWorkspacePath(value string) bool {
 		}
 	}
 	return true
+}
+
+func validateManifestReleaseDiscovery(component Component) error {
+	discovery := component.ReleaseDiscovery
+	if discovery == nil {
+		return nil
+	}
+	if discovery.SourceID == "" || discovery.Provider != "github-releases-v1" ||
+		discovery.ReleaseID <= 0 || discovery.MetadataAssetSize <= 0 ||
+		discovery.Tag == "" || strings.TrimSpace(discovery.Tag) != discovery.Tag ||
+		strings.ContainsAny(discovery.Tag, "/\\?#") {
+		return fmt.Errorf("release discovery identity is incomplete or unsafe")
+	}
+	repositoryURI, err := catalog.CanonicalGitHubRepositoryURI(discovery.RepositoryURI)
+	if err != nil || repositoryURI != discovery.RepositoryURI {
+		return fmt.Errorf("release discovery repository URI is not canonical")
+	}
+	if !fullGitObjectID(discovery.TagCommit) || discovery.TagCommit != strings.ToLower(discovery.TagCommit) {
+		return fmt.Errorf("release discovery tag commit is not a canonical full Git object ID")
+	}
+	expectedAssetName, err := catalog.ExpectedMetadataAssetName(catalog.ReleaseSource{
+		ComponentID: component.ComponentID,
+		Variant:     component.Variant,
+	}, component.Version)
+	if err != nil || discovery.MetadataAssetName != expectedAssetName {
+		return fmt.Errorf("release discovery metadata asset name does not match the selected component/version")
+	}
+	repositoryPath := strings.TrimPrefix(repositoryURI, "https://github.com")
+	expectedAPIURI := fmt.Sprintf("https://api.github.com/repos%s/releases/%d", repositoryPath, discovery.ReleaseID)
+	expectedDownloadURI := fmt.Sprintf("https://github.com%s/releases/download/%s/%s", repositoryPath, discovery.Tag, expectedAssetName)
+	if discovery.ReleaseAPIURI != expectedAPIURI || component.ReleaseMetadataURI != expectedDownloadURI {
+		return fmt.Errorf("release discovery API/asset URI does not match the immutable repository/release/name identity")
+	}
+
+	// Bind the Release tag to the exact publisher source revision retained in
+	// the Manifest. A syntactically valid but substituted tag commit must never
+	// be accepted as equivalent provenance.
+	publisherUnits := 0
+	checkPublisherUnit := func(sourceUnitID, sourceRepository, revision string) error {
+		canonicalRepository, canonicalErr := catalog.CanonicalGitHubRepositoryURI(sourceRepository)
+		if canonicalErr != nil || canonicalRepository != repositoryURI {
+			return nil
+		}
+		publisherUnits++
+		if sourceUnitID == "" || !fullGitObjectID(revision) ||
+			revision != discovery.TagCommit {
+			return fmt.Errorf("release discovery tag commit does not match its publisher source revision")
+		}
+		return nil
+	}
+	if component.Delivery == "artifact" {
+		if component.SelectedArtifact == nil {
+			return fmt.Errorf("release discovery has no selected artifact source provenance")
+		}
+		for _, source := range component.SelectedArtifact.SourceProvenance {
+			if err := checkPublisherUnit(source.SourceUnitID, source.RepositoryURI, source.Revision); err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, source := range component.SourceUnits {
+			if err := checkPublisherUnit(source.SourceUnitID, source.RepositoryURI, source.Revision); err != nil {
+				return err
+			}
+		}
+	}
+	if publisherUnits != 1 {
+		return fmt.Errorf("release discovery requires exactly one publisher source unit in Manifest provenance")
+	}
+	return nil
 }
