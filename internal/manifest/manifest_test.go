@@ -921,7 +921,7 @@ func TestADR0028ManifestRejectsIncompleteOrSubstitutedReleaseIdentity(t *testing
 		t.Fatal(err)
 	}
 	tests := []struct {
-		name string
+		name   string
 		mutate func(*Document)
 	}{
 		{
