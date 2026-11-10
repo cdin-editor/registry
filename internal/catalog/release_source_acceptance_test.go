@@ -356,7 +356,6 @@ func TestLoadFromGitHubReleaseSourcesRejectsMalformedMetadataAndPublisherRevisio
 	}
 }
 
-
 func TestValidateReleaseSourcesRejectsDuplicateSourceIDAndUnsafeTagPrefix(t *testing.T) {
 	base := ReleaseSource{
 		SourceID: "shared-source", Provider: githubReleaseProvider,
@@ -390,7 +389,6 @@ func TestLoadFromGitHubReleaseSourcesRejectsTagAndMetadataVersionMismatch(t *tes
 		t.Fatalf("error = %v, want tag/metadata version mismatch", err)
 	}
 }
-
 
 func TestLoadFromGitHubReleaseSourcesRejectsInvalidAPIAssetIdentityAndSize(t *testing.T) {
 	tests := []struct {
