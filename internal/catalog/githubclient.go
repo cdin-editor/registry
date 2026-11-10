@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const maxGitHubAPIResponseBytes = int64(8 << 20)
@@ -262,58 +263,87 @@ func (f *HTTPFetcher) fetchGitHubAPI(ctx context.Context, source ReleaseSource, 
 	if f.offline {
 		return f.readGitHubAPISnapshot(source, requestURI, f.maxBytes)
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: create GitHub API request failed")
-	}
-	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("User-Agent", "cdin-registry/1")
-	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	response, err := f.client.Do(request)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, fmt.Errorf("catalog: GitHub API transport failed: %w", scrubURLError(err))
-	}
-	defer response.Body.Close()
-	if response.StatusCode == http.StatusTooManyRequests ||
-		(response.StatusCode == http.StatusForbidden && response.Header.Get("X-RateLimit-Remaining") == "0") {
-		return nil, fmt.Errorf("GITHUB_RATE_LIMIT_EXHAUSTED: GitHub API rate limit prevents complete Release discovery")
-	}
-	if response.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("GITHUB_API_FORBIDDEN: GitHub denied Release discovery")
-	}
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GITHUB_API_HTTP_ERROR: GitHub API returned HTTP %d", response.StatusCode)
-	}
 	limit := f.maxBytes
 	if limit <= 0 || limit > maxGitHubAPIResponseBytes {
 		limit = maxGitHubAPIResponseBytes
 	}
-	if response.ContentLength > limit {
-		return nil, fmt.Errorf("GITHUB_API_RESPONSE_TOO_LARGE: GitHub API page exceeds the configured response limit")
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("catalog: read GitHub API response failed: %w", scrubURLError(err))
+		request, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+		if requestErr != nil {
+			return nil, fmt.Errorf("catalog: create GitHub API request failed")
+		}
+		request.Header.Set("Accept", "application/vnd.github+json")
+		request.Header.Set("User-Agent", "cdin-registry/1")
+		request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		response, requestErr := f.client.Do(request)
+		if requestErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, fmt.Errorf("catalog: GitHub API transport failed: %w", scrubURLError(requestErr))
+		}
+
+		rateLimited := response.StatusCode == http.StatusTooManyRequests ||
+			(response.StatusCode == http.StatusForbidden && response.Header.Get("X-RateLimit-Remaining") == "0")
+		retryableServerError := response.StatusCode == http.StatusInternalServerError ||
+			response.StatusCode == http.StatusBadGateway ||
+			response.StatusCode == http.StatusServiceUnavailable ||
+			response.StatusCode == http.StatusGatewayTimeout
+		if rateLimited || retryableServerError {
+			retryAfter := response.Header.Get("Retry-After")
+			_ = response.Body.Close()
+			if attempt+1 == maxAttempts {
+				if rateLimited {
+					return nil, fmt.Errorf("GITHUB_RATE_LIMIT_EXHAUSTED: GitHub API rate limit prevents complete Release discovery after %d attempts", maxAttempts)
+				}
+				return nil, fmt.Errorf("GITHUB_API_RETRY_EXHAUSTED: GitHub API transient failure after %d attempts", maxAttempts)
+			}
+			delay := time.Duration(100*(attempt+1)) * time.Millisecond
+			if seconds, parseErr := strconv.Atoi(retryAfter); parseErr == nil && seconds >= 0 && seconds <= 2 {
+				delay = time.Duration(seconds) * time.Second
+			}
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+			continue
+		}
+		defer response.Body.Close()
+		if response.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("GITHUB_API_FORBIDDEN: GitHub denied Release discovery")
+		}
+		if response.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("GITHUB_API_HTTP_ERROR: GitHub API returned HTTP %d", response.StatusCode)
+		}
+		if response.ContentLength > limit {
+			return nil, fmt.Errorf("GITHUB_API_RESPONSE_TOO_LARGE: GitHub API page exceeds the configured response limit")
+		}
+		data, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
+		if readErr != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, fmt.Errorf("catalog: read GitHub API response failed: %w", scrubURLError(readErr))
+		}
+		if int64(len(data)) > limit {
+			return nil, fmt.Errorf("GITHUB_API_RESPONSE_TOO_LARGE: GitHub API page exceeds the configured response limit")
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if f.cacheDir != "" {
+			_ = f.writeGitHubAPISnapshot(source, requestURI, data)
+		}
+		return data, nil
 	}
-	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("GITHUB_API_RESPONSE_TOO_LARGE: GitHub API page exceeds the configured response limit")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if f.cacheDir != "" {
-		_ = f.writeGitHubAPISnapshot(source, requestURI, data)
-	}
-	return data, nil
+	return nil, fmt.Errorf("GITHUB_API_RETRY_EXHAUSTED: GitHub API retry budget was exhausted")
 }
 
 func githubAPISnapshotKey(source ReleaseSource, requestURI string) string {
