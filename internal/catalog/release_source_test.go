@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/cdin-editor/registry/internal/validation"
 )
 
 type fakeGitHubReleaseClient struct {
