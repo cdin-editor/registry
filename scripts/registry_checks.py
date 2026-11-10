@@ -413,6 +413,9 @@ def run_release_binary_self_test() -> None:
     )
     settings = parse_go_build_info(sample)
     validate_go_build_info(settings, "linux", "amd64")
+    validate_go_build_info(
+        {"GOOS": "linux", "GOARCH": "arm64", "CGO_ENABLED": "0"}, "linux", "arm64"
+    )
 
     checks = [
         ("missing build identity", lambda: validate_go_build_info({"GOOS": "linux"}, "linux", "amd64")),
@@ -441,11 +444,20 @@ def run_release_binary_self_test() -> None:
         pass
     else:
         raise SystemExit("Registry target self-test failed: wrong ELF machine was accepted")
+    elf_arm64 = bytearray(64)
+    elf_arm64[:4] = b"\\x7fELF"
+    elf_arm64[4:6] = b"\\x02\\x01"
+    elf_arm64[18:20] = (183).to_bytes(2, "little")
+    validate_executable_header(bytes(elf_arm64), "linux", "arm64")
 
     mach_o = bytearray(32)
     mach_o[:4] = (0xFEEDFACF).to_bytes(4, "little")
     mach_o[4:8] = (0x0100000C).to_bytes(4, "little")
     validate_executable_header(bytes(mach_o), "darwin", "arm64")
+    mach_o_x86 = bytearray(32)
+    mach_o_x86[:4] = (0xFEEDFACF).to_bytes(4, "little")
+    mach_o_x86[4:8] = (0x01000007).to_bytes(4, "little")
+    validate_executable_header(bytes(mach_o_x86), "darwin", "amd64")
 
     pe = bytearray(0x90)
     pe[:2] = b"MZ"
