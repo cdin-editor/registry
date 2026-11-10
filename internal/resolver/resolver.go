@@ -179,7 +179,7 @@ type RejectedCandidate struct {
 	ComponentID        string                              `json:"component_id"`
 	Variant            string                              `json:"variant"`
 	Version            string                              `json:"version"`
-	ReasonCode         RejectionReasonCode                  `json:"reason_code"`
+	ReasonCode         RejectionReasonCode                 `json:"reason_code"`
 	Detail             string                              `json:"detail,omitempty"`
 	CatalogID          string                              `json:"catalog_id,omitempty"`
 	ReleaseMetadataURI string                              `json:"release_metadata_uri,omitempty"`
