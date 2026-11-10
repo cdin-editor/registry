@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	githubReleaseProvider = "github-releases-v1"
+	githubReleaseProvider   = "github-releases-v1"
 	defaultReleaseTagPrefix = "v"
-	maxGitHubReleasePages = 20
-	githubReleasePageSize = 100
-	maxGitHubTagDepth = 8
+	maxGitHubReleasePages   = 20
+	githubReleasePageSize   = 100
+	maxGitHubTagDepth       = 8
 )
 
 var catalogIdentifierPattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
@@ -83,16 +83,16 @@ type GitHubReleaseClient interface {
 // ReleaseDiscoveryProvenance preserves the exact publication identity used to
 // construct a candidate. It is copied into the Resolved Manifest for replay.
 type ReleaseDiscoveryProvenance struct {
-	SourceID            string `json:"source_id"`
-	Provider            string `json:"provider"`
-	RepositoryURI       string `json:"repository_uri"`
-	ReleaseID           int64  `json:"release_id"`
-	ReleaseAPIURI       string `json:"release_api_uri"`
-	Tag                 string `json:"tag"`
-	TagCommit           string `json:"tag_commit"`
-	MetadataAssetName   string `json:"metadata_asset_name"`
-	MetadataAssetSize   int64  `json:"metadata_asset_size_bytes"`
-	PublishedAt         string `json:"published_at,omitempty"`
+	SourceID          string `json:"source_id"`
+	Provider          string `json:"provider"`
+	RepositoryURI     string `json:"repository_uri"`
+	ReleaseID         int64  `json:"release_id"`
+	ReleaseAPIURI     string `json:"release_api_uri"`
+	Tag               string `json:"tag"`
+	TagCommit         string `json:"tag_commit"`
+	MetadataAssetName string `json:"metadata_asset_name"`
+	MetadataAssetSize int64  `json:"metadata_asset_size_bytes"`
+	PublishedAt       string `json:"published_at,omitempty"`
 }
 
 // ValidateReleaseSources enforces semantic constraints that are intentionally
