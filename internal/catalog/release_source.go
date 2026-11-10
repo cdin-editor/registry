@@ -86,14 +86,12 @@ type ReleaseDiscoveryProvenance struct {
 	SourceID            string `json:"source_id"`
 	Provider            string `json:"provider"`
 	RepositoryURI       string `json:"repository_uri"`
-	GitHubReleaseID     int64  `json:"github_release_id"`
-	GitHubReleaseAPIURI string `json:"github_release_api_uri"`
+	ReleaseID           int64  `json:"release_id"`
+	ReleaseAPIURI       string `json:"release_api_uri"`
 	Tag                 string `json:"tag"`
 	TagCommit           string `json:"tag_commit"`
 	MetadataAssetName   string `json:"metadata_asset_name"`
-	MetadataAssetURI    string `json:"metadata_asset_uri"`
 	MetadataAssetSize   int64  `json:"metadata_asset_size_bytes"`
-	MetadataAssetSHA256 string `json:"metadata_asset_sha256"`
 	PublishedAt         string `json:"published_at,omitempty"`
 }
 
