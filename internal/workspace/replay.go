@@ -227,6 +227,7 @@ func resolutionFromManifest(document manifest.Document) (resolver.Result, error)
 		graph.Components = append(graph.Components, component)
 		report.Selected = append(report.Selected, resolver.SelectedCandidate{
 			ComponentID: item.ComponentID, Variant: item.Variant, Version: item.Version,
+			ReleaseDiscovery: item.ReleaseDiscovery,
 		})
 	}
 	for _, root := range document.Roots {
@@ -319,7 +320,7 @@ func verifyReplayMetadata(ctx context.Context, document manifest.Document, fetch
 		payload, ok := verifiedReleaseBytes[cacheKey]
 		if !ok {
 			var err error
-			payload, err = fetchReplayBytes(ctx, fetcher, component.ReleaseMetadataURI, component.ReleaseMetadataSHA)
+			payload, err = fetchReplayComponentMetadata(ctx, fetcher, component)
 			if err != nil {
 				return fmt.Errorf("workspace: replay release metadata verification failed: %w", err)
 			}
@@ -393,7 +394,7 @@ func validateReplayReleaseSource(
 	if discovery.ReleaseAPIURI != expectedAPIURI || component.ReleaseMetadataURI != expectedDownloadURI {
 		return fmt.Errorf("workspace: replay GitHub Release or metadata asset URI differs from the recorded identity")
 	}
-	if !strings.EqualFold(discovery.TagCommit, strings.ToLower(discovery.TagCommit)) {
+	if discovery.TagCommit != strings.ToLower(discovery.TagCommit) {
 		return fmt.Errorf("workspace: replay GitHub tag commit is not canonical lowercase")
 	}
 	return nil
@@ -446,6 +447,28 @@ func validReplayGitRevision(value string) bool {
 		}
 	}
 	return true
+}
+
+func fetchReplayComponentMetadata(
+	ctx context.Context,
+	fetcher catalog.Fetcher,
+	component manifest.Component,
+) ([]byte, error) {
+	if component.ReleaseDiscovery != nil {
+		if identityFetcher, ok := fetcher.(catalog.GitHubReleaseManifestAssetFetcher); ok {
+			payload, err := identityFetcher.FetchGitHubReleaseAssetFromManifest(
+				ctx, *component.ReleaseDiscovery, component.ReleaseMetadataURI, component.ReleaseMetadataSHA,
+			)
+			if err != nil {
+				return nil, err
+			}
+			if manifest.Digest(payload) != component.ReleaseMetadataSHA {
+				return nil, fmt.Errorf("metadata digest mismatch")
+			}
+			return payload, nil
+		}
+	}
+	return fetchReplayBytes(ctx, fetcher, component.ReleaseMetadataURI, component.ReleaseMetadataSHA)
 }
 
 func fetchReplayBytes(ctx context.Context, fetcher catalog.Fetcher, uri, expectedSHA256 string) ([]byte, error) {
