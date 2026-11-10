@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 
@@ -97,7 +96,12 @@ func loadFromGitHubReleaseSources(
 				if !validGitRevision(tagCommit) {
 					return nil, fmt.Errorf("catalog: GitHub tag %s did not resolve to a full commit SHA", githubRelease.TagName)
 				}
-				payload, err := client.FetchGitHubReleaseAsset(ctx, asset.BrowserDownloadURL, maxReleaseMetadataBytes)
+				var payload []byte
+				if digestFetcher, supportsDigest := fetcher.(DigestFetcher); supportsDigest {
+					payload, err = digestFetcher.FetchWithDigest(ctx, asset.BrowserDownloadURL, expectedSHA)
+				} else {
+					payload, err = client.FetchGitHubReleaseAsset(ctx, asset.BrowserDownloadURL, maxReleaseMetadataBytes)
+				}
 				if err != nil {
 					return nil, fmt.Errorf("catalog: fetch GitHub Release metadata asset %s: %w", expectedAsset, err)
 				}
@@ -236,4 +240,3 @@ func validGitRevision(value string) bool {
 	return true
 }
 
-var _ = url.URL{}
