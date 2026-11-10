@@ -869,3 +869,106 @@ func TestREG024CanonicalRejectsCyclicValues(t *testing.T) {
 		t.Fatal("cyclic pointer unexpectedly passed canonical serialization")
 	}
 }
+
+
+func TestADR0028ManifestRecordsAndValidatesExactGitHubReleaseIdentity(t *testing.T) {
+	graph, sources := resolvedFixture()
+	const repositoryURI = "https://github.com/example/engine"
+	const tag = "v1.0.0"
+	const metadataURI = "https://github.com/example/engine/releases/download/v1.0.0/engine-1.0.0.json"
+	graph.SchemaVersion = "1.2.0"
+	graph.Components[0].ReleaseMetadataURI = metadataURI
+	graph.Components[0].ReleaseDiscovery = &catalogModel.ReleaseDiscoveryProvenance{
+		SourceID: "engine-source",
+		Provider: "github-releases-v1",
+		RepositoryURI: repositoryURI,
+		ReleaseID: 123,
+		ReleaseAPIURI: "https://api.github.com/repos/example/engine/releases/123",
+		Tag: tag,
+		TagCommit: testRevision,
+		MetadataAssetName: "engine-1.0.0.json",
+		MetadataAssetSize: 456,
+		PublishedAt: "2026-11-10T18:00:00Z",
+	}
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(validation.ResolvedManifest, encoded, "registry-manifest.json"); err != nil {
+		t.Fatalf("ADR-0028 Manifest does not satisfy Spec schema: %v\n%s", err, encoded)
+	}
+	if err := Verify(encoded, Digest(encoded), validator); err != nil {
+		t.Fatalf("ADR-0028 Manifest failed semantic verification: %v", err)
+	}
+	if document.Components[0].ReleaseDiscovery == nil ||
+		document.Components[0].ReleaseDiscovery.ReleaseID != 123 ||
+		document.Components[0].ReleaseDiscovery.TagCommit != testRevision {
+		t.Fatalf("Manifest lost exact GitHub Release provenance: %#v", document.Components[0].ReleaseDiscovery)
+	}
+}
+
+func TestADR0028ManifestRejectsIncompleteOrSubstitutedReleaseIdentity(t *testing.T) {
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		mutate func(*Document)
+	}{
+		{
+			name: "missing Release ID",
+			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.ReleaseID = 0 },
+		},
+		{
+			name: "wrong tag commit",
+			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.TagCommit = strings.Repeat("0", 40) },
+		},
+		{
+			name: "non-canonical metadata asset name",
+			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.MetadataAssetName = "other.json" },
+		},
+		{
+			name: "substituted GitHub Release API URI",
+			mutate: func(document *Document) { document.Components[0].ReleaseDiscovery.ReleaseAPIURI = "https://api.github.com/repos/attacker/engine/releases/123" },
+		},
+		{
+			name: "substituted asset download URI",
+			mutate: func(document *Document) { document.Components[0].ReleaseMetadataURI = "https://github.com/attacker/engine/releases/download/v1.0.0/engine-1.0.0.json" },
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			graph, sources := resolvedFixture()
+			graph.SchemaVersion = "1.2.0"
+			graph.Components[0].ReleaseMetadataURI = "https://github.com/example/engine/releases/download/v1.0.0/engine-1.0.0.json"
+			graph.Components[0].ReleaseDiscovery = &catalogModel.ReleaseDiscoveryProvenance{
+				SourceID: "engine-source", Provider: "github-releases-v1",
+				RepositoryURI: "https://github.com/example/engine", ReleaseID: 123,
+				ReleaseAPIURI: "https://api.github.com/repos/example/engine/releases/123",
+				Tag: "v1.0.0", TagCommit: testRevision, MetadataAssetName: "engine-1.0.0.json",
+				MetadataAssetSize: 456,
+			}
+			document, buildErr := Build(graph, sources, "1.2.3")
+			if buildErr != nil {
+				t.Fatal(buildErr)
+			}
+			testCase.mutate(&document)
+			encoded, marshalErr := MarshalCanonical(document)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			if err := Verify(encoded, "", validator); err == nil {
+				t.Fatal("substituted/incomplete release identity unexpectedly passed Manifest verification")
+			}
+		})
+	}
+}
