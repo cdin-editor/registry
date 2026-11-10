@@ -64,11 +64,11 @@ func testADR0028Fixture(t *testing.T, version, publishedAt string, id int64) (Re
 			"requires": []any{},
 		},
 		"publication": map[string]any{
-			"provider":             "github-releases-v1",
-			"repository_uri":       repository,
-			"tag":                  tag,
-			"tag_commit":           commit,
-			"metadata_asset_name":  assetName,
+			"provider":            "github-releases-v1",
+			"repository_uri":      repository,
+			"tag":                 tag,
+			"tag_commit":          commit,
+			"metadata_asset_name": assetName,
 		},
 	}
 	payload, err := json.Marshal(metadata)
@@ -83,18 +83,18 @@ func testADR0028Fixture(t *testing.T, version, publishedAt string, id int64) (Re
 	}
 	release := GitHubRelease{
 		ID: id, TagName: tag, Prerelease: false, PublishedAt: publishedAt,
-		URL: fmt.Sprintf("https://api.github.com/repos/acme/editor/releases/%d", id),
+		URL:     fmt.Sprintf("https://api.github.com/repos/acme/editor/releases/%d", id),
 		HTMLURL: fmt.Sprintf("https://github.com/acme/editor/releases/tag/%s", tag),
 		Assets: []GitHubReleaseAsset{{
 			ID: id + 1000, Name: assetName, Size: int64(len(payload)), Digest: "sha256:" + digest,
-			URL: fmt.Sprintf("https://api.github.com/repos/acme/editor/releases/assets/%d", id+1000),
+			URL:                fmt.Sprintf("https://api.github.com/repos/acme/editor/releases/assets/%d", id+1000),
 			BrowserDownloadURL: fmt.Sprintf("https://github.com/acme/editor/releases/download/%s/%s", tag, assetName),
 		}},
 	}
 	client := &fakeGitHubReleaseClient{
 		metadata: payload,
 		releases: map[int][]GitHubRelease{1: {release}},
-		commits: map[string]string{tag: commit},
+		commits:  map[string]string{tag: commit},
 	}
 	return source, release, client
 }
@@ -126,7 +126,7 @@ func TestValidateReleaseSourcesCanonicalizesDefaults(t *testing.T) {
 func TestDynamicCatalogRejectsMixedStaticAndReleaseSources(t *testing.T) {
 	index := Index{
 		SchemaVersion: "1.1.0", CatalogID: "test.catalog",
-		Entries: []Entry{{ComponentID: "editor", Version: "1.0.0", MetadataURI: "https://example.invalid/release.json", MetadataSHA: strings.Repeat("a", 64)}},
+		Entries:        []Entry{{ComponentID: "editor", Version: "1.0.0", MetadataURI: "https://example.invalid/release.json", MetadataSHA: strings.Repeat("a", 64)}},
 		ReleaseSources: []ReleaseSource{{SourceID: "editor-source", Provider: githubReleaseProvider, RepositoryURI: "https://github.com/acme/editor", ComponentID: "editor"}},
 	}
 	indexBytes, marshalErr := json.Marshal(index)
@@ -215,7 +215,6 @@ func TestLoadFromGitHubReleaseSourcesRejectsNonCanonicalAssetURI(t *testing.T) {
 	}
 }
 
-
 func TestADR0028SpecSchemasAcceptPublicationAndReleaseSources(t *testing.T) {
 	source, _, client := testADR0028Fixture(t, "1.2.0", "2026-11-10T18:00:00Z", 15)
 	validator, err := validation.New()
@@ -226,8 +225,8 @@ func TestADR0028SpecSchemasAcceptPublicationAndReleaseSources(t *testing.T) {
 		t.Fatalf("Spec Component Release Metadata schema rejected ADR-0028 fixture: %v", err)
 	}
 	index, err := json.Marshal(Index{
-		SchemaVersion: "1.1.0",
-		CatalogID: "test.catalog",
+		SchemaVersion:  "1.1.0",
+		CatalogID:      "test.catalog",
 		ReleaseSources: []ReleaseSource{source},
 	})
 	if err != nil {
