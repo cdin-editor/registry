@@ -46,8 +46,9 @@ type HTTPFetcherOptions struct {
 	Timeout      time.Duration
 	MaxBytes     int64
 	MaxRedirects int
-	CacheDir     string
-	Offline      bool
+	CacheDir       string
+	Offline        bool
+	GitHubAPIToken string
 }
 
 // safePolicyError is produced only by local URL/redirect policy checks. It can
@@ -68,6 +69,7 @@ type HTTPFetcher struct {
 	cacheDir      string
 	metadataCache *MetadataCache
 	offline       bool
+	githubAPIToken string
 
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
@@ -89,6 +91,9 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 	}
 	if len(allowed) == 0 {
 		return nil, fmt.Errorf("catalog: at least one HTTPS metadata host must be allow-listed")
+	}
+	if strings.ContainsAny(options.GitHubAPIToken, "\r\n") || strings.TrimSpace(options.GitHubAPIToken) != options.GitHubAPIToken {
+		return nil, fmt.Errorf("catalog: GitHub API token contains invalid whitespace")
 	}
 	timeout := options.Timeout
 	if timeout <= 0 {
@@ -117,8 +122,9 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		maxBytes:      maxBytes,
 		cacheDir:      cacheDir,
 		metadataCache: metadataCache,
-		offline:       options.Offline,
-		lookupIPAddr:  net.DefaultResolver.LookupIPAddr,
+		offline:        options.Offline,
+		githubAPIToken: options.GitHubAPIToken,
+		lookupIPAddr:   net.DefaultResolver.LookupIPAddr,
 		dialIP: (&net.Dialer{
 			Timeout:   8 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -141,6 +147,9 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		Transport: transport,
 		Timeout:   timeout,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) > 0 && !strings.EqualFold(request.URL.Hostname(), via[len(via)-1].URL.Hostname()) {
+				request.Header.Del("Authorization")
+			}
 			if len(via) > redirects {
 				return &safePolicyError{message: "catalog: metadata redirect limit exceeded"}
 			}
@@ -315,6 +324,9 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "cdin-registry/1")
+	if strings.EqualFold(parsed.Hostname(), "api.github.com") && f.githubAPIToken != "" {
+		request.Header.Set("Authorization", "Bearer "+f.githubAPIToken)
+	}
 	response, err := f.client.Do(request)
 	if err != nil {
 		if ctx.Err() != nil {
