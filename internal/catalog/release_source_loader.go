@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"time"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cdin-editor/registry/internal/semver"
 	"github.com/cdin-editor/registry/internal/validation"
@@ -200,16 +200,16 @@ func loadFromGitHubReleaseSources(
 				release.MetadataURI = asset.BrowserDownloadURL
 				release.MetadataSHA = actualSHA
 				release.Discovery = &ReleaseDiscoveryProvenance{
-					SourceID:             source.SourceID,
-					Provider:             githubReleaseProvider,
-					RepositoryURI:        source.RepositoryURI,
-					ReleaseID:            githubRelease.ID,
-					ReleaseAPIURI:        githubRelease.URL,
-					Tag:                  githubRelease.TagName,
-					TagCommit:            strings.ToLower(tagCommit),
-					MetadataAssetName:    expectedAsset,
-					MetadataAssetSize:    asset.Size,
-					PublishedAt:          githubRelease.PublishedAt,
+					SourceID:          source.SourceID,
+					Provider:          githubReleaseProvider,
+					RepositoryURI:     source.RepositoryURI,
+					ReleaseID:         githubRelease.ID,
+					ReleaseAPIURI:     githubRelease.URL,
+					Tag:               githubRelease.TagName,
+					TagCommit:         strings.ToLower(tagCommit),
+					MetadataAssetName: expectedAsset,
+					MetadataAssetSize: asset.Size,
+					PublishedAt:       githubRelease.PublishedAt,
 				}
 				seen[key] = release
 				if release.Status != "withdrawn" {
