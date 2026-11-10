@@ -10,6 +10,13 @@
       "metadata_sha256": "a7042e32c6e8234faf6963c64b71a13075189b66dc658f50acb3689d8bc59f72"
     },
     {
+      "component_id": "backend",
+      "variant": "default",
+      "version": "1.2.1",
+      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/backend/d4f5e18f2662291a31465c9f571e3d34e6b4da1c/registry/releases/backend-1.2.1.json",
+      "metadata_sha256": "3db608685961d457f26003ae5636f7ee8704cf2c59533ff0ffe045c87590595f"
+    },
+    {
       "component_id": "frontend",
       "variant": "gui-sdl",
       "version": "1.0.0",
