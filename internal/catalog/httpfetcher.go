@@ -306,6 +306,10 @@ func (f *HTTPFetcher) fetchWithCacheKey(ctx context.Context, metadataURI, expect
 }
 
 func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, error) {
+	return f.fetchBounded(ctx, metadataURI, "application/json", f.maxBytes)
+}
+
+func (f *HTTPFetcher) fetchBounded(ctx context.Context, metadataURI, accept string, requestedLimit int64) ([]byte, error) {
 	if f == nil || f.client == nil {
 		return nil, fmt.Errorf("catalog: HTTP fetcher is not initialized")
 	}
@@ -314,6 +318,10 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	limit := requestedLimit
+	if limit <= 0 || limit > f.maxBytes {
+		limit = f.maxBytes
 	}
 	parsed, err := url.Parse(metadataURI)
 	if err != nil {
@@ -326,7 +334,7 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 	if err != nil {
 		return nil, fmt.Errorf("catalog: create metadata request: %w", err)
 	}
-	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Accept", accept)
 	request.Header.Set("User-Agent", "cdin-registry/1")
 	response, err := f.client.Do(request)
 	if err != nil {
@@ -339,17 +347,17 @@ func (f *HTTPFetcher) fetch(ctx context.Context, metadataURI string) ([]byte, er
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("catalog: metadata server returned HTTP status %d", response.StatusCode)
 	}
-	if response.ContentLength > f.maxBytes {
+	if response.ContentLength > limit {
 		return nil, fmt.Errorf("catalog: metadata response exceeds configured size limit")
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, f.maxBytes+1))
+	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		return nil, fmt.Errorf("catalog: read metadata response: %w", scrubURLError(err))
 	}
-	if int64(len(data)) > f.maxBytes {
+	if int64(len(data)) > limit {
 		return nil, fmt.Errorf("catalog: metadata response exceeds configured size limit")
 	}
 	if err := ctx.Err(); err != nil {
@@ -367,8 +375,15 @@ func (f *HTTPFetcher) validateURL(parsed *url.URL) error {
 	if strings.ToLower(parsed.Scheme) != "https" || parsed.Hostname() == "" {
 		return fmt.Errorf("catalog: metadata URI must use HTTPS")
 	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("catalog: metadata URI must not contain credentials, query or fragment")
+	if parsed.User != nil || parsed.Fragment != "" {
+		return fmt.Errorf("catalog: metadata URI must not contain credentials or fragment")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	// GitHub's signed release-asset redirects carry short-lived query parameters.
+	// Only the two fixed GitHub asset hosts may use a query; arbitrary Catalog
+	// metadata URLs and all other redirects remain query-free.
+	if parsed.RawQuery != "" && host != "release-assets.githubusercontent.com" && host != "objects.githubusercontent.com" {
+		return fmt.Errorf("catalog: metadata URI must not contain a query")
 	}
 	if port := parsed.Port(); port != "" && port != "443" {
 		return fmt.Errorf("catalog: metadata URI must use HTTPS port 443")
