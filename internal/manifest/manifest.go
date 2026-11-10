@@ -1266,4 +1266,3 @@ func validateManifestReleaseDiscovery(component Component) error {
 	}
 	return nil
 }
-
