@@ -310,6 +310,152 @@ def sync_schemas(mode: str) -> None:
     print(f"Registry v1 schemas and embedded copies match {repository}@{revision} (tree and Git blob-pinned)")
 
 
+_GO_BUILD_SETTING = re.compile(r"^\\s*build\\s+(GOOS|GOARCH|CGO_ENABLED)=(\\S+)\\s*$")
+
+def parse_go_build_info(output: str) -> dict[str, str]:
+    """Extract target settings from `go version -m` without trusting filenames."""
+    settings: dict[str, str] = {}
+    for line in output.splitlines():
+        match = _GO_BUILD_SETTING.match(line)
+        if not match:
+            continue
+        key, value = match.groups()
+        previous = settings.get(key)
+        if previous is not None and previous != value:
+            raise ValueError(f"conflicting Go build setting {key}")
+        settings[key] = value
+    return settings
+
+
+def validate_go_build_info(settings: dict[str, str], goos: str, goarch: str) -> None:
+    expected = {"GOOS": goos, "GOARCH": goarch, "CGO_ENABLED": "0"}
+    missing = [key for key in expected if key not in settings]
+    if missing:
+        raise ValueError(f"Go executable build info is missing {', '.join(missing)}")
+    mismatched = {
+        key: (settings[key], value)
+        for key, value in expected.items()
+        if settings[key] != value
+    }
+    if mismatched:
+        details = ", ".join(
+            f"{key}={actual!r} (expected {wanted!r})"
+            for key, (actual, wanted) in sorted(mismatched.items())
+        )
+        raise ValueError(f"Go executable target mismatch: {details}")
+
+
+def validate_executable_header(data: bytes, goos: str, goarch: str) -> None:
+    """Verify the executable container and machine field from the built bytes."""
+    if goos == "linux":
+        if len(data) < 20 or data[:4] != b"\\x7fELF":
+            raise ValueError("Linux Registry artifact is not an ELF executable")
+        if data[4] != 2 or data[5] != 1:
+            raise ValueError("Linux Registry artifact must be 64-bit little-endian ELF")
+        machine = int.from_bytes(data[18:20], "little")
+        expected = {"amd64": 62, "arm64": 183}.get(goarch)
+        if expected is None or machine != expected:
+            raise ValueError(f"ELF machine {machine} does not match {goarch}")
+        return
+
+    if goos == "darwin":
+        if len(data) < 8 or int.from_bytes(data[:4], "little") != 0xFEEDFACF:
+            raise ValueError("macOS Registry artifact is not a 64-bit little-endian Mach-O executable")
+        cpu_type = int.from_bytes(data[4:8], "little")
+        expected = {"amd64": 0x01000007, "arm64": 0x0100000C}.get(goarch)
+        if expected is None or cpu_type != expected:
+            raise ValueError(f"Mach-O CPU type {cpu_type:#x} does not match {goarch}")
+        return
+
+    if goos == "windows":
+        if goarch != "amd64" or len(data) < 0x40 or data[:2] != b"MZ":
+            raise ValueError("Windows Registry artifact must be an x86_64 PE executable")
+        pe_offset = int.from_bytes(data[0x3C:0x40], "little")
+        if pe_offset < 0x40 or pe_offset > len(data) - 6:
+            raise ValueError("Windows Registry artifact has an invalid PE header offset")
+        if data[pe_offset:pe_offset + 4] != b"PE\\x00\\x00":
+            raise ValueError("Windows Registry artifact has an invalid PE signature")
+        machine = int.from_bytes(data[pe_offset + 4:pe_offset + 6], "little")
+        if machine != 0x8664:
+            raise ValueError(f"PE machine {machine:#x} does not match x86_64")
+        return
+
+    raise ValueError(f"unsupported executable target OS: {goos}")
+
+
+def verify_release_binary_target(binary: Path, goos: str, goarch: str) -> None:
+    """Inspect the built executable itself before Pipeline uploads the asset."""
+    result = subprocess.run(
+        ["go", "version", "-m", str(binary)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit("Unable to inspect Registry executable build metadata")
+    try:
+        settings = parse_go_build_info(result.stdout)
+        validate_go_build_info(settings, goos, goarch)
+        validate_executable_header(binary.read_bytes(), goos, goarch)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"Registry release target verification failed: {error}") from error
+
+
+def run_release_binary_self_test() -> None:
+    """Exercise Go build-info and executable-header checks with synthetic fixtures."""
+    sample = (
+        "registry: go1.27.3\\n"
+        " path\\tgithub.com/cdin-editor/registry/cmd/registry\\n"
+        " build\\tCGO_ENABLED=0\\n"
+        " build\\tGOARCH=amd64\\n"
+        " build\\tGOOS=linux\\n"
+    )
+    settings = parse_go_build_info(sample)
+    validate_go_build_info(settings, "linux", "amd64")
+
+    checks = [
+        ("missing build identity", lambda: validate_go_build_info({"GOOS": "linux"}, "linux", "amd64")),
+        ("wrong architecture", lambda: validate_go_build_info(
+            {"GOOS": "linux", "GOARCH": "arm64", "CGO_ENABLED": "0"}, "linux", "amd64"
+        )),
+        ("conflicting metadata", lambda: parse_go_build_info(
+            " build\\tGOOS=linux\\n build\\tGOOS=darwin\\n"
+        )),
+    ]
+    for label, check in checks:
+        try:
+            check()
+        except ValueError:
+            continue
+        raise SystemExit(f"Registry target self-test failed: {label} was accepted")
+
+    elf = bytearray(64)
+    elf[:4] = b"\\x7fELF"
+    elf[4:6] = b"\\x02\\x01"
+    elf[18:20] = (62).to_bytes(2, "little")
+    validate_executable_header(bytes(elf), "linux", "amd64")
+    try:
+        validate_executable_header(bytes(elf), "linux", "arm64")
+    except ValueError:
+        pass
+    else:
+        raise SystemExit("Registry target self-test failed: wrong ELF machine was accepted")
+
+    mach_o = bytearray(32)
+    mach_o[:4] = (0xFEEDFACF).to_bytes(4, "little")
+    mach_o[4:8] = (0x0100000C).to_bytes(4, "little")
+    validate_executable_header(bytes(mach_o), "darwin", "arm64")
+
+    pe = bytearray(0x90)
+    pe[:2] = b"MZ"
+    pe[0x3C:0x40] = (0x80).to_bytes(4, "little")
+    pe[0x80:0x84] = b"PE\\x00\\x00"
+    pe[0x84:0x86] = (0x8664).to_bytes(2, "little")
+    validate_executable_header(bytes(pe), "windows", "amd64")
+    print("Registry executable target self-tests: OK")
+
+
 def release_build() -> None:
     target_os = os.environ.get("PIPELINE_TARGET_OS") or subprocess.check_output(
         ["go", "env", "GOOS"], cwd=ROOT, text=True
@@ -347,6 +493,8 @@ def release_build() -> None:
     )
     if not binary.is_file() or binary.stat().st_size == 0:
         raise SystemExit(f"Release artifact missing or empty: {binary}")
+    verify_release_binary_target(binary, goos, goarch)
+    print(f"Verified executable target: {goos}/{goarch} (CGO_ENABLED=0)")
     print(f"Artifact ready: {binary.relative_to(ROOT)}")
 
 
@@ -360,6 +508,7 @@ def main() -> None:
     schema = sub.add_parser("schema-sync")
     schema.add_argument("mode", choices=("check", "update"), nargs="?", default="check")
     sub.add_parser("release-build")
+    sub.add_parser("release-binary-self-test")
     args = parser.parse_args()
     if args.command == "format":
         check_format()
@@ -373,6 +522,8 @@ def main() -> None:
         sync_schemas("--update" if args.mode == "update" else "--check")
     elif args.command == "release-build":
         release_build()
+    elif args.command == "release-binary-self-test":
+        run_release_binary_self_test()
 
 
 if __name__ == "__main__":
