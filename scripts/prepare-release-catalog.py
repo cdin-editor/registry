@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -378,17 +379,23 @@ def run_self_test() -> None:
             "entries": [{**static["entries"][0], "metadata_sha256": "bad"}],
         }),
     )
+    with tempfile.TemporaryDirectory(prefix="registry-release-fixtures-") as temporary:
+        artifact_root = Path(temporary)
+        for target_id, (asset_name, _target) in EXPECTED_EXECUTABLES.items():
+            target_directory = artifact_root / f"release-build-{target_id}"
+            target_directory.mkdir()
+            (target_directory / asset_name).write_bytes(f"fixture:{target_id}".encode("ascii"))
+        executable_fixture = collect_executables(artifact_root)
+        if len(executable_fixture) != len(EXPECTED_EXECUTABLES):
+            raise AssertionError("executable collection self-test did not find five targets")
+        wrong_target = artifact_root / "release-build-linux-arm64" / "registry-linux-amd64"
+        (artifact_root / "release-build-linux-arm64" / "registry-linux-arm64").unlink()
+        wrong_target.write_bytes(b"wrong target")
+        _expect_failure(
+            "wrong executable target filename",
+            lambda: collect_executables(artifact_root),
+        )
     raw = json.dumps(static, sort_keys=True).encode("utf-8")
-    executable_fixture = [
-        {
-            "asset_name": name,
-            "target_id": target_id,
-            "target": target,
-            "size": 128,
-            "sha256": "b" * 64,
-        }
-        for target_id, (name, target) in EXPECTED_EXECUTABLES.items()
-    ]
     descriptor = release_descriptor(
         version="0.2.0-dev.1",
         tag="v0.2.0-dev.1",
