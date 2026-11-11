@@ -141,6 +141,54 @@ def validate_catalog(document: dict[str, Any]) -> None:
         source_identities.add(identity)
 
 
+EXPECTED_EXECUTABLES = {
+    "linux-amd64": ("registry-linux-amd64", "linux/amd64"),
+    "linux-arm64": ("registry-linux-arm64", "linux/arm64"),
+    "darwin-amd64": ("registry-darwin-amd64", "darwin/amd64"),
+    "darwin-arm64": ("registry-darwin-arm64", "darwin/arm64"),
+    "windows-amd64": ("registry-windows-amd64.exe", "windows/amd64"),
+}
+
+
+def collect_executables(root: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for target_id, (expected_name, target) in EXPECTED_EXECUTABLES.items():
+        target_directory = root / f"release-build-{target_id}"
+        if target_directory.is_symlink() or not target_directory.is_dir():
+            raise CatalogReleaseError(f"missing or unsafe Registry target artifact: {target_id}")
+        files = sorted(target_directory.iterdir(), key=lambda item: item.name)
+        if len(files) != 1 or files[0].is_symlink() or not files[0].is_file():
+            raise CatalogReleaseError(
+                f"Registry target {target_id} must contain exactly one regular executable"
+            )
+        binary = files[0]
+        if binary.name != expected_name:
+            raise CatalogReleaseError(
+                f"Registry target {target_id} produced {binary.name!r}, expected {expected_name!r}"
+            )
+        if binary.name in seen:
+            raise CatalogReleaseError(f"duplicate Registry executable asset name: {binary.name}")
+        seen.add(binary.name)
+        records.append({
+            "asset_name": binary.name,
+            "target_id": target_id,
+            "target": target,
+            "size": binary.stat().st_size,
+            "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+        })
+    unexpected = sorted(
+        item.name for item in root.iterdir()
+        if item.name.startswith("release-build-")
+        and item.name.removeprefix("release-build-") not in EXPECTED_EXECUTABLES
+    )
+    if unexpected:
+        raise CatalogReleaseError(
+            "unexpected Registry release target artifact directories: " + ", ".join(unexpected)
+        )
+    return records
+
+
 def release_descriptor(
     *,
     version: str,
@@ -148,6 +196,7 @@ def release_descriptor(
     source_sha: str,
     catalog_bytes: bytes,
     catalog: dict[str, Any],
+    executables: list[dict[str, Any]],
 ) -> dict[str, Any]:
     if VERSION_PATTERN.fullmatch(version) is None:
         raise CatalogReleaseError(f"invalid Pipeline release version: {version!r}")
@@ -155,6 +204,26 @@ def release_descriptor(
         raise CatalogReleaseError("release tag must equal v plus Pipeline release version")
     if not GIT_SHA_PATTERN.fullmatch(source_sha):
         raise CatalogReleaseError("Pipeline source SHA must be a full lowercase Git commit SHA")
+    expected_targets = set(EXPECTED_EXECUTABLES)
+    actual_targets = {item.get("target_id") for item in executables if isinstance(item, dict)}
+    if len(executables) != len(expected_targets) or actual_targets != expected_targets:
+        raise CatalogReleaseError(
+            f"Registry executable target inventory mismatch: expected {sorted(expected_targets)}, "
+            f"got {sorted(str(item) for item in actual_targets)}"
+        )
+    asset_names: set[str] = set()
+    for item in executables:
+        name = item.get("asset_name")
+        expected_name, expected_target = EXPECTED_EXECUTABLES[item["target_id"]]
+        if name != expected_name or item.get("target") != expected_target:
+            raise CatalogReleaseError(f"Registry executable identity mismatch: {item!r}")
+        if name in asset_names:
+            raise CatalogReleaseError(f"duplicate Registry executable asset: {name}")
+        if not isinstance(item.get("size"), int) or item["size"] <= 0:
+            raise CatalogReleaseError(f"invalid Registry executable size for {name}")
+        if not isinstance(item.get("sha256"), str) or not SHA256_PATTERN.fullmatch(item["sha256"]):
+            raise CatalogReleaseError(f"invalid Registry executable SHA-256 for {name}")
+        asset_names.add(name)
     return {
         "schema_version": "1.0.0",
         "registry": {
@@ -170,6 +239,7 @@ def release_descriptor(
             "sha256": hashlib.sha256(catalog_bytes).hexdigest(),
             "size": len(catalog_bytes),
         },
+        "executables": sorted(executables, key=lambda item: item["target_id"]),
     }
 
 
@@ -221,6 +291,7 @@ def prepare_release_catalog() -> tuple[Path, Path]:
         source_sha=source_sha,
         catalog_bytes=catalog_bytes,
         catalog=catalog,
+        executables=collect_executables(Path(output_directory).expanduser()),
     )
 
     root = Path(output_directory).expanduser()
@@ -284,6 +355,8 @@ def run_self_test() -> None:
     }
     validate_catalog(static)
     validate_catalog(dynamic)
+    if CATALOG_PATH.is_file():
+        decode_catalog(CATALOG_PATH.read_bytes())
     _expect_failure(
         "mixed static and dynamic models",
         lambda: validate_catalog({**static, "release_sources": dynamic["release_sources"]}),
@@ -306,12 +379,23 @@ def run_self_test() -> None:
         }),
     )
     raw = json.dumps(static, sort_keys=True).encode("utf-8")
+    executable_fixture = [
+        {
+            "asset_name": name,
+            "target_id": target_id,
+            "target": target,
+            "size": 128,
+            "sha256": "b" * 64,
+        }
+        for target_id, (name, target) in EXPECTED_EXECUTABLES.items()
+    ]
     descriptor = release_descriptor(
         version="0.2.0-dev.1",
         tag="v0.2.0-dev.1",
         source_sha="a" * 40,
         catalog_bytes=raw,
         catalog=static,
+        executables=executable_fixture,
     )
     if descriptor["catalog"]["sha256"] != hashlib.sha256(raw).hexdigest():
         raise AssertionError("descriptor SHA-256 self-test failed")
@@ -325,6 +409,18 @@ def run_self_test() -> None:
             source_sha="a" * 40,
             catalog_bytes=raw,
             catalog=static,
+            executables=executable_fixture,
+        ),
+    )
+    _expect_failure(
+        "incomplete executable target inventory",
+        lambda: release_descriptor(
+            version="0.2.0-dev.1",
+            tag="v0.2.0-dev.1",
+            source_sha="a" * 40,
+            catalog_bytes=raw,
+            catalog=static,
+            executables=executable_fixture[:-1],
         ),
     )
     duplicate_key = b'{"schema_version":"1.0.0","schema_version":"1.0.0"}'
