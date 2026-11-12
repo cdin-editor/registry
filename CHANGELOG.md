@@ -5,12 +5,26 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0-dev.2] - 2026-11-12
+
+### Added
+
+- Discover immutable Component Release Metadata from GitHub Releases using
+  Catalog `release_sources`, full pagination, exact tag/commit resolution,
+  canonical asset names and digest-verified metadata identities.
+- Generate the release-time Catalog snapshot and
+  `registry-release-0.2.0-dev.2.json` descriptor from the exact tag commit,
+  including the verified five-target executable inventory and final asset
+  identities.
+
 ### Fixed
 
-- Inspect every cross-compiled Registry executable before upload, verifying
-  its embedded Go GOOS/GOARCH/CGO settings and actual ELF, Mach-O or PE
-  machine identity. Add deterministic positive/negative target-verification
-  self-tests to the release quality gate.
+- Verify each cross-compiled executable before upload, checking embedded Go
+  GOOS/GOARCH/CGO settings and actual ELF, Mach-O or PE machine identity.
+- Reject mismatched release/tag/source identities and malformed or ambiguous
+  Catalog metadata instead of publishing an unverifiable target inventory.
+- Keep the Registry CLI/package version independent from Registry Data
+  Contract and Spec schema versions.
 
 ## [0.2.0-dev.1] - 2026-11-10
 
