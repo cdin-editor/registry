@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
-PIPELINE_REVISION = "eae4979972be66358646c0a94c99e02127ae0563"
+PIPELINE_REVISION = "0c2c89c7c64575c6b0f66c78925bdf5638abc5e9"
 
 
 class ReleaseWorkflowPinTests(unittest.TestCase):
