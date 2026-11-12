@@ -36,3 +36,5 @@ jobs:
           python-version: "3.12"
       - name: Test Catalog model and release identity validation
         run: python scripts/prepare-release-catalog.py --self-test
+      - name: Verify immutable Pipeline release workflow pin
+        run: python -m unittest discover -s tests -p "test_release_workflow_pin.py"
