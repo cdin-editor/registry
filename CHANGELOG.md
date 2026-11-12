@@ -5,13 +5,6 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-
-- Inspect every cross-compiled Registry executable before upload, verifying
-  its embedded Go GOOS/GOARCH/CGO settings and actual ELF, Mach-O or PE
-  machine identity. Add deterministic positive/negative target-verification
-  self-tests to the release quality gate.
-
 ## [0.2.0-dev.1] - 2026-11-10
 
 ### Added
@@ -33,10 +26,17 @@ Notable changes to CDIN Registry are recorded here. The format follows
   producing mislabeled or duplicate ARM64/AMD64 assets instead of the requested
   cross-compiled binaries.
 
+- Verify every cross-compiled executable before upload, checking its
+  embedded Go GOOS/GOARCH/CGO settings and actual ELF, Mach-O or PE machine
+  identity. Add deterministic positive/negative target-verification tests
+  to the release quality gate.
+
 ### Tests
 
 - Cover PAX path traversal overrides and corrupted gzip trailers in TAR.GZ
   package extraction.
+- Cover target-verification success and mismatched embedded/binary machine
+  identities across the supported release matrix.
 
 ## [0.1.0-dev.1] - 2026-11-08
 
