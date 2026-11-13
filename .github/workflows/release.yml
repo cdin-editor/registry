@@ -4,13 +4,81 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
+  create-verified-development-tag:
+    name: Tag the exact main commit after successful CI
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'CI' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      source_ref: ${{ steps.tag.outputs.source_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Create or verify the immutable Catalog release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG_NAME: v0.2.0-dev.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          tag_ref_json="$RUNNER_TEMP/tag-ref.json"
+          status="$(curl --silent --show-error --output "$tag_ref_json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$TAG_NAME")"
+          case "$status" in
+            200)
+              echo "Tag $TAG_NAME already exists; verifying its immutable target."
+              ;;
+            404)
+              gh api --method POST "repos/$REPOSITORY/git/refs" \
+                -f "ref=refs/tags/$TAG_NAME" -f "sha=$SOURCE_SHA" >/dev/null
+              echo "Created $TAG_NAME."
+              ;;
+            *)
+              cat "$tag_ref_json" >&2
+              echo "Could not inspect $TAG_NAME (HTTP $status)." >&2
+              exit 1
+              ;;
+          esac
+          git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
+          tag_commit="$(git rev-parse --verify "$TAG_NAME^{commit}")"
+          if [[ "$tag_commit" != "$SOURCE_SHA" ]]; then
+            echo "Immutable $TAG_NAME resolves to $tag_commit, expected $SOURCE_SHA." >&2
+            exit 1
+          fi
+          printf 'source_ref=refs/tags/%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
+
   release:
     name: Cross-platform release (Pipeline)
+    needs: [create-verified-development-tag]
+    if: >-
+      always() &&
+      (github.event_name == 'push' ||
+       github.event_name == 'workflow_dispatch' ||
+       needs.create-verified-development-tag.result == 'success')
     permissions:
       contents: write
       id-token: write
@@ -18,6 +86,7 @@ jobs:
     uses: m-mdy-m/pipeline/.github/workflows/release.yml@0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
     with:
       pipeline-ref: 0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
+      source-ref: ${{ needs.create-verified-development-tag.outputs.source_ref || github.ref }}
       go-version: "1.27.3"
       test-command: "python scripts/prepare-release-catalog.py --self-test && PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
       build-command: "python scripts/registry_checks.py release-build"
@@ -25,13 +94,10 @@ jobs:
       asset-preparation-command: "python scripts/prepare-release-catalog.py"
       changelog-path: "CHANGELOG.md"
       working-directory: "."
-      # Pipeline's release target inherits PIPELINE_TARGET_* from the command
-      # environment. The executable is pure Go (CGO_ENABLED=0), so each target
-      # can be cross-compiled from its runner without assuming host GOARCH.
       build-matrix-json: >-
         {"include":[
           {"id":"linux-amd64","os":"ubuntu-24.04","build_command":"PIPELINE_TARGET_OS=linux PIPELINE_TARGET_ARCH=x86_64 python scripts/registry_checks.py release-build"},
-          {"id":"linux-arm64","os":"ubuntu-24.04","build_command":"PIPELINE_TARGET_OS=linux PIPELINE_TARGET_ARCH=aarch64 python scripts/registry_checks.py release-build"},
+          {"id":"linux-arm64","os":"ubuntu-24.04-arm","build_command":"PIPELINE_TARGET_OS=linux PIPELINE_TARGET_ARCH=aarch64 python scripts/registry_checks.py release-build"},
           {"id":"darwin-amd64","os":"macos-15","build_command":"PIPELINE_TARGET_OS=macos PIPELINE_TARGET_ARCH=x86_64 python scripts/registry_checks.py release-build"},
           {"id":"darwin-arm64","os":"macos-15","build_command":"PIPELINE_TARGET_OS=macos PIPELINE_TARGET_ARCH=arm64 python scripts/registry_checks.py release-build"},
           {"id":"windows-amd64","os":"windows-latest","build_command":"PIPELINE_TARGET_OS=windows PIPELINE_TARGET_ARCH=x86_64 python scripts/registry_checks.py release-build"}
