@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -384,3 +385,74 @@ func TestRepositoryGovernancePSXRequiresProjectAndReviewFiles(t *testing.T) {
 		}
 	}
 }
+
+
+func TestRepositoryGovernanceFrontend122CatalogMetadata(t *testing.T) {
+	type catalogEntry struct {
+		ComponentID   string `json:"component_id"`
+		Variant       string `json:"variant"`
+		Version       string `json:"version"`
+		MetadataURI   string `json:"metadata_uri"`
+		MetadataSHA256 string `json:"metadata_sha256"`
+	}
+	var document struct {
+		SchemaVersion  string         `json:"schema_version"`
+		CatalogID      string         `json:"catalog_id"`
+		Entries        []catalogEntry `json:"entries"`
+		ReleaseSources json.RawMessage `json:"release_sources"`
+	}
+	if err := json.Unmarshal(repositoryFile(t, "catalogs/cdin-components/catalog-index.json"), &document); err != nil {
+		t.Fatalf("decode CDIN Catalog: %v", err)
+	}
+	if document.SchemaVersion != "1.0.0" || document.CatalogID != "cdin-components" {
+		t.Fatalf("Catalog identity = %s/%s, want 1.0.0/cdin-components", document.SchemaVersion, document.CatalogID)
+	}
+	if len(document.ReleaseSources) != 0 {
+		t.Fatal("Catalog must retain the static entries model until the remaining component publishers have canonical metadata")
+	}
+
+	want := map[string]struct {
+		uri    string
+		digest string
+	}{
+		"core": {
+			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-core-1.2.2.json",
+			digest: "055f0e030358bf2381883440da5f15e996435a0a8cd05b96a7a229fdfeb863de",
+		},
+		"gui-sdl": {
+			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-gui-sdl-1.2.2.json",
+			digest: "7e2f61c11c368c0e23e0e5d4f5c48184e1708fd83f4b8ff5ea317b79f8c30fb4",
+		},
+		"tui": {
+			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-tui-1.2.2.json",
+			digest: "a17b1fdd40a5f064d769bcfd1ac47edd8b3821b20e271888002d83f446929f78",
+		},
+	}
+	found := make(map[string]bool, len(want))
+	for _, entry := range document.Entries {
+		if entry.ComponentID != "frontend" || entry.Version != "1.2.2" {
+			continue
+		}
+		expected, ok := want[entry.Variant]
+		if !ok {
+			t.Errorf("unexpected Frontend 1.2.2 variant %q", entry.Variant)
+			continue
+		}
+		if found[entry.Variant] {
+			t.Errorf("duplicate Frontend 1.2.2 variant %q", entry.Variant)
+		}
+		found[entry.Variant] = true
+		if entry.MetadataURI != expected.uri {
+			t.Errorf("%s Metadata URI = %q, want %q", entry.Variant, entry.MetadataURI, expected.uri)
+		}
+		if entry.MetadataSHA256 != expected.digest {
+			t.Errorf("%s Metadata SHA-256 = %q, want %q", entry.Variant, entry.MetadataSHA256, expected.digest)
+		}
+	}
+	for variant := range want {
+		if !found[variant] {
+			t.Errorf("missing Frontend 1.2.2 Catalog entry for %s", variant)
+		}
+	}
+}
+
