@@ -5,6 +5,26 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0-dev.3] - 2026-11-13
+
+### Added
+
+- Add the three Frontend Foundation 1.2.2 variants (Core, GUI-SDL and TUI)
+  to the static CDIN Catalog using their canonical ADR-0028 Metadata assets
+  from the immutable Frontend v1.2.2 GitHub Release. The Metadata asset URI and
+  SHA-256 are pinned directly; the source Release resolves to commit
+  `acdce828a9a782ee4f1ae415df34558ee37552ac`.
+- Keep the exact Catalog snapshot, five verified Registry executables and
+  `registry-release-0.2.0-dev.3.json` descriptor together in the same
+  Registry Release, with the final Pipeline SHA256SUMS covering all assets.
+
+### Compatibility
+
+- Retain the static Catalog 1.0.0 entries model. Runtime RC3 does not yet have
+  a canonical immutable Release Metadata asset, so the historical Runtime
+  entries are not replaced with a fabricated RC3 identity and dynamic
+  `release_sources` are not enabled prematurely.
+
 ## [0.2.0-dev.2] - 2026-11-12
 
 ### Added
