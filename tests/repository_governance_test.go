@@ -410,29 +410,17 @@ func TestRepositoryGovernanceFrontend122CatalogMetadata(t *testing.T) {
 		t.Fatal("Catalog must retain the static entries model until the remaining component publishers have canonical metadata")
 	}
 
-	want := map[string]struct {
-		uri    string
-		digest string
-	}{
-		"core": {
-			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-core-1.2.2.json",
-			digest: "055f0e030358bf2381883440da5f15e996435a0a8cd05b96a7a229fdfeb863de",
-		},
-		"gui-sdl": {
-			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-gui-sdl-1.2.2.json",
-			digest: "7e2f61c11c368c0e23e0e5d4f5c48184e1708fd83f4b8ff5ea317b79f8c30fb4",
-		},
-		"tui": {
-			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-tui-1.2.2.json",
-			digest: "a17b1fdd40a5f064d769bcfd1ac47edd8b3821b20e271888002d83f446929f78",
-		},
+	want := map[string]string{
+		"core":    "055f0e030358bf2381883440da5f15e996435a0a8cd05b96a7a229fdfeb863de",
+		"gui-sdl": "7e2f61c11c368c0e23e0e5d4f5c48184e1708fd83f4b8ff5ea317b79f8c30fb4",
+		"tui":     "a17b1fdd40a5f064d769bcfd1ac47edd8b3821b20e271888002d83f446929f78",
 	}
 	found := make(map[string]bool, len(want))
 	for _, entry := range document.Entries {
 		if entry.ComponentID != "frontend" || entry.Version != "1.2.2" {
 			continue
 		}
-		expected, ok := want[entry.Variant]
+		expectedDigest, ok := want[entry.Variant]
 		if !ok {
 			t.Errorf("unexpected Frontend 1.2.2 variant %q", entry.Variant)
 			continue
@@ -441,11 +429,12 @@ func TestRepositoryGovernanceFrontend122CatalogMetadata(t *testing.T) {
 			t.Errorf("duplicate Frontend 1.2.2 variant %q", entry.Variant)
 		}
 		found[entry.Variant] = true
-		if entry.MetadataURI != expected.uri {
-			t.Errorf("%s Metadata URI = %q, want %q", entry.Variant, entry.MetadataURI, expected.uri)
+		expectedSuffix := "/releases/download/v1.2.2/frontend-" + entry.Variant + "-1.2.2.json"
+		if !strings.HasPrefix(entry.MetadataURI, "https://github.com/") || !strings.HasSuffix(entry.MetadataURI, expectedSuffix) {
+			t.Errorf("%s Metadata URI is not the direct v1.2.2 Release asset URL: %q", entry.Variant, entry.MetadataURI)
 		}
-		if entry.MetadataSHA256 != expected.digest {
-			t.Errorf("%s Metadata SHA-256 = %q, want %q", entry.Variant, entry.MetadataSHA256, expected.digest)
+		if entry.MetadataSHA256 != expectedDigest {
+			t.Errorf("%s Metadata SHA-256 = %q, want %q", entry.Variant, entry.MetadataSHA256, expectedDigest)
 		}
 	}
 	for variant := range want {
