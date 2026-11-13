@@ -389,16 +389,16 @@ func TestRepositoryGovernancePSXRequiresProjectAndReviewFiles(t *testing.T) {
 
 func TestRepositoryGovernanceFrontend122CatalogMetadata(t *testing.T) {
 	type catalogEntry struct {
-		ComponentID   string `json:"component_id"`
-		Variant       string `json:"variant"`
-		Version       string `json:"version"`
-		MetadataURI   string `json:"metadata_uri"`
+		ComponentID    string `json:"component_id"`
+		Variant        string `json:"variant"`
+		Version        string `json:"version"`
+		MetadataURI    string `json:"metadata_uri"`
 		MetadataSHA256 string `json:"metadata_sha256"`
 	}
 	var document struct {
-		SchemaVersion  string         `json:"schema_version"`
-		CatalogID      string         `json:"catalog_id"`
-		Entries        []catalogEntry `json:"entries"`
+		SchemaVersion  string          `json:"schema_version"`
+		CatalogID      string          `json:"catalog_id"`
+		Entries        []catalogEntry  `json:"entries"`
 		ReleaseSources json.RawMessage `json:"release_sources"`
 	}
 	if err := json.Unmarshal(repositoryFile(t, "catalogs/cdin-components/catalog-index.json"), &document); err != nil {
@@ -455,4 +455,3 @@ func TestRepositoryGovernanceFrontend122CatalogMetadata(t *testing.T) {
 		}
 	}
 }
-
