@@ -9,21 +9,26 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Added
 
-- Add the three Frontend Foundation 1.2.2 variants (Core, GUI-SDL and TUI)
-  to the static CDIN Catalog using their canonical ADR-0028 Metadata assets
-  from the immutable Frontend v1.2.2 GitHub Release. The Metadata asset URI and
-  SHA-256 are pinned directly; the source Release resolves to commit
-  `acdce828a9a782ee4f1ae415df34558ee37552ac`.
+- Pin canonical ADR-0028 Release Metadata assets for Backend 1.2.2
+  (tag commit `41681388d8294efeb371b0d337b426a72c19aeae`), Kernel 1.2.3
+  (tag commit `2fb09f52dc1a9963cf358ec54d584c520e174e67`), and Runtime 1.0.0
+  (tag commit `eb48a511ea6d5085db38e501784290d80cb03947`) in the static CDIN
+  Catalog.
+- Refresh the Frontend Core, GUI-SDL and TUI 1.2.2 metadata digests from the
+  GitHub Release Asset API. The immutable `v1.2.2` tag resolves to
+  `728406c1e677d601c55b82b4fbf1a77eecfd8581`; do not use the earlier
+  pre-release-candidate commit recorded in the original Catalog preparation.
 - Keep the exact Catalog snapshot, five verified Registry executables and
   `registry-release-0.2.0-dev.3.json` descriptor together in the same
   Registry Release, with the final Pipeline SHA256SUMS covering all assets.
 
 ### Compatibility
 
-- Retain the static Catalog 1.0.0 entries model. Runtime RC3 does not yet have
-  a canonical immutable Release Metadata asset, so the historical Runtime
-  entries are not replaced with a fabricated RC3 identity and dynamic
-  `release_sources` are not enabled prematurely.
+- Retain the backward-compatible static Catalog 1.0.0 entries model for this
+  release. New metadata entries are pinned only when their canonical GitHub
+  Release Asset names, tag-resolved commits and API-reported SHA-256 digests
+  are available. Dynamic `release_sources` remain a separate Catalog migration
+  and are not mixed into this static document.
 
 ## [0.2.0-dev.2] - 2026-11-12
 
