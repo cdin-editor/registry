@@ -410,39 +410,18 @@ func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
 		t.Fatal("Catalog must retain the static entries model for this pinned product snapshot")
 	}
 
-	want := map[string]struct {
-		uri    string
-		sha256 string
-	}{
-		"backend|default|1.2.2": {
-			uri:    "https://github.com/cdin-editor/backend/releases/download/v1.2.2/backend-1.2.2.json",
-			sha256: "8348c5a1f89203aadff4e35ca3a0a017d343289bd0df2674a034d17aca2ad6f7",
-		},
-		"frontend|core|1.2.2": {
-			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-core-1.2.2.json",
-			sha256: "67a4496caded1b56f2796cbf5977c9b240e1d857645f330ceb33abaed70ade2a",
-		},
-		"frontend|gui-sdl|1.2.2": {
-			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-gui-sdl-1.2.2.json",
-			sha256: "90c1dc71785b04a8782155b1d1e5759d103995f7a71ebe44f4651e71554da221",
-		},
-		"frontend|tui|1.2.2": {
-			uri:    "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-tui-1.2.2.json",
-			sha256: "82b0405fbed96a0b0cd54c9ab320e03925841d0cb58cd27c5d43d7c550b809a0",
-		},
-		"kernel|default|1.2.3": {
-			uri:    "https://github.com/cdin-editor/kernel/releases/download/v1.2.3/kernel-1.2.3.json",
-			sha256: "0962aba47b614e412258dace8c93059b2ad11dfdad9a35babb03c3158b6e2a54",
-		},
-		"runtime|default|1.0.0": {
-			uri:    "https://github.com/cdin-editor/runtime/releases/download/v1.0.0/runtime-1.0.0.json",
-			sha256: "8b56a21ccf237b54380b106f95cfd29fa8428d50a7a9175c532a3e4eda1a5f0c",
-		},
+	want := map[string]string{
+		"backend|default|1.2.2":   "8348c5a1f89203aadff4e35ca3a0a017d343289bd0df2674a034d17aca2ad6f7",
+		"frontend|core|1.2.2":     "67a4496caded1b56f2796cbf5977c9b240e1d857645f330ceb33abaed70ade2a",
+		"frontend|gui-sdl|1.2.2":  "90c1dc71785b04a8782155b1d1e5759d103995f7a71ebe44f4651e71554da221",
+		"frontend|tui|1.2.2":      "82b0405fbed96a0b0cd54c9ab320e03925841d0cb58cd27c5d43d7c550b809a0",
+		"kernel|default|1.2.3":    "0962aba47b614e412258dace8c93059b2ad11dfdad9a35babb03c3158b6e2a54",
+		"runtime|default|1.0.0":   "8b56a21ccf237b54380b106f95cfd29fa8428d50a7a9175c532a3e4eda1a5f0c",
 	}
 	found := make(map[string]bool, len(want))
 	for _, entry := range document.Entries {
 		key := entry.ComponentID + "|" + entry.Variant + "|" + entry.Version
-		expected, ok := want[key]
+		expectedDigest, ok := want[key]
 		if !ok {
 			continue
 		}
@@ -450,11 +429,21 @@ func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
 			t.Errorf("duplicate Catalog metadata identity %q", key)
 		}
 		found[key] = true
-		if entry.MetadataURI != expected.uri {
-			t.Errorf("%s metadata URI = %q, want %q", key, entry.MetadataURI, expected.uri)
+
+		basename := entry.ComponentID
+		if entry.Variant != "default" {
+			basename += "-" + entry.Variant
 		}
-		if entry.MetadataSHA256 != expected.sha256 {
-			t.Errorf("%s metadata SHA-256 = %q, want %q", key, entry.MetadataSHA256, expected.sha256)
+		basename += "-" + entry.Version + ".json"
+		expectedURI := strings.Join([]string{
+			"https://github.com", "cdin-editor", entry.ComponentID,
+			"releases", "download", "v" + entry.Version, basename,
+		}, "/")
+		if entry.MetadataURI != expectedURI {
+			t.Errorf("%s metadata URI = %q, want canonical Release URL %q", key, entry.MetadataURI, expectedURI)
+		}
+		if entry.MetadataSHA256 != expectedDigest {
+			t.Errorf("%s metadata SHA-256 = %q, want %q", key, entry.MetadataSHA256, expectedDigest)
 		}
 	}
 	for key := range want {
