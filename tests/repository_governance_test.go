@@ -386,7 +386,6 @@ func TestRepositoryGovernancePSXRequiresProjectAndReviewFiles(t *testing.T) {
 	}
 }
 
-
 func TestRepositoryGovernanceFrontend122CatalogMetadata(t *testing.T) {
 	type catalogEntry struct {
 		ComponentID    string `json:"component_id"`
