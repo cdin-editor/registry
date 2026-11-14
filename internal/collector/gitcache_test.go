@@ -229,28 +229,28 @@ func TestGitObjectLockContentionRecognizesWindowsAccessDenied(t *testing.T) {
 		t.Fatal(err)
 	}
 	accessDenied := &os.PathError{Op: "open", Path: path, Err: os.ErrPermission}
-	busy, err := gitObjectLockContention(path, accessDenied)
+	busy, retry, err := gitObjectLockContention(path, accessDenied)
 	if err != nil {
 		t.Fatalf("existing lock permission collision returned an error: %v", err)
 	}
-	if !busy {
-		t.Fatal("existing regular lock file was not recognized as contention")
+	if !busy || retry {
+		t.Fatalf("existing regular lock classification = busy %t retry %t; want busy", busy, retry)
 	}
 
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	busy, err = gitObjectLockContention(path, accessDenied)
+	busy, retry, err = gitObjectLockContention(path, accessDenied)
 	if err != nil {
-		t.Fatalf("permission error without an existing lock returned an error: %v", err)
+		t.Fatalf("permission error after concurrent lock release returned an error: %v", err)
 	}
-	if busy {
-		t.Fatal("permission error without an existing lock was treated as contention")
+	if busy || !retry {
+		t.Fatalf("missing lock classification = busy %t retry %t; want retry", busy, retry)
 	}
 
-	busy, err = gitObjectLockContention(path, errors.New("unrelated open failure"))
-	if err != nil || busy {
-		t.Fatalf("unrelated error = busy %t, err %v; want no contention", busy, err)
+	busy, retry, err = gitObjectLockContention(path, errors.New("unrelated open failure"))
+	if err != nil || busy || retry {
+		t.Fatalf("unrelated error = busy %t retry %t err %v; want no contention/retry", busy, retry, err)
 	}
 }
 
