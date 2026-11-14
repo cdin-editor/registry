@@ -482,6 +482,50 @@ def run_release_binary_self_test() -> None:
     print("Registry executable target self-tests: OK")
 
 
+RELEASE_TAG_PATTERN = re.compile(
+    r"^v(?P<version>\\d+\\.\\d+\\.\\d+(?:-(?:dev|alpha|beta|rc)\\.\\d+)?)$"
+)
+
+
+def release_version_from_tag(
+    tag: str,
+    *,
+    tag_commit: str,
+    head_commit: str,
+    pipeline_version: str = "",
+) -> str:
+    """Return the release version only when the exact Git tag identifies HEAD."""
+    match = RELEASE_TAG_PATTERN.fullmatch(tag)
+    if match is None:
+        raise ValueError(f"unsupported release Git tag: {tag!r}")
+    if not head_commit or tag_commit != head_commit:
+        raise ValueError(
+            f"release tag {tag} resolves to {tag_commit or 'missing'}, "
+            f"but the build checkout is {head_commit or 'missing'}"
+        )
+    version = match.group("version")
+    if pipeline_version and pipeline_version.removeprefix("v") != version:
+        raise ValueError(
+            f"Pipeline release version {pipeline_version!r} does not match "
+            f"Git tag {tag!r}"
+        )
+    return version
+
+
+def git_output(*arguments: str) -> str:
+    result = subprocess.run(
+        ["git", *arguments],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ValueError(f"git {' '.join(arguments)} failed: {detail}")
+    return result.stdout.strip()
+
+
 def release_build() -> None:
     target_os = os.environ.get("PIPELINE_TARGET_OS") or subprocess.check_output(
         ["go", "env", "GOOS"], cwd=ROOT, text=True
@@ -497,12 +541,27 @@ def release_build() -> None:
     if target_arch not in arch_map:
         raise SystemExit(f"Unsupported release target architecture: {target_arch}")
     goos, goarch = os_map[target_os], arch_map[target_arch]
-    version = (os.environ.get("PIPELINE_RELEASE_TAG") or "0.1.0-dev").removeprefix("v")
-    commit = os.environ.get("PIPELINE_SHA")
-    if not commit:
-        commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-        ).strip()
+    release_tag = os.environ.get("PIPELINE_RELEASE_TAG", "").strip()
+    if not release_tag:
+        raise SystemExit("PIPELINE_RELEASE_TAG is required; release versions come from Git tags.")
+
+    try:
+        head_commit = git_output("rev-parse", "HEAD")
+        tag_commit = git_output("rev-parse", f"refs/tags/{release_tag}^{{commit}}")
+        version = release_version_from_tag(
+            release_tag,
+            tag_commit=tag_commit,
+            head_commit=head_commit,
+            pipeline_version=os.environ.get("PIPELINE_RELEASE_VERSION", "").strip(),
+        )
+    except ValueError as error:
+        raise SystemExit(f"Registry release version verification failed: {error}") from error
+
+    commit = os.environ.get("PIPELINE_SHA", "").strip() or head_commit
+    if commit != head_commit:
+        raise SystemExit(
+            f"Pipeline source SHA {commit} does not match tagged build commit {head_commit}"
+        )
     output_dir = ROOT / "dist"
     output_dir.mkdir(exist_ok=True)
     binary_name = f"registry-{goos}-{goarch}" + (".exe" if goos == "windows" else "")
