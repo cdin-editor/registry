@@ -48,6 +48,44 @@ func TestApplyDeliveryPolicyExactTargetWinsUniversal(t *testing.T) {
 	}
 }
 
+func TestApplyDeliveryPolicyPreservesReleaseProvenanceManifestSchema(t *testing.T) {
+	graph := &Graph{
+		SchemaVersion: "1.2.0",
+		Components: []ResolvedComponent{
+			{
+				ComponentID: "backend",
+				Variant:     "default",
+				ReleaseDiscovery: &catalog.ReleaseDiscoveryProvenance{
+					SourceID:          "backend-default",
+					Provider:          "github-releases-v1",
+					RepositoryURI:     "https://github.com/example/backend",
+					ReleaseID:         42,
+					ReleaseAPIURI:     "https://api.github.com/repos/example/backend/releases/42",
+					Tag:               "v1.2.2",
+					TagCommit:         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					MetadataAssetName: "backend-1.2.2.json",
+					MetadataAssetSize: 1234,
+				},
+				Artifacts: []catalog.Artifact{
+					testArtifact("backend-linux", *nativeTarget()),
+				},
+			},
+		},
+	}
+	if conflict := applyDeliveryPolicy(graph, ResolutionPolicy{
+		DeliveryMode: "artifact",
+		Target:       nativeTarget(),
+	}); conflict != nil {
+		t.Fatalf("unexpected conflict: %#v", conflict)
+	}
+	if graph.SchemaVersion != "1.2.0" {
+		t.Fatalf("artifact delivery downgraded provenance Manifest schema: got %q, want 1.2.0", graph.SchemaVersion)
+	}
+	if graph.Components[0].Delivery != "artifact" || graph.Components[0].SelectedArtifact == nil {
+		t.Fatalf("artifact selection was not applied: %#v", graph.Components[0])
+	}
+}
+
 func TestApplyDeliveryPolicyUniversalFallback(t *testing.T) {
 	graph := &Graph{
 		Components: []ResolvedComponent{
