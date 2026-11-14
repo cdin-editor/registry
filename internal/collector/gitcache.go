@@ -463,26 +463,29 @@ func (c *GitObjectCache) beginLease(ctx context.Context, keys []string) (func(),
 // lock file. In the latter case we only treat the error as contention after
 // Lstat proves that the path is an existing regular lock file; all other
 // permission failures and unsafe filesystem entries still fail closed.
-func gitObjectLockContention(path string, openErr error) (bool, error) {
+func gitObjectLockContention(path string, openErr error) (busy, retry bool, err error) {
 	if errors.Is(openErr, os.ErrExist) {
-		return true, nil
+		return true, false, nil
 	}
 	if !errors.Is(openErr, os.ErrPermission) {
-		return false, nil
+		return false, false, nil
 	}
-	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		// The owner may have released the lock between OpenFile and Lstat.
-		// Retry rather than reporting an unrelated permission error.
-		return false, nil
+	info, statErr := os.Lstat(path)
+	if errors.Is(statErr, os.ErrNotExist) {
+		// The owner released the lock between OpenFile and Lstat. Retry the
+		// exclusive create instead of returning the stale permission error.
+		return false, true, nil
 	}
-	if err != nil {
-		return false, fmt.Errorf("collector: inspect Git-object lock after permission collision: %w", err)
+	if statErr != nil {
+		return false, false, fmt.Errorf(
+			"collector: inspect Git-object lock after permission collision: %w",
+			statErr,
+		)
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return false, fmt.Errorf("collector: Git-object lock path is not a regular file")
+		return false, false, fmt.Errorf("collector: Git-object lock path is not a regular file")
 	}
-	return true, nil
+	return true, false, nil
 }
 
 func (c *GitObjectCache) acquireObjectLock(ctx context.Context, oid string) (func(), error) {
@@ -504,9 +507,15 @@ func (c *GitObjectCache) acquireObjectLock(ctx context.Context, oid string) (fun
 			}
 			return func() { _ = os.Remove(path) }, nil
 		}
-		busy, contentionErr := gitObjectLockContention(path, err)
+		busy, retry, contentionErr := gitObjectLockContention(path, err)
 		if contentionErr != nil {
 			return nil, contentionErr
+		}
+		if retry {
+			if err := waitGitCacheMaintenance(ctx); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		if !busy {
 			return nil, fmt.Errorf("collector: acquire Git-object lock: %w", err)
@@ -518,27 +527,33 @@ func (c *GitObjectCache) acquireObjectLock(ctx context.Context, oid string) (fun
 }
 
 func (c *GitObjectCache) acquireMaintenanceLock() (func(), error) {
-	file, err := os.OpenFile(c.gcLock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		busy, contentionErr := gitObjectLockContention(c.gcLock, err)
-		if contentionErr != nil {
-			return nil, contentionErr
+	for {
+		file, err := os.OpenFile(c.gcLock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			busy, retry, contentionErr := gitObjectLockContention(c.gcLock, err)
+			if contentionErr != nil {
+				return nil, contentionErr
+			}
+			if retry {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			if busy {
+				return nil, ErrGitObjectCacheBusy
+			}
+			return nil, fmt.Errorf("collector: acquire Git-object cache maintenance lock: %w", err)
 		}
-		if busy {
-			return nil, ErrGitObjectCacheBusy
+		if err := file.Sync(); err != nil {
+			_ = file.Close()
+			_ = os.Remove(c.gcLock)
+			return nil, fmt.Errorf("collector: sync Git-object cache maintenance lock: %w", err)
 		}
-		return nil, fmt.Errorf("collector: acquire Git-object cache maintenance lock: %w", err)
+		if err := file.Close(); err != nil {
+			_ = os.Remove(c.gcLock)
+			return nil, fmt.Errorf("collector: close Git-object cache maintenance lock: %w", err)
+		}
+		return func() { _ = os.Remove(c.gcLock) }, nil
 	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		_ = os.Remove(c.gcLock)
-		return nil, fmt.Errorf("collector: sync Git-object cache maintenance lock: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(c.gcLock)
-		return nil, fmt.Errorf("collector: close Git-object cache maintenance lock: %w", err)
-	}
-	return func() { _ = os.Remove(c.gcLock) }, nil
 }
 
 func (c *GitObjectCache) maintenanceLockPresent() (bool, error) {
