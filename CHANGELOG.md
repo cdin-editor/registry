@@ -3,37 +3,33 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.0] - Draft (not released)
+## [1.0.0] - Unreleased
 
-> This is the proposed stable release entry. It is not a published release.
-> Finalize the date and contents only after the acceptance gates in
-> [Registry 1.0.0 release readiness](docs/release-readiness-1.0.0.md) pass.
+> Planned stable release. The immutable `v1.0.0` tag and GitHub Release
+> have **not** been published; see
+> [release readiness](docs/release-readiness-1.0.0.md).
 
-### Planned release scope
+### Added
 
-- Stable CLI/package compatibility surface for Product Definitions, Catalog Indexes,
-  Component Release Metadata, deterministic resolution, Workspace preparation,
-  Manifest verification, exact replay and update discovery.
-- Five native Registry executables for Linux x86_64/ARM64, macOS x86_64/ARM64
-  and Windows x86_64 UCRT64.
-- Same-tag Catalog Index and release descriptor, with exact source commit,
-  executable target identities, SHA-256 digests and byte sizes.
-- Reproducible, artifact-first clean-consumer verification without cloning
-  Registry source or installing the Go toolchain.
+- Add a release-readiness checklist for the stable 1.0.0 CLI/package release,
+  covering the public CLI and data-contract compatibility surface,
+  reproducibility, Workspace/cache safety, the five-target release bundle,
+  clean-consumer verification and documented limitations.
 
-### Release status
+### Changed
 
-- Not released. Do not use this section as evidence that `v1.0.0` is available.
-- Stable publication remains blocked on the checklist and downstream consumer
-  evidence linked above.
+- Align CI, documentation and contributor guidance with the exact immutable Pipeline revision used by the repository's release workflow.
+- Repair contributor-guide links to retired architecture, status and tooling pages.
 
-## [Unreleased]
+### Fixed
 
-### Documentation
-
-- Add a release-readiness checklist for Registry 1.0.0 covering the public CLI/data-contract surface, reproducibility, five-target release bundle, clean-consumer verification and explicitly documented limitations.
-- Correct the current development version and align Pipeline references across contributor, development and getting-started documentation.
-- Repair contributor-guide links to retired architecture/status pages and add an idempotent release-publication preflight.
+- Make release publication idempotent: skip an already complete immutable
+  Release and fail closed with the missing asset inventory when an existing
+  Release is incomplete.
+- Distinguish Windows Git-object lock contention from transient lock
+  disappearance; retry the latter during both object-lock and maintenance-lock
+  acquisition while preserving fail-closed handling for unsafe paths and
+  unrelated permission errors.
 
 ## [0.2.0-dev.3] - 2026-11-13
 
