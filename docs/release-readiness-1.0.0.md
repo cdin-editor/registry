@@ -22,6 +22,7 @@ A Registry 1.0.0 tag must not be interpreted as Spec 1.0.0, Catalog 1.0.0, or a 
 - [ ] The final public command list, flags, input formats, exit behavior and machine-readable output are reviewed and documented as the 1.x compatibility surface.
 - [ ] All six public document types validate against the exact embedded schemas pinned to the Spec commit/tree/blob IDs in `SOURCE.toml`.
 - [ ] Static Catalog 1.0.x and dynamic Catalog 1.1.x+ are both covered by valid and invalid fixtures.
+- [ ] The production CDIN Catalog uses one GitHub Release source per component/variant; each candidate version is derived from its repository tag and the tag-resolved commit is verified against canonical ADR-0028 Release Metadata. Historical releases without that metadata asset are skipped; malformed or mismatched metadata fails closed.
 - [ ] Mixed `entries` + `release_sources`, duplicate identities, invalid provider/source definitions, malformed metadata and ambiguous candidates fail closed.
 - [ ] SemVer selection, dependency/contract resolution, deterministic ordering, conflict reporting and update discovery have executable regression coverage.
 - [ ] Existing source-delivery Product Definitions remain backward-compatible when the optional artifact-delivery policy is absent.
