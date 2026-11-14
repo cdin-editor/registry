@@ -224,6 +224,17 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		})
 }
 
+// githubAPITokenFromEnvironment reads the optional GitHub API credential
+// supplied by CI or an interactive caller. HTTPFetcher applies it only to
+// api.github.com release-discovery requests, never to metadata or asset hosts.
+func githubAPITokenFromEnvironment() string {
+	token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("GH_TOKEN"))
+	}
+	return token
+}
+
 // catalogFetcherFactory is injected at the CLI composition boundary so local
 // fixture catalogs can exercise the same validation → load → resolve path
 // without network access. Production always supplies NewHTTPFetcher.
@@ -266,6 +277,7 @@ func runExecutionWithFetcherFactory(ctx context.Context, args []string, preparin
 		AllowedHosts: options.allowedHosts,
 		CacheDir:     options.cacheDir,
 		Offline:      options.offline,
+		GitHubToken:  githubAPITokenFromEnvironment(),
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "registry: configure Catalog transport: %v\n", err)
