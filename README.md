@@ -21,9 +21,9 @@ Version-controlled Catalog Index snapshots may be stored under:
 
 `catalogs/<catalog-id>/catalog-index.json`
 
-For example, this repository carries the `cdin-components` Catalog at `catalogs/cdin-components/catalog-index.json`. It is data consumed by the generic Registry engine, not a CDIN-specific code path. A consumer can pin a Registry commit and pass the Catalog path from that exact checkout to the CLI. That makes both the engine and the catalog snapshot reproducible without copying repository URLs or release metadata references into the consumer's Composition Root.
+For example, this repository carries the `cdin-components` Catalog at `catalogs/cdin-components/catalog-index.json`. It is data consumed by the generic Registry engine, not a CDIN-specific code path. A consumer can pin a Registry commit and pass the Catalog path from that exact checkout to the CLI. That makes the engine and the Catalog source definitions reproducible together.
 
-The Catalog Index contains only component identity, variant, package version, immutable Release Metadata URI, and metadata digest. Source repository URIs and full Git commit IDs remain in component-owned Release Metadata.
+Catalog Index 1.0.x supports a static `entries` list of immutable version/metadata-URI/digest records. Catalog Index 1.1.x+ supports dynamic `release_sources`: each source maps one component/variant to its GitHub repository and tag prefix. Registry derives the candidate version from each GitHub Release tag, resolves that tag to its exact commit, and verifies the canonical Release Metadata asset, digest, publication identity, and source revision before exposing the candidate. The `cdin-components` Catalog uses dynamic sources for Backend, Kernel, Runtime, and Frontend Core, TUI, and GUI-SDL; component versions are not duplicated as manually maintained numbers in the Catalog.
 
 ## Typical workflow
 
