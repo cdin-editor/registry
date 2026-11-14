@@ -3,6 +3,12 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] - 2026-11-14
+
+### Fixed
+
+- Derive the Resolved Manifest schema version from the features actually serialized. Mixed artifact delivery and ADR-0028 release-discovery provenance now produce a Manifest schema version accepted by the embedded Spec schema, even when an intermediate Resolver graph carries an older compatible schema version.
+
 ## [1.0.0] - 2026-11-14
 
 ### Added

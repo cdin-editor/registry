@@ -870,12 +870,40 @@ func TestREG024CanonicalRejectsCyclicValues(t *testing.T) {
 	}
 }
 
+func TestResolutionPolicyRaisesManifestSchemaToArtifactContract(t *testing.T) {
+	graph, sources := resolvedFixture()
+	graph.Resolution.DeliveryMode = "source"
+
+	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if document.SchemaVersion != artifactSchemaVersion {
+		t.Fatalf("Manifest schema version = %q, want %q when a delivery policy is serialized",
+			document.SchemaVersion, artifactSchemaVersion)
+	}
+	encoded, err := MarshalCanonical(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator, err := validation.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(validation.ResolvedManifest, encoded, "registry-manifest.json"); err != nil {
+		t.Fatalf("delivery-policy Manifest does not satisfy embedded Spec schema: %v\n%s", err, encoded)
+	}
+	if err := Verify(encoded, Digest(encoded), validator); err != nil {
+		t.Fatalf("delivery-policy Manifest failed semantic verification: %v", err)
+	}
+}
+
 func TestADR0028ManifestRecordsAndValidatesExactGitHubReleaseIdentity(t *testing.T) {
 	graph, sources := resolvedFixture()
 	const repositoryURI = "https://github.com/example/engine"
 	const tag = "v1.0.0"
 	const metadataURI = "https://github.com/example/engine/releases/download/v1.0.0/engine-1.0.0.json"
-	graph.SchemaVersion = "1.2.0"
+	graph.SchemaVersion = "1.1.0"
 	graph.Resolution.DeliveryMode = "source"
 	graph.Components[0].ReleaseMetadataURI = metadataURI
 	graph.Components[0].ReleaseDiscovery = &catalogModel.ReleaseDiscoveryProvenance{
@@ -893,6 +921,10 @@ func TestADR0028ManifestRecordsAndValidatesExactGitHubReleaseIdentity(t *testing
 	document, err := Build(graph, sources, "1.2.3")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if document.SchemaVersion != releaseDiscoverySchemaVersion {
+		t.Fatalf("Manifest schema version = %q, want %q when Release Discovery provenance is serialized",
+			document.SchemaVersion, releaseDiscoverySchemaVersion)
 	}
 	encoded, err := MarshalCanonical(document)
 	if err != nil {

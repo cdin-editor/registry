@@ -1,6 +1,6 @@
 # Registry 1.0.0 release readiness
 
-**Status: NOT READY — no stable `v1.0.0` release has been published.**
+**Status: RELEASE PUBLISHED — CLEAN-CONSUMER ACCEPTANCE INCOMPLETE.** The immutable `v1.0.0` GitHub Release was published on 2026-11-14 from tag commit `c5b6900319cebe22f2d035a6c3b23a32f06a48b5` (GitHub Release ID `445222506`). Its inventory contains five target executables, the same-tag dynamic Catalog, `registry-release-1.0.0.json` and `SHA256SUMS`. Release build/test, assembly/checksum verification and publication jobs succeeded. The published binary/Catalog have not yet passed the clean-consumer, offline-cache, Manifest verification and exact replay gates in section 4. Keep Registry #71 OPEN until those are verified; publication alone is not the entire acceptance.
 
 This checklist defines the acceptance boundary for the Registry CLI/package release. It does not claim that CDIN itself is product-ready. Registry is a generic build-time delivery engine; a downstream product remains responsible for its own integration, build, tests, installers and launch.
 
@@ -38,13 +38,13 @@ A Registry 1.0.0 tag must not be interpreted as Spec 1.0.0, Catalog 1.0.0, or a 
 
 ### 3. Release bundle and publisher
 
-- [ ] The release is built from the exact immutable `v1.0.0` tag commit. The tag must never be moved to a later main commit.
-- [ ] Five native executable targets are built and inspected: Linux x86_64/ARM64, macOS x86_64/ARM64 and Windows x86_64 UCRT64.
-- [ ] Each executable's embedded Go build information and actual ELF/Mach-O/PE header match its declared target.
-- [ ] The same tag commit produces `catalog-index.json` and `registry-release-1.0.0.json`; the descriptor records the full source commit, Catalog identity, exact Catalog SHA-256/size and all five executable identities/digests/sizes.
-- [ ] The final `SHA256SUMS` covers all five executables, the Catalog and the release descriptor. Any additional signatures/attestations are supplementary and must not replace digest verification.
-- [ ] Publisher preflight rejects a tag/source mismatch, malformed or mixed Catalog models, duplicate release-source identities, missing targets and incomplete artifact inventories.
-- [ ] Pipeline and helper workflow references are full immutable commit SHAs. Release publication uses authenticated, least-privilege GitHub API access.
+- [x] The release is built from the exact immutable `v1.0.0` tag commit `c5b6900319cebe22f2d035a6c3b23a32f06a48b5`. The tag resolves to that same commit and remains immutable.
+- [x] Five native executable targets were built and inspected: Linux x86_64/ARM64, macOS x86_64/ARM64 and Windows x86_64 UCRT64. Release run [43586740253](https://github.com/cdin-editor/registry/actions/runs/43586740253) verified each binary's actual OS/architecture before upload.
+- [x] Each executable's embedded build target and actual ELF/Mach-O/PE target were checked by the release build validator; all five target jobs passed in run [43586740253](https://github.com/cdin-editor/registry/actions/runs/43586740253).
+- [x] The same tag commit produced `catalog-index.json` and `registry-release-1.0.0.json`. The Catalog is 1,538 bytes (SHA-256 `92d6d837d2dfa94c516036e406e2b7b12c3398a94acb8bfc4d26726bc47f60e0`); the descriptor is 1,633 bytes (SHA-256 `b47030a2f6ebba6a3ccfe88ca28437111f1e71b0c0ae5e8fbcb6a6eeaf78e495`) and records the tag/source identity and all five executable targets.
+- [x] The final `SHA256SUMS` covers all five executables, the Catalog and the release descriptor. The Pipeline assemble and independent checksum-verification stages passed in run [43586740253](https://github.com/cdin-editor/registry/actions/runs/43586740253).
+- [x] Publisher preflight validates the exact tag/source match, static/dynamic Catalog shape, duplicate release-source identities, required target inventory and descriptor identities before the Release is assembled.
+- [x] The release workflow pins Pipeline to immutable commit `1682c520bb5be073eeaa07db03a254fb2e247545`; publication uses the workflow's scoped GitHub token and the `contents: write` permission required for the Release.
 - [ ] Main-CI automation is idempotent: an already complete immutable prerelease is skipped; an existing but incomplete Release fails with an actionable error rather than being silently treated as complete.
 
 ### 4. Clean-consumer acceptance
@@ -53,7 +53,7 @@ A Registry 1.0.0 tag must not be interpreted as Spec 1.0.0, Catalog 1.0.0, or a 
 - [ ] The consumer verifies descriptor identity, Catalog byte count/digest, executable target and `SHA256SUMS` before invoking Registry.
 - [ ] The published binary validates a Product Definition, resolves a fixture Catalog, prepares a Workspace, verifies the resulting Manifest and replays it to a second fresh output directory.
 - [ ] The test runs on all supported native targets or a documented split of native CI plus cross-platform artifact verification; no target may be inferred from the runner filename alone.
-- [ ] The published Release asset inventory and exact tag-resolved commit are recorded in the release evidence.
+- [x] The published Release asset inventory and tag-resolved commit are recorded in [GitHub Release `v1.0.0`](https://github.com/cdin-editor/registry/releases/tag/v1.0.0), release descriptor and tag commit.
 
 The current open downstream publication requirement is tracked in [Registry #58](https://github.com/cdin-editor/registry/issues/58). That issue closes only after the real immutable Release assets exist and a consumer verifies them; publisher code merging is not sufficient.
 
@@ -85,4 +85,4 @@ The following are not silently implied by a 1.0.0 release. Keep them visible in 
 5. Verify the published Release contains the exact five executables, Catalog, descriptor and final checksum manifest. Re-download and verify every asset from a clean consumer.
 6. Only then mark Registry 1.0.0 released and close the corresponding release-tracking requirements.
 
-Until these gates pass, describe Registry as a development prerelease and do not claim stable 1.0.0 availability.
+The GitHub Release is now published as stable `v1.0.0`; until the remaining clean-consumer, data-contract compatibility, offline/replay, documentation and quality gates pass, describe the release as **published but not fully accepted**. Do not equate the published tag with completion of Registry #71 or downstream CDIN #121/#122.

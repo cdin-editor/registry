@@ -64,7 +64,48 @@ func (e *VerificationError) Unwrap() error {
 	return e.cause
 }
 
-const schemaVersion = "1.0.0"
+const (
+	schemaVersion                 = "1.0.0"
+	artifactSchemaVersion         = "1.1.0"
+	releaseDiscoverySchemaVersion = "1.2.0"
+)
+
+// minimumManifestSchemaVersion derives the minimum public schema from the
+// features actually serialized in a Manifest. The Resolver normally selects
+// this version already, but the Manifest boundary must remain self-consistent
+// when callers construct or transform a Graph (for example, mixed artifact
+// delivery plus ADR-0028 release provenance).
+func minimumManifestSchemaVersion(graph *resolver.Graph) string {
+	version := graph.SchemaVersion
+	if version == "" {
+		version = schemaVersion
+	}
+	hasArtifactFeatures := graph.Resolution.DeliveryMode != ""
+	hasReleaseDiscovery := false
+	for _, component := range graph.Components {
+		if component.Delivery == "artifact" || component.SelectedArtifact != nil {
+			hasArtifactFeatures = true
+		}
+		if component.ReleaseDiscovery != nil {
+			hasReleaseDiscovery = true
+		}
+	}
+	raiseTo := func(minimum string) {
+		currentVersion, currentErr := semver.Parse(version)
+		minimumVersion, minimumErr := semver.Parse(minimum)
+		if currentErr == nil && minimumErr == nil &&
+			semver.ComparePrecedence(currentVersion, minimumVersion) < 0 {
+			version = minimum
+		}
+	}
+	if hasArtifactFeatures {
+		raiseTo(artifactSchemaVersion)
+	}
+	if hasReleaseDiscovery {
+		raiseTo(releaseDiscoverySchemaVersion)
+	}
+	return version
+}
 
 // Document is the public Resolved Manifest v1 data model. It is a
 // reproducibility record, not a mutable product configuration or lockfile.
@@ -202,10 +243,7 @@ func BuildWithArtifacts(graph *resolver.Graph, collected []collector.Source, pac
 			Version:    contract.Version,
 		})
 	}
-	documentSchema := graph.SchemaVersion
-	if documentSchema == "" {
-		documentSchema = schemaVersion
-	}
+	documentSchema := minimumManifestSchemaVersion(graph)
 	doc := Document{
 		SchemaVersion:        documentSchema,
 		RegistryVersion:      registryVersion,
