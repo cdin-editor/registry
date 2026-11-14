@@ -224,15 +224,22 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 		})
 }
 
-// githubAPITokenFromEnvironment reads the optional GitHub API credential
-// supplied by CI or an interactive caller. HTTPFetcher applies it only to
-// api.github.com release-discovery requests, never to metadata or asset hosts.
+// githubAPITokenFromEnvironment reads an optional credential for public
+// GitHub Release discovery. GitHub Actions' automatic GITHUB_TOKEN is scoped
+// to the repository running the workflow, while a Catalog can query several
+// independent repositories. Prefer an explicitly provisioned cross-repository
+// token; only use GITHUB_TOKEN as a local-shell fallback outside Actions.
+// HTTPFetcher sends the credential exclusively to api.github.com.
 func githubAPITokenFromEnvironment() string {
-	token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
-	if token == "" {
-		token = strings.TrimSpace(os.Getenv("GH_TOKEN"))
+	for _, name := range []string{"REGISTRY_GITHUB_API_TOKEN", "GH_TOKEN"} {
+		if token := strings.TrimSpace(os.Getenv(name)); token != "" {
+			return token
+		}
 	}
-	return token
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("GITHUB_ACTIONS")), "true") {
+		return ""
+	}
+	return strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 }
 
 // catalogFetcherFactory is injected at the CLI composition boundary so local
