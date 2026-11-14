@@ -223,6 +223,37 @@ func TestGitObjectCacheWaitsForObjectLockAndCleansCanceledLease(t *testing.T) {
 	}
 }
 
+func TestGitObjectLockContentionRecognizesWindowsAccessDenied(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ffffffffffffffffffffffffffffffffffffffff.lock")
+	if err := os.WriteFile(path, []byte("held"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	accessDenied := &os.PathError{Op: "open", Path: path, Err: os.ErrPermission}
+	busy, err := gitObjectLockContention(path, accessDenied)
+	if err != nil {
+		t.Fatalf("existing lock permission collision returned an error: %v", err)
+	}
+	if !busy {
+		t.Fatal("existing regular lock file was not recognized as contention")
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	busy, err = gitObjectLockContention(path, accessDenied)
+	if err != nil {
+		t.Fatalf("permission error without an existing lock returned an error: %v", err)
+	}
+	if busy {
+		t.Fatal("permission error without an existing lock was treated as contention")
+	}
+
+	busy, err = gitObjectLockContention(path, errors.New("unrelated open failure"))
+	if err != nil || busy {
+		t.Fatalf("unrelated error = busy %t, err %v; want no contention", busy, err)
+	}
+}
+
 func TestGitObjectCacheConcurrentAccessPopulatesOnce(t *testing.T) {
 	cache, err := NewGitObjectCache(t.TempDir())
 	if err != nil {

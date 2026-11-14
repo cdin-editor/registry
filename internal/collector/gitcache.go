@@ -458,6 +458,33 @@ func (c *GitObjectCache) beginLease(ctx context.Context, keys []string) (func(),
 	}
 }
 
+// gitObjectLockContention recognizes both the normal O_EXCL collision and
+// Windows' Access Denied response when another process has just created the
+// lock file. In the latter case we only treat the error as contention after
+// Lstat proves that the path is an existing regular lock file; all other
+// permission failures and unsafe filesystem entries still fail closed.
+func gitObjectLockContention(path string, openErr error) (bool, error) {
+	if errors.Is(openErr, os.ErrExist) {
+		return true, nil
+	}
+	if !errors.Is(openErr, os.ErrPermission) {
+		return false, nil
+	}
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// The owner may have released the lock between OpenFile and Lstat.
+		// Retry rather than reporting an unrelated permission error.
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("collector: inspect Git-object lock after permission collision: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("collector: Git-object lock path is not a regular file")
+	}
+	return true, nil
+}
+
 func (c *GitObjectCache) acquireObjectLock(ctx context.Context, oid string) (func(), error) {
 	path := filepath.Join(c.locks, oid+".lock")
 	for {
@@ -477,7 +504,11 @@ func (c *GitObjectCache) acquireObjectLock(ctx context.Context, oid string) (fun
 			}
 			return func() { _ = os.Remove(path) }, nil
 		}
-		if !errors.Is(err, os.ErrExist) {
+		busy, contentionErr := gitObjectLockContention(path, err)
+		if contentionErr != nil {
+			return nil, contentionErr
+		}
+		if !busy {
 			return nil, fmt.Errorf("collector: acquire Git-object lock: %w", err)
 		}
 		if err := waitGitCacheMaintenance(ctx); err != nil {
@@ -489,7 +520,11 @@ func (c *GitObjectCache) acquireObjectLock(ctx context.Context, oid string) (fun
 func (c *GitObjectCache) acquireMaintenanceLock() (func(), error) {
 	file, err := os.OpenFile(c.gcLock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		if errors.Is(err, os.ErrExist) {
+		busy, contentionErr := gitObjectLockContention(c.gcLock, err)
+		if contentionErr != nil {
+			return nil, contentionErr
+		}
+		if busy {
 			return nil, ErrGitObjectCacheBusy
 		}
 		return nil, fmt.Errorf("collector: acquire Git-object cache maintenance lock: %w", err)
