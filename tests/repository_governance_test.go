@@ -387,68 +387,67 @@ func TestRepositoryGovernancePSXRequiresProjectAndReviewFiles(t *testing.T) {
 }
 
 func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
-	type catalogEntry struct {
-		ComponentID    string `json:"component_id"`
-		Variant        string `json:"variant"`
-		Version        string `json:"version"`
-		MetadataURI    string `json:"metadata_uri"`
-		MetadataSHA256 string `json:"metadata_sha256"`
+	type releaseSource struct {
+		SourceID     string `json:"source_id"`
+		Provider     string `json:"provider"`
+		Repository   string `json:"repository_uri"`
+		ComponentID  string `json:"component_id"`
+		Variant      string `json:"variant"`
+		TagPrefix    string `json:"tag_prefix"`
 	}
 	var document struct {
-		SchemaVersion  string          `json:"schema_version"`
-		CatalogID      string          `json:"catalog_id"`
-		Entries        []catalogEntry  `json:"entries"`
-		ReleaseSources json.RawMessage `json:"release_sources"`
+		SchemaVersion string          `json:"schema_version"`
+		CatalogID     string          `json:"catalog_id"`
+		Entries       json.RawMessage `json:"entries"`
+		ReleaseSources []releaseSource `json:"release_sources"`
 	}
 	if err := json.Unmarshal(repositoryFile(t, "catalogs/cdin-components/catalog-index.json"), &document); err != nil {
 		t.Fatalf("decode CDIN Catalog: %v", err)
 	}
-	if document.SchemaVersion != "1.0.0" || document.CatalogID != "cdin-components" {
-		t.Fatalf("Catalog identity = %s/%s, want 1.0.0/cdin-components", document.SchemaVersion, document.CatalogID)
+	if document.SchemaVersion != "1.1.0" || document.CatalogID != "cdin-components" {
+		t.Fatalf("Catalog identity = %s/%s, want 1.1.0/cdin-components", document.SchemaVersion, document.CatalogID)
 	}
-	if len(document.ReleaseSources) != 0 {
-		t.Fatal("Catalog must retain the static entries model for this pinned product snapshot")
+	if len(document.Entries) != 0 {
+		t.Fatal("tag-driven Catalog must not duplicate manually versioned static entries")
+	}
+	if len(document.ReleaseSources) != 6 {
+		t.Fatalf("release source count = %d, want six component/variant sources", len(document.ReleaseSources))
 	}
 
 	want := map[string]string{
-		"backend|default|1.2.2":  "8348c5a1f89203aadff4e35ca3a0a017d343289bd0df2674a034d17aca2ad6f7",
-		"frontend|core|1.2.2":    "67a4496caded1b56f2796cbf5977c9b240e1d857645f330ceb33abaed70ade2a",
-		"frontend|gui-sdl|1.2.2": "90c1dc71785b04a8782155b1d1e5759d103995f7a71ebe44f4651e71554da221",
-		"frontend|tui|1.2.2":     "82b0405fbed96a0b0cd54c9ab320e03925841d0cb58cd27c5d43d7c550b809a0",
-		"kernel|default|1.2.3":   "0962aba47b614e412258dace8c93059b2ad11dfdad9a35babb03c3158b6e2a54",
-		"runtime|default|1.0.0":  "8b56a21ccf237b54380b106f95cfd29fa8428d50a7a9175c532a3e4eda1a5f0c",
+		"backend|default":    "https://github.com/cdin-editor/backend",
+		"kernel|default":     "https://github.com/cdin-editor/kernel",
+		"runtime|default":    "https://github.com/cdin-editor/runtime",
+		"frontend|core":      "https://github.com/cdin-editor/frontend",
+		"frontend|tui":       "https://github.com/cdin-editor/frontend",
+		"frontend|gui-sdl":   "https://github.com/cdin-editor/frontend",
 	}
 	found := make(map[string]bool, len(want))
-	for _, entry := range document.Entries {
-		key := entry.ComponentID + "|" + entry.Variant + "|" + entry.Version
-		expectedDigest, ok := want[key]
+	sourceIDs := make(map[string]bool, len(document.ReleaseSources))
+	for _, source := range document.ReleaseSources {
+		key := source.ComponentID + "|" + source.Variant
+		expectedRepository, ok := want[key]
 		if !ok {
-			continue
+			t.Errorf("unexpected release source identity %q", key)
+		}
+		if source.Repository != expectedRepository {
+			t.Errorf("%s repository = %q, want %q", key, source.Repository, expectedRepository)
+		}
+		if source.SourceID == "" || sourceIDs[source.SourceID] {
+			t.Errorf("release source ID %q is empty or duplicated", source.SourceID)
+		}
+		sourceIDs[source.SourceID] = true
+		if source.Provider != "github-releases-v1" || source.TagPrefix != "v" {
+			t.Errorf("%s provider/tag prefix = %q/%q, want github-releases-v1/v", key, source.Provider, source.TagPrefix)
 		}
 		if found[key] {
-			t.Errorf("duplicate Catalog metadata identity %q", key)
+			t.Errorf("duplicate release source identity %q", key)
 		}
 		found[key] = true
-
-		basename := entry.ComponentID
-		if entry.Variant != "default" {
-			basename += "-" + entry.Variant
-		}
-		basename += "-" + entry.Version + ".json"
-		expectedURI := strings.Join([]string{
-			"https://github.com", "cdin-editor", entry.ComponentID,
-			"releases", "download", "v" + entry.Version, basename,
-		}, "/")
-		if entry.MetadataURI != expectedURI {
-			t.Errorf("%s metadata URI = %q, want canonical Release URL %q", key, entry.MetadataURI, expectedURI)
-		}
-		if entry.MetadataSHA256 != expectedDigest {
-			t.Errorf("%s metadata SHA-256 = %q, want %q", key, entry.MetadataSHA256, expectedDigest)
-		}
 	}
 	for key := range want {
 		if !found[key] {
-			t.Errorf("missing Catalog metadata identity %q", key)
+			t.Errorf("missing tag-derived release source %q", key)
 		}
 	}
 }
