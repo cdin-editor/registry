@@ -23,12 +23,12 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
     def test_reusable_release_workflow_and_helper_input_use_the_same_full_sha(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         workflow = re.search(
-            r"^\\s*uses:\\s*m-mdy-m/pipeline/\\.github/workflows/release\\.yml@([0-9a-f]{40})\\s*$",
+            r"^\s*uses:\s*m-mdy-m/pipeline/\.github/workflows/release\.yml@([0-9a-f]{40})\s*$",
             content,
             re.MULTILINE,
         )
         helper = re.search(
-            r"^\\s*pipeline-ref:\\s*([0-9a-f]{40})\\s*$",
+            r"^\s*pipeline-ref:\s*([0-9a-f]{40})\s*$",
             content,
             re.MULTILINE,
         )
@@ -81,7 +81,7 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         self.assertNotIn("create-verified-development-tag", content)
         self.assertNotIn("TAG_NAME: v0.2.0-dev.3", content)
 
-        validation = content.split("  validate-release-tag:", 1)[1].split("\\n  release:", 1)[0]
+        validation = content.split("  validate-release-tag:", 1)[1].split("\n  release:", 1)[0]
         for required in (
             'GITHUB_REF_TYPE: ${{ github.ref_type }}',
             'if [[ "$GITHUB_REF_TYPE" != "tag" ]]',
@@ -111,7 +111,7 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
 
     def test_changelog_has_one_dated_section_for_the_release_tag(self) -> None:
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        matches = re.findall(r"^## \\[1\\.0\\.0\\] - 2026-11-14$", changelog, re.MULTILINE)
+        matches = re.findall(r"^## \[1\.0\.0\] - 2026-11-14$", changelog, re.MULTILINE)
         self.assertEqual(len(matches), 1)
         self.assertNotIn("## [1.0.0] - Unreleased", changelog)
 
@@ -122,7 +122,7 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         ):
             content = (ROOT / relative).read_text(encoding="utf-8")
             revisions = re.findall(
-                r"^\\s*uses:\\s*m-mdy-m/pipeline/\\.github/workflows/[^\\s]+@([0-9a-f]{40})\\s*$",
+                r"^\s*uses:\s*m-mdy-m/pipeline/\.github/workflows/[^\s]+@([0-9a-f]{40})\s*$",
                 content,
                 re.MULTILINE,
             )
