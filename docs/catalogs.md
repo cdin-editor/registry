@@ -87,7 +87,42 @@ A Catalog Index points to Release Metadata and records its integrity digest:
 
 The digest must be the lowercase SHA-256 digest of the exact metadata bytes. If a published metadata document changes by even one byte, publish a new immutable metadata identity and update the Catalog entry. Never silently retarget a published metadata URI while retaining its old digest.
 
-## 3. Version-controlled Catalog snapshots
+## 3. Tag-derived release sources
+
+Catalog Index 1.1.0 and later can declare `release_sources` instead of listing each version in `entries`. A source maps exactly one component/variant to its canonical GitHub repository and tag prefix:
+
+```json
+{
+  "schema_version": "1.1.0",
+  "catalog_id": "example-catalog",
+  "release_sources": [
+    {
+      "source_id": "backend-default",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/example/backend",
+      "component_id": "backend",
+      "variant": "default",
+      "tag_prefix": "v"
+    }
+  ]
+}
+```
+
+With the `v` prefix, GitHub tags such as `v1.2.3` or `v2.0.0-rc.1` supply the component version. Registry does not maintain a second, manually edited version list. For every published GitHub Release it:
+
+- parses the version from the exact release tag;
+- resolves lightweight or annotated tags to the full Git commit;
+- finds the canonical ADR-0028 metadata asset for the component/variant/version;
+- verifies the asset size and SHA-256 reported by the GitHub Release API;
+- verifies the metadata version, `publication.tag`, `publication.tag_commit`, and publisher source-unit revision against that same tag and commit.
+
+A mismatch, moved tag, ambiguous publication or missing metadata asset fails closed. The verified tag and commit are retained as discovery provenance in the resolved Manifest, so replay does not silently select a newer release.
+
+The `cdin-components` Catalog uses six independent release sources: Backend/default, Kernel/default, Runtime/default, and Frontend/core, Frontend/tui, and Frontend/gui-sdl. Thus each component variant takes its own version from its own repository's GitHub Release tags.
+
+Static Catalog 1.0.x `entries` remain supported for fixed snapshots and backward compatibility. A Catalog must use one model at a time; do not mix `entries` and `release_sources` in the same document.
+
+## 4. Version-controlled Catalog snapshots
 
 Catalog Indexes are data, separate from Registry engine code. A Catalog publisher may maintain version-controlled snapshots in this repository under:
 
@@ -105,7 +140,7 @@ That file is a generic Catalog input. It contains logical component identities, 
 
 This location is a repository distribution convention, not a special resolver rule. The CLI still accepts any local Catalog Index path or remote Catalog URI through the same `--catalog` option.
 
-## 4. Publish a release and update a Catalog
+## 5. Publish a release and update a Catalog
 
 A typical publication sequence is:
 
@@ -120,7 +155,7 @@ A typical publication sequence is:
 
 The component maintainer remains authoritative for source and Release Metadata. The Catalog publisher maintains the index that makes immutable releases discoverable. Registry's generic engine reads the index, verifies metadata, and performs resolution/collection; it does not infer repositories by scanning source hosts or hardcode component names.
 
-## 5. Validate and consume the documents
+## 6. Validate and consume the documents
 
 ```sh
 ./build/registry validate component-release ./release.json
