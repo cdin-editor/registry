@@ -11,7 +11,6 @@ Notable changes to CDIN Registry are recorded here. The format follows
 - Correct the current development version and align Pipeline references across contributor, development and getting-started documentation.
 - Repair contributor-guide links to retired architecture/status pages and add an idempotent release-publication preflight.
 
-
 ## [0.2.0-dev.3] - 2026-11-13
 
 ### Added
