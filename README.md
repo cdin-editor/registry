@@ -98,7 +98,7 @@ make build
 make check
 ```
 
-The executable is written to `build/registry`. The current source identifies itself as `0.2.0-dev.3`; this is a development prerelease, not a stable Registry 1.0.0 release. See [Registry 1.0.0 release readiness](docs/release-readiness-1.0.0.md) for the remaining acceptance gates.
+The executable is written to `build/registry`. Release builds take their version from the exact Git tag checked out for that build (for example, `v1.0.0` produces `1.0.0`). An untagged developer build reports `development`; the release workflow rejects a tag/commit mismatch.
 
 ## License
 
