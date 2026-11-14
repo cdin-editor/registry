@@ -116,7 +116,7 @@ With the `v` prefix, GitHub tags such as `v1.2.3` or `v2.0.0-rc.1` supply the co
 - verifies the asset size and SHA-256 reported by the GitHub Release API;
 - verifies the metadata version, `publication.tag`, `publication.tag_commit`, and publisher source-unit revision against that same tag and commit.
 
-A mismatch, moved tag, ambiguous publication or missing metadata asset fails closed. The verified tag and commit are retained as discovery provenance in the resolved Manifest, so replay does not silently select a newer release.
+A GitHub Release without the canonical Registry metadata asset is treated as a legacy/non-Registry release and skipped. Once the canonical asset is present, any malformed identity, duplicate asset, moved tag, digest/size mismatch or publication/source-commit mismatch fails closed. The verified tag and commit are retained as discovery provenance in the resolved Manifest, so replay does not silently select a newer release.
 
 The `cdin-components` Catalog uses six independent release sources: Backend/default, Kernel/default, Runtime/default, and Frontend/core, Frontend/tui, and Frontend/gui-sdl. Thus each component variant takes its own version from its own repository's GitHub Release tags.
 
