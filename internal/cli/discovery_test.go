@@ -153,6 +153,24 @@ func runDiscoveryFixture(t *testing.T, fixture discoveryFixture, constraint stri
 	return code, report, stdout, stderr
 }
 
+func TestGitHubAPITokenFromEnvironment(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
+	if got := githubAPITokenFromEnvironment(); got != "" {
+		t.Fatalf("empty environment token = %q, want empty", got)
+	}
+
+	t.Setenv("GH_TOKEN", "  gh-token  ")
+	if got := githubAPITokenFromEnvironment(); got != "gh-token" {
+		t.Fatalf("GH_TOKEN fallback = %q, want trimmed token", got)
+	}
+
+	t.Setenv("GITHUB_TOKEN", "primary-token")
+	if got := githubAPITokenFromEnvironment(); got != "primary-token" {
+		t.Fatalf("GITHUB_TOKEN precedence = %q, want primary token", got)
+	}
+}
+
 func TestManifestDiscoverReportsUnchangedAndWritesImmutableAuditFile(t *testing.T) {
 	revision := strings.Repeat("a", 40)
 	historical, _, metadata := buildCLIReplayManifest(t, revision, true)
