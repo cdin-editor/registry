@@ -50,12 +50,20 @@ jobs:
             "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$TAG_NAME")"
           case "$status" in
             200)
-              echo "Tag $TAG_NAME already exists; verifying its immutable target."
+              echo "Tag $TAG_NAME already exists; resolving its immutable source commit."
+              git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
+              release_sha="$(git rev-parse --verify "$TAG_NAME^{commit}")"
+              if ! git merge-base --is-ancestor "$release_sha" "$SOURCE_SHA"; then
+                echo "Existing immutable $TAG_NAME target $release_sha is not an ancestor of trusted CI commit $SOURCE_SHA." >&2
+                exit 1
+              fi
+              echo "Using the existing immutable tag target $release_sha; the tag will not be moved."
               ;;
             404)
               gh api --method POST "repos/$REPOSITORY/git/refs" \
                 -f "ref=refs/tags/$TAG_NAME" -f "sha=$SOURCE_SHA" >/dev/null
-              echo "Created $TAG_NAME."
+              release_sha="$SOURCE_SHA"
+              echo "Created $TAG_NAME at trusted main commit $release_sha."
               ;;
             *)
               cat "$tag_ref_json" >&2
@@ -65,8 +73,8 @@ jobs:
           esac
           git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
           tag_commit="$(git rev-parse --verify "$TAG_NAME^{commit}")"
-          if [[ "$tag_commit" != "$SOURCE_SHA" ]]; then
-            echo "Immutable $TAG_NAME resolves to $tag_commit, expected $SOURCE_SHA." >&2
+          if [[ "$tag_commit" != "$release_sha" ]]; then
+            echo "Immutable $TAG_NAME resolves to $tag_commit, expected $release_sha." >&2
             exit 1
           fi
           printf 'source_ref=refs/tags/%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
@@ -83,9 +91,9 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: m-mdy-m/pipeline/.github/workflows/release.yml@0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
+    uses: m-mdy-m/pipeline/.github/workflows/release.yml@1682c520bb5be073eeaa07db03a254fb2e247545
     with:
-      pipeline-ref: 0c2c89c7c64575c6b0f66c78925bdf5638abc5e9
+      pipeline-ref: 1682c520bb5be073eeaa07db03a254fb2e247545
       source-ref: ${{ needs.create-verified-development-tag.outputs.source_ref || github.ref }}
       go-version: "1.27.3"
       test-command: "python scripts/prepare-release-catalog.py --self-test && PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
