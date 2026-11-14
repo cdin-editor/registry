@@ -83,7 +83,7 @@ func minimumManifestSchemaVersion(graph *resolver.Graph) string {
 	hasArtifactFeatures := graph.Resolution.DeliveryMode != ""
 	hasReleaseDiscovery := false
 	for _, component := range graph.Components {
-		if component.Delivery != "" || component.SelectedArtifact != nil {
+		if component.Delivery == "artifact" || component.SelectedArtifact != nil {
 			hasArtifactFeatures = true
 		}
 		if component.ReleaseDiscovery != nil {
