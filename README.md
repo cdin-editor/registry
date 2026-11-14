@@ -27,10 +27,10 @@ Catalog Index 1.0.x supports a static `entries` list of immutable version/metada
 
 ## Typical workflow
 
-1. A component maintainer publishes an immutable Release Metadata document for a release.
-2. The Catalog publisher adds a Catalog Index entry containing that metadata URI and its SHA-256 digest.
+1. A component maintainer creates a versioned Git tag and publishes a GitHub Release containing canonical Component Release Metadata assets.
+2. The Catalog publisher maps each component/variant to its repository and tag prefix; it does not copy package version numbers into a second list.
 3. A consumer supplies a Product Definition describing its root components and version constraints.
-4. Registry reads the Catalog Index, fetches and verifies Release Metadata, then resolves dependencies and contracts.
+4. Registry derives versions from GitHub Release tags, resolves each tag to its exact commit, verifies the matching metadata asset and publication identity, then resolves dependencies and contracts.
 5. Registry collects exact Git revisions and publishes a Workspace, Resolved Manifest, and Resolution Report.
 6. The consumer builds and tests the prepared Workspace.
 
