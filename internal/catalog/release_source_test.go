@@ -170,7 +170,7 @@ func TestLoadFromGitHubReleaseSourcesSkipsLegacyReleaseWithoutRegistryMetadata(t
 		HTMLURL:     "https://github.com/acme/editor/releases/tag/v1.1.0",
 		Assets: []GitHubReleaseAsset{{
 			ID: 1019, Name: "editor-1.1.0-source.tar.gz", Size: 100,
-			Digest: "sha256:" + strings.Repeat("a", 64),
+			Digest:             "sha256:" + strings.Repeat("a", 64),
 			URL:                "https://api.github.com/repos/acme/editor/releases/assets/1019",
 			BrowserDownloadURL: "https://github.com/acme/editor/releases/download/v1.1.0/editor-1.1.0-source.tar.gz",
 		}},
