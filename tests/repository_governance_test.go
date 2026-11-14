@@ -396,9 +396,9 @@ func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
 		TagPrefix    string `json:"tag_prefix"`
 	}
 	var document struct {
-		SchemaVersion string          `json:"schema_version"`
-		CatalogID     string          `json:"catalog_id"`
-		Entries       json.RawMessage `json:"entries"`
+		SchemaVersion  string          `json:"schema_version"`
+		CatalogID      string          `json:"catalog_id"`
+		Entries        json.RawMessage `json:"entries"`
 		ReleaseSources []releaseSource `json:"release_sources"`
 	}
 	if err := json.Unmarshal(repositoryFile(t, "catalogs/cdin-components/catalog-index.json"), &document); err != nil {
