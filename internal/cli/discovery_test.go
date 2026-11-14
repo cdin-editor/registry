@@ -168,9 +168,9 @@ func TestGitHubAPITokenFromEnvironment(t *testing.T) {
 		t.Fatalf("GH_TOKEN fallback = %q, want trimmed token", got)
 	}
 
-	t.Setenv("GITHUB_TOKEN", "primary-token")
-	if got := githubAPITokenFromEnvironment(); got != "primary-token" {
-		t.Fatalf("GITHUB_TOKEN precedence = %q, want primary token", got)
+	t.Setenv("GITHUB_TOKEN", "fallback-token")
+	if got := githubAPITokenFromEnvironment(); got != "gh-token" {
+		t.Fatalf("GH_TOKEN local precedence = %q, want gh-token", got)
 	}
 }
 
