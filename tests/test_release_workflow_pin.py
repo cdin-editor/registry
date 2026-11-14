@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import json
 import re
 import unittest
 
@@ -131,6 +132,36 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         for relative in ("README.md", "CONTRIBUTING.md", "docs/getting-started.md", "docs/development.md"):
             content = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn(f"pipeline.git@{PIPELINE_REVISION}", content, relative)
+
+    def test_cdin_catalog_uses_tag_derived_release_sources_not_fixed_versions(self) -> None:
+        catalog = json.loads(
+            (ROOT / "catalogs" / "cdin-components" / "catalog-index.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(catalog["schema_version"], "1.1.0")
+        self.assertEqual(catalog["catalog_id"], "cdin-components")
+        self.assertNotIn("entries", catalog)
+        sources = catalog["release_sources"]
+        self.assertEqual(len(sources), 6)
+        actual = {
+            (item["component_id"], item["variant"], item["repository_uri"])
+            for item in sources
+        }
+        expected = {
+            ("backend", "default", "https://github.com/cdin-editor/backend"),
+            ("kernel", "default", "https://github.com/cdin-editor/kernel"),
+            ("runtime", "default", "https://github.com/cdin-editor/runtime"),
+            ("frontend", "core", "https://github.com/cdin-editor/frontend"),
+            ("frontend", "tui", "https://github.com/cdin-editor/frontend"),
+            ("frontend", "gui-sdl", "https://github.com/cdin-editor/frontend"),
+        }
+        self.assertEqual(actual, expected)
+        for source in sources:
+            with self.subTest(source=source["source_id"]):
+                self.assertEqual(source["provider"], "github-releases-v1")
+                self.assertEqual(source["tag_prefix"], "v")
+                self.assertNotIn("version", source)
+                self.assertNotIn("metadata_uri", source)
+                self.assertNotIn("metadata_sha256", source)
 
     def test_release_readiness_checklist_is_linked_from_the_public_docs(self) -> None:
         self.assertTrue((ROOT / "docs" / "release-readiness-1.0.0.md").is_file())
