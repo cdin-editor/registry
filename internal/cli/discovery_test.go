@@ -154,23 +154,45 @@ func runDiscoveryFixture(t *testing.T, fixture discoveryFixture, constraint stri
 }
 
 func TestGitHubAPITokenFromEnvironment(t *testing.T) {
-	// Exercise a local CLI environment, not the Actions runner's automatic token.
-	t.Setenv("GITHUB_ACTIONS", "")
-	t.Setenv("REGISTRY_GITHUB_API_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "")
-	t.Setenv("GH_TOKEN", "")
+	set := func(name, value string) {
+		t.Helper()
+		t.Setenv(name, value)
+	}
+	set("GITHUB_ACTIONS", "")
+	set("REGISTRY_GITHUB_API_TOKEN", "")
+	set("GITHUB_TOKEN", "")
+	set("GH_TOKEN", "")
 	if got := githubAPITokenFromEnvironment(); got != "" {
 		t.Fatalf("empty environment token = %q, want empty", got)
 	}
 
-	t.Setenv("GH_TOKEN", "  gh-token  ")
+	set("GH_TOKEN", "  gh-token  ")
+	set("GITHUB_TOKEN", "local-github-token")
 	if got := githubAPITokenFromEnvironment(); got != "gh-token" {
-		t.Fatalf("GH_TOKEN fallback = %q, want trimmed token", got)
+		t.Fatalf("GH_TOKEN precedence = %q, want trimmed gh-token", got)
 	}
 
-	t.Setenv("GITHUB_TOKEN", "fallback-token")
-	if got := githubAPITokenFromEnvironment(); got != "gh-token" {
-		t.Fatalf("GH_TOKEN local precedence = %q, want gh-token", got)
+	set("REGISTRY_GITHUB_API_TOKEN", " registry-read-token ")
+	if got := githubAPITokenFromEnvironment(); got != "registry-read-token" {
+		t.Fatalf("Registry-specific token precedence = %q, want trimmed token", got)
+	}
+
+	set("GITHUB_ACTIONS", "true")
+	set("REGISTRY_GITHUB_API_TOKEN", "")
+	set("GH_TOKEN", "")
+	set("GITHUB_TOKEN", "repo-scoped-token")
+	if got := githubAPITokenFromEnvironment(); got != "" {
+		t.Fatalf("Actions GITHUB_TOKEN fallback = %q, want empty", got)
+	}
+
+	set("GH_TOKEN", "cross-repository-read-token")
+	if got := githubAPITokenFromEnvironment(); got != "cross-repository-read-token" {
+		t.Fatalf("Actions GH_TOKEN = %q, want explicit read token", got)
+	}
+
+	set("REGISTRY_GITHUB_API_TOKEN", "registry-specific-token")
+	if got := githubAPITokenFromEnvironment(); got != "registry-specific-token" {
+		t.Fatalf("Actions Registry token = %q, want Registry-specific token", got)
 	}
 }
 
