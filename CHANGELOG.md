@@ -5,7 +5,6 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [1.0.0] - 2026-11-14
 
-
 ### Added
 
 - Add a release-readiness checklist for the stable 1.0.0 CLI/package release,
