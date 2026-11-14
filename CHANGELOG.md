@@ -17,6 +17,7 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 - Derive the CLI version, release descriptor, and release asset metadata from the exact immutable Git tag; untagged developer builds identify as `development`.
 - Publish only from a validated `vMAJOR.MINOR.PATCH` Git tag whose target equals the checked-out source commit; verify that the changelog contains the matching version section.
+- Replace the fixed CDIN component version list with six GitHub Release sources; Backend, Kernel, Runtime, and Frontend Core/TUI/GUI-SDL versions are discovered from their own immutable Git tags and verified against the matching release metadata asset and tag commit.
 - Align CI, documentation and contributor guidance with the exact immutable Pipeline revision used by the repository's release workflow.
 - Repair contributor-guide links to retired architecture, status and tooling pages.
 
