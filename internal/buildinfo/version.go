@@ -1,8 +1,9 @@
 package buildinfo
 
-// These variables are set by the release build through -ldflags.
+// Version is set by release builds from the exact Git tag through -ldflags.
+// Untagged development builds intentionally do not claim a release version.
 var (
-	Version   = "0.2.0-dev.3"
+	Version   = "development"
 	Commit    = "unknown"
 	BuildDate = "unknown"
 )

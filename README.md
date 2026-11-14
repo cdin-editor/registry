@@ -21,16 +21,16 @@ Version-controlled Catalog Index snapshots may be stored under:
 
 `catalogs/<catalog-id>/catalog-index.json`
 
-For example, this repository carries the `cdin-components` Catalog at `catalogs/cdin-components/catalog-index.json`. It is data consumed by the generic Registry engine, not a CDIN-specific code path. A consumer can pin a Registry commit and pass the Catalog path from that exact checkout to the CLI. That makes both the engine and the catalog snapshot reproducible without copying repository URLs or release metadata references into the consumer's Composition Root.
+For example, this repository carries the `cdin-components` Catalog at `catalogs/cdin-components/catalog-index.json`. It is data consumed by the generic Registry engine, not a CDIN-specific code path. A consumer can pin a Registry commit and pass the Catalog path from that exact checkout to the CLI. That makes the engine and the Catalog source definitions reproducible together.
 
-The Catalog Index contains only component identity, variant, package version, immutable Release Metadata URI, and metadata digest. Source repository URIs and full Git commit IDs remain in component-owned Release Metadata.
+Catalog Index 1.0.x supports a static `entries` list of immutable version/metadata-URI/digest records. Catalog Index 1.1.x+ supports dynamic `release_sources`: each source maps one component/variant to its GitHub repository and tag prefix. Registry derives the candidate version from each GitHub Release tag, resolves that tag to its exact commit, and verifies the canonical Release Metadata asset, digest, publication identity, and source revision before exposing the candidate. The `cdin-components` Catalog uses dynamic sources for Backend, Kernel, Runtime, and Frontend Core, TUI, and GUI-SDL; component versions are not duplicated as manually maintained numbers in the Catalog.
 
 ## Typical workflow
 
-1. A component maintainer publishes an immutable Release Metadata document for a release.
-2. The Catalog publisher adds a Catalog Index entry containing that metadata URI and its SHA-256 digest.
+1. A component maintainer creates a versioned Git tag and publishes a GitHub Release containing canonical Component Release Metadata assets.
+2. The Catalog publisher maps each component/variant to its repository and tag prefix; it does not copy package version numbers into a second list.
 3. A consumer supplies a Product Definition describing its root components and version constraints.
-4. Registry reads the Catalog Index, fetches and verifies Release Metadata, then resolves dependencies and contracts.
+4. Registry derives versions from GitHub Release tags, resolves each tag to its exact commit, verifies the matching metadata asset and publication identity, then resolves dependencies and contracts.
 5. Registry collects exact Git revisions and publishes a Workspace, Resolved Manifest, and Resolution Report.
 6. The consumer builds and tests the prepared Workspace.
 
@@ -98,7 +98,7 @@ make build
 make check
 ```
 
-The executable is written to `build/registry`. The current source identifies itself as `0.2.0-dev.3`; this is a development prerelease, not a stable Registry 1.0.0 release. See [Registry 1.0.0 release readiness](docs/release-readiness-1.0.0.md) for the remaining acceptance gates.
+The executable is written to `build/registry`. Release builds take their version from the exact Git tag checked out for that build (for example, `v1.0.0` produces `1.0.0`). An untagged developer build reports `development`; the release workflow rejects a tag/commit mismatch.
 
 ## License
 

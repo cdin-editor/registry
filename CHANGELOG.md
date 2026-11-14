@@ -3,11 +3,7 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.0] - Unreleased
-
-> Planned stable release. The immutable `v1.0.0` tag and GitHub Release
-> have **not** been published; see
-> [release readiness](docs/release-readiness-1.0.0.md).
+## [1.0.0] - 2026-11-14
 
 ### Added
 
@@ -18,6 +14,10 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Changed
 
+- Derive the CLI version, release descriptor, and release asset metadata from the exact immutable Git tag; untagged developer builds identify as `development`.
+- Publish only from a validated `vMAJOR.MINOR.PATCH` Git tag whose target equals the checked-out source commit; verify that the changelog contains the matching version section.
+- Replace the fixed CDIN component version list with six GitHub Release sources; Backend, Kernel, Runtime, and Frontend Core/TUI/GUI-SDL versions are discovered from their own immutable Git tags and verified against the matching release metadata asset and tag commit.
+- Skip historical GitHub Releases that predate canonical Registry metadata assets; keep strict failure for present-but-ambiguous, malformed, digest-mismatched or tag-mismatched Registry metadata.
 - Align CI, documentation and contributor guidance with the exact immutable Pipeline revision used by the repository's release workflow.
 - Repair contributor-guide links to retired architecture, status and tooling pages.
 

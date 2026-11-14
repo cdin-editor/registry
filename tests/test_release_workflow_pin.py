@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Keep Registry's tag-release helper bound to an immutable Pipeline revision."""
+"""Keep Registry release versions bound to immutable Git tags."""
 from __future__ import annotations
 
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import json
 import re
 import unittest
 
@@ -10,6 +12,12 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 PIPELINE_REVISION = "1682c520bb5be073eeaa07db03a254fb2e247545"
+
+_SPEC = spec_from_file_location("registry_checks", ROOT / "scripts" / "registry_checks.py")
+if _SPEC is None or _SPEC.loader is None:
+    raise RuntimeError("cannot load scripts/registry_checks.py for release-version tests")
+registry_checks = module_from_spec(_SPEC)
+_SPEC.loader.exec_module(registry_checks)
 
 
 class ReleaseWorkflowPinTests(unittest.TestCase):
@@ -30,48 +38,83 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         self.assertEqual(workflow.group(1), helper.group(1))
         self.assertEqual(workflow.group(1), PIPELINE_REVISION)
 
-    def test_existing_catalog_tag_is_reused_without_moving_its_target(self) -> None:
-        content = WORKFLOW.read_text(encoding="utf-8")
-        tag_step = content.split("      - name: Create or verify the immutable Catalog release tag", 1)[1]
-        tag_step = tag_step.split("  release:", 1)[0]
-        self.assertIn('status="$(curl --silent --show-error --output "$tag_ref_json"', tag_step)
-        self.assertIn('200)', tag_step)
-        self.assertIn('404)', tag_step)
-        self.assertIn('git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"', tag_step)
-        self.assertIn('git merge-base --is-ancestor "$release_sha" "$SOURCE_SHA"', tag_step)
-        self.assertIn('if [[ "$tag_commit" != "$release_sha" ]]', tag_step)
-        self.assertIn("source_ref=refs/tags/%s", tag_step)
-        self.assertIn("Using the existing immutable tag target", tag_step)
-        self.assertNotIn('git tag -f', tag_step)
+    def test_release_version_is_derived_from_the_exact_git_tag(self) -> None:
+        commit = "a" * 40
+        self.assertEqual(
+            registry_checks.release_version_from_tag(
+                "v1.0.0",
+                tag_commit=commit,
+                head_commit=commit,
+                pipeline_version="1.0.0",
+            ),
+            "1.0.0",
+        )
+        self.assertEqual(
+            registry_checks.release_version_from_tag(
+                "v0.2.0-dev.3",
+                tag_commit=commit,
+                head_commit=commit,
+                pipeline_version="0.2.0-dev.3",
+            ),
+            "0.2.0-dev.3",
+        )
+        invalid = (
+            ("1.0.0", commit, commit, ""),
+            ("v1.0", commit, commit, ""),
+            ("v1.0.0", "b" * 40, commit, ""),
+            ("v1.0.0", commit, commit, "1.0.1"),
+        )
+        for tag, tag_commit, head_commit, pipeline_version in invalid:
+            with self.subTest(tag=tag, pipeline_version=pipeline_version):
+                with self.assertRaises(ValueError):
+                    registry_checks.release_version_from_tag(
+                        tag,
+                        tag_commit=tag_commit,
+                        head_commit=head_commit,
+                        pipeline_version=pipeline_version,
+                    )
 
-    def test_workflow_run_trigger_is_diagnostic_and_only_releases_successful_main_pushes(self) -> None:
+    def test_release_workflow_publishes_only_from_a_validated_git_tag(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn('branches: ["main"]', content)
-        tag_job = content.split("  create-verified-development-tag:", 1)[1].split("\n  release:", 1)[0]
-        self.assertIn("if: github.event_name == 'workflow_run'", tag_job)
-        for field in (
-            "UPSTREAM_NAME: ${{ github.event.workflow_run.name }}",
-            "UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}",
-            "UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}",
-            "UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}",
-            "UPSTREAM_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}",
-        ):
-            with self.subTest(field=field):
-                self.assertIn(field, tag_job)
+        self.assertIn('tags: ["v*"]', content)
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("workflow_run:", content)
+        self.assertNotIn("create-verified-development-tag", content)
+        self.assertNotIn("TAG_NAME: v0.2.0-dev.3", content)
+
+        validation = content.split("  validate-release-tag:", 1)[1].split("\n  release:", 1)[0]
         for required in (
-            '"$UPSTREAM_NAME" != "CI"',
-            '"$UPSTREAM_EVENT" != "push"',
-            '"$UPSTREAM_CONCLUSION" != "success"',
-            '"$UPSTREAM_BRANCH" != "main"',
-            '"$UPSTREAM_REPOSITORY" != "$REPOSITORY"',
-            'echo "should_release=false" >> "$GITHUB_OUTPUT"',
-            'echo "should_release=true" >> "$GITHUB_OUTPUT"',
+            'GITHUB_REF_TYPE: ${{ github.ref_type }}',
+            'if [[ "$GITHUB_REF_TYPE" != "tag" ]]',
+            'git rev-parse --verify "refs/tags/$TAG_NAME^{commit}"',
+            'if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]',
+            "CHANGELOG.md must contain exactly one heading",
+            "source_ref=refs/tags/%s",
         ):
             with self.subTest(required=required):
-                self.assertIn(required, tag_job)
+                self.assertIn(required, validation)
 
-        release_job = content.split("  release:", 1)[1]
-        self.assertIn("needs.create-verified-development-tag.outputs.should_release == 'true'", release_job)
+        release = content.split("  release:", 1)[1]
+        self.assertIn("needs: [validate-release-tag]", release)
+        self.assertIn("needs.validate-release-tag.result == 'success'", release)
+        self.assertIn("needs.validate-release-tag.outputs.source_ref", release)
+
+    def test_build_scripts_do_not_contain_a_fixed_release_version_fallback(self) -> None:
+        buildinfo = (ROOT / "internal" / "buildinfo" / "version.go").read_text(encoding="utf-8")
+        checks = (ROOT / "scripts" / "registry_checks.py").read_text(encoding="utf-8")
+        shell_build = (ROOT / "scripts" / "release" / "build.sh").read_text(encoding="utf-8")
+        self.assertIn('Version   = "development"', buildinfo)
+        self.assertIn('PIPELINE_RELEASE_TAG is required', checks)
+        self.assertIn("release_version_from_tag(", checks)
+        self.assertIn('release_tag="${PIPELINE_RELEASE_TAG:-}"', shell_build)
+        self.assertNotIn('or "0.1.0-dev"', checks)
+        self.assertNotIn(':-0.1.0-dev', shell_build)
+
+    def test_changelog_has_one_dated_section_for_the_release_tag(self) -> None:
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        matches = re.findall(r"^## \[1\.0\.0\] - 2026-11-14$", changelog, re.MULTILINE)
+        self.assertEqual(len(matches), 1)
+        self.assertNotIn("## [1.0.0] - Unreleased", changelog)
 
     def test_ci_and_docs_use_the_same_immutable_pipeline_revision(self) -> None:
         for relative in (
@@ -90,38 +133,46 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
             content = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn(f"pipeline.git@{PIPELINE_REVISION}", content, relative)
 
-    def test_main_ci_release_job_skips_only_a_complete_existing_release(self) -> None:
-        content = WORKFLOW.read_text(encoding="utf-8")
-        tag_step = content.split("      - name: Create or verify the immutable Catalog release tag", 1)[1]
-        tag_step = tag_step.split("  release:", 1)[0]
-        for asset in (
-            "registry-linux-amd64",
-            "registry-linux-arm64",
-            "registry-darwin-amd64",
-            "registry-darwin-arm64",
-            "registry-windows-amd64.exe",
-            "catalog-index.json",
-            "registry-release-$VERSION.json",
-            "SHA256SUMS",
-        ):
-            with self.subTest(asset=asset):
-                self.assertIn(asset, tag_step)
-        self.assertIn('echo "release_required=false" >> "$GITHUB_OUTPUT"', tag_step)
-        self.assertIn('echo "release_required=true" >> "$GITHUB_OUTPUT"', tag_step)
-        self.assertIn("outputs.release_required == 'true'", content)
-        self.assertIn("Existing immutable Release", tag_step)
-        self.assertIn("repair its asset inventory explicitly", tag_step)
+    def test_cdin_catalog_uses_tag_derived_release_sources_not_fixed_versions(self) -> None:
+        catalog = json.loads(
+            (ROOT / "catalogs" / "cdin-components" / "catalog-index.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(catalog["schema_version"], "1.1.0")
+        self.assertEqual(catalog["catalog_id"], "cdin-components")
+        self.assertNotIn("entries", catalog)
+        sources = catalog["release_sources"]
+        self.assertEqual(len(sources), 6)
+        actual = {
+            (item["component_id"], item["variant"], item["repository_uri"])
+            for item in sources
+        }
+        expected = {
+            ("backend", "default", "https://github.com/cdin-editor/backend"),
+            ("kernel", "default", "https://github.com/cdin-editor/kernel"),
+            ("runtime", "default", "https://github.com/cdin-editor/runtime"),
+            ("frontend", "core", "https://github.com/cdin-editor/frontend"),
+            ("frontend", "tui", "https://github.com/cdin-editor/frontend"),
+            ("frontend", "gui-sdl", "https://github.com/cdin-editor/frontend"),
+        }
+        self.assertEqual(actual, expected)
+        for source in sources:
+            with self.subTest(source=source["source_id"]):
+                self.assertEqual(source["provider"], "github-releases-v1")
+                self.assertEqual(source["tag_prefix"], "v")
+                self.assertNotIn("version", source)
+                self.assertNotIn("metadata_uri", source)
+                self.assertNotIn("metadata_sha256", source)
 
     def test_release_readiness_checklist_is_linked_from_the_public_docs(self) -> None:
         self.assertTrue((ROOT / "docs" / "release-readiness-1.0.0.md").is_file())
         self.assertIn("docs/release-readiness-1.0.0.md", (ROOT / "README.md").read_text(encoding="utf-8"))
         self.assertIn("release-readiness-1.0.0.md", (ROOT / "docs" / "README.md").read_text(encoding="utf-8"))
 
-    def test_release_still_prepares_the_adr_0028_catalog_from_the_tagged_source(self) -> None:
+    def test_release_still_prepares_the_catalog_from_the_tagged_source(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("asset-preparation-command:", content)
         self.assertIn("python scripts/prepare-release-catalog.py", content)
-        self.assertIn("pipeline-ref:", content)
+        self.assertIn("source-ref: ${{ needs.validate-release-tag.outputs.source_ref }}", content)
 
 
 if __name__ == "__main__":

@@ -240,40 +240,31 @@ func TestLoadFromGitHubReleaseSourcesRejectsOversizedPage(t *testing.T) {
 	}
 }
 
-func TestLoadFromGitHubReleaseSourcesRejectsMissingAndDuplicateMetadataAssets(t *testing.T) {
-	tests := []struct {
-		name   string
-		mutate func(*GitHubRelease)
-		found  string
-	}{
-		{
-			name: "missing metadata asset",
-			mutate: func(release *GitHubRelease) {
-				release.Assets = nil
-			},
-			found: "found 0",
-		},
-		{
-			name: "duplicate metadata asset",
-			mutate: func(release *GitHubRelease) {
-				release.Assets = append(release.Assets, release.Assets[0])
-			},
-			found: "found 2",
-		},
+func TestLoadFromGitHubReleaseSourcesRejectsDuplicateMetadataAssets(t *testing.T) {
+	source, release, _, _, client := singleADR0028Script(t, "1.0.0", 24)
+	release.Assets = append(release.Assets, release.Assets[0])
+	client.pages[1] = []GitHubRelease{release}
+
+	_, err := loadScriptedReleaseSource(context.Background(), source, client)
+	if err == nil || !strings.Contains(err.Error(), "found 2") {
+		t.Fatalf("error = %v, want duplicate metadata asset rejection", err)
 	}
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			source, release, _, _, client := singleADR0028Script(t, "1.0.0", 24)
-			testCase.mutate(&release)
-			client.pages[1] = []GitHubRelease{release}
-			_, err := loadScriptedReleaseSource(context.Background(), source, client)
-			if err == nil || !strings.Contains(err.Error(), testCase.found) {
-				t.Fatalf("error = %v, want asset cardinality failure containing %q", err, testCase.found)
-			}
-			if len(client.assetCalls) != 0 {
-				t.Fatalf("asset fetch occurred despite invalid asset cardinality: %v", client.assetCalls)
-			}
-		})
+	if len(client.assetCalls) != 0 {
+		t.Fatalf("asset fetch occurred despite duplicate metadata assets: %v", client.assetCalls)
+	}
+}
+
+func TestLoadFromGitHubReleaseSourcesReturnsNoCandidatesWhenOnlyLegacyReleasesExist(t *testing.T) {
+	source, release, _, _, client := singleADR0028Script(t, "1.0.0", 24)
+	release.Assets = nil
+	client.pages[1] = []GitHubRelease{release}
+
+	_, err := loadScriptedReleaseSource(context.Background(), source, client)
+	if err == nil || !strings.Contains(err.Error(), "no verified metadata candidates") {
+		t.Fatalf("error = %v, want explicit no-candidates error for legacy release", err)
+	}
+	if len(client.assetCalls) != 0 {
+		t.Fatalf("asset fetch occurred for a legacy release without canonical metadata: %v", client.assetCalls)
 	}
 }
 

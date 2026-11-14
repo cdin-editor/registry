@@ -1,125 +1,54 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "catalog_id": "cdin-components",
-  "entries": [
+  "release_sources": [
     {
+      "source_id": "backend-default",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/cdin-editor/backend",
       "component_id": "backend",
       "variant": "default",
-      "version": "1.2.0",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/backend/d8abff79de11c85aba60a1a08305ddfa6ef91a4d/registry/releases/backend-1.2.0.json",
-      "metadata_sha256": "a7042e32c6e8234faf6963c64b71a13075189b66dc658f50acb3689d8bc59f72"
+      "tag_prefix": "v"
     },
     {
-      "component_id": "backend",
-      "variant": "default",
-      "version": "1.2.1",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/backend/d4f5e18f2662291a31465c9f571e3d34e6b4da1c/registry/releases/backend-1.2.1.json",
-      "metadata_sha256": "3db608685961d457f26003ae5636f7ee8704cf2c59533ff0ffe045c87590595f"
-    },
-    {
-      "component_id": "backend",
-      "variant": "default",
-      "version": "1.2.2",
-      "metadata_uri": "https://github.com/cdin-editor/backend/releases/download/v1.2.2/backend-1.2.2.json",
-      "metadata_sha256": "8348c5a1f89203aadff4e35ca3a0a017d343289bd0df2674a034d17aca2ad6f7"
-    },
-    {
+      "source_id": "frontend-core",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/cdin-editor/frontend",
       "component_id": "frontend",
       "variant": "core",
-      "version": "1.2.2",
-      "metadata_uri": "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-core-1.2.2.json",
-      "metadata_sha256": "67a4496caded1b56f2796cbf5977c9b240e1d857645f330ceb33abaed70ade2a"
+      "tag_prefix": "v"
     },
     {
+      "source_id": "frontend-gui-sdl",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/cdin-editor/frontend",
       "component_id": "frontend",
       "variant": "gui-sdl",
-      "version": "1.0.0",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/2aca848abfb175463a69cf6ba478a10752390579/registry/releases/frontend-gui-sdl-1.0.0.json",
-      "metadata_sha256": "3cd05d758567158803c12e346759ab73cda4232b69252d8396c522bc7f83a7bb"
+      "tag_prefix": "v"
     },
     {
-      "component_id": "frontend",
-      "variant": "gui-sdl",
-      "version": "1.0.1",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/c4b0019a66f89ca63d97f158c0afbaf22f1c2359/registry/releases/frontend-gui-sdl-1.0.1.json",
-      "metadata_sha256": "875f0d22e3583ccbb63fe15b15195841d8998f6ff287bede0a00956a4ea97cc8"
-    },
-    {
-      "component_id": "frontend",
-      "variant": "gui-sdl",
-      "version": "1.0.2",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/91104066ef85a2233728a75eac7f05e532c79073/registry/releases/frontend-gui-sdl-1.0.2.json",
-      "metadata_sha256": "0a40cc1f6d46127282c0b26c3af60d5c688a26ede41db3d3c8c9e75270bff088"
-    },
-    {
-      "component_id": "frontend",
-      "variant": "gui-sdl",
-      "version": "1.2.2",
-      "metadata_uri": "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-gui-sdl-1.2.2.json",
-      "metadata_sha256": "90c1dc71785b04a8782155b1d1e5759d103995f7a71ebe44f4651e71554da221"
-    },
-    {
+      "source_id": "frontend-tui",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/cdin-editor/frontend",
       "component_id": "frontend",
       "variant": "tui",
-      "version": "1.0.0",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/7ad6f29912d6b60efa8420d14b55787e05ed2769/registry/releases/frontend-tui-1.0.0.json",
-      "metadata_sha256": "ce403f2032d21f69b26c225108ae2fdacba302f14f5bae93d6e18f83c8d3cb51"
+      "tag_prefix": "v"
     },
     {
-      "component_id": "frontend",
-      "variant": "tui",
-      "version": "1.0.1",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/c4b0019a66f89ca63d97f158c0afbaf22f1c2359/registry/releases/frontend-tui-1.0.1.json",
-      "metadata_sha256": "da045f62089df07e1b2335777354e461a2cdef413110bdea2e4842a6964ebf01"
-    },
-    {
-      "component_id": "frontend",
-      "variant": "tui",
-      "version": "1.0.2",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/frontend/91104066ef85a2233728a75eac7f05e532c79073/registry/releases/frontend-tui-1.0.2.json",
-      "metadata_sha256": "b5f33bce95723fae6bf6ae5a1052c8f273aa85e4b69487942ff517e1d04b89bf"
-    },
-    {
-      "component_id": "frontend",
-      "variant": "tui",
-      "version": "1.2.2",
-      "metadata_uri": "https://github.com/cdin-editor/frontend/releases/download/v1.2.2/frontend-tui-1.2.2.json",
-      "metadata_sha256": "82b0405fbed96a0b0cd54c9ab320e03925841d0cb58cd27c5d43d7c550b809a0"
-    },
-    {
+      "source_id": "kernel-default",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/cdin-editor/kernel",
       "component_id": "kernel",
       "variant": "default",
-      "version": "1.2.1",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/kernel/39a2f53f94f71545590621533bd25375e8d8d57c/registry/releases/kernel-1.2.1.json",
-      "metadata_sha256": "862e1588c732b0f7edef5f430f91e2079b8e8901b2fe9506df6684c62021b631"
+      "tag_prefix": "v"
     },
     {
-      "component_id": "kernel",
-      "variant": "default",
-      "version": "1.2.3",
-      "metadata_uri": "https://github.com/cdin-editor/kernel/releases/download/v1.2.3/kernel-1.2.3.json",
-      "metadata_sha256": "0962aba47b614e412258dace8c93059b2ad11dfdad9a35babb03c3158b6e2a54"
-    },
-    {
+      "source_id": "runtime-default",
+      "provider": "github-releases-v1",
+      "repository_uri": "https://github.com/cdin-editor/runtime",
       "component_id": "runtime",
       "variant": "default",
-      "version": "1.0.0",
-      "metadata_uri": "https://github.com/cdin-editor/runtime/releases/download/v1.0.0/runtime-1.0.0.json",
-      "metadata_sha256": "8b56a21ccf237b54380b106f95cfd29fa8428d50a7a9175c532a3e4eda1a5f0c"
-    },
-    {
-      "component_id": "runtime",
-      "variant": "default",
-      "version": "1.0.0-rc.1",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/runtime/ee9ad4e46067cea86faf60bad8510cca5423b249/registry/releases/runtime-1.0.0-rc.1.json",
-      "metadata_sha256": "4fc8a7ce49531b5ce0610312722073d9ac69b5662946541c155b03785f644691"
-    },
-    {
-      "component_id": "runtime",
-      "variant": "default",
-      "version": "1.0.0-rc.2",
-      "metadata_uri": "https://raw.githubusercontent.com/cdin-editor/runtime/b99c28a2e69a4001be0ac38e2fba239fee26c0fb/registry/releases/runtime-1.0.0-rc.2.json",
-      "metadata_sha256": "b572ab0a390599d95815a70af97899ec17d003d3c47ee78584920db9ee387412"
+      "tag_prefix": "v"
     }
   ]
 }

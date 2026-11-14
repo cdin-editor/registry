@@ -18,9 +18,31 @@ case "$target_arch" in
   *) echo "Unsupported release target architecture: $target_arch" >&2; exit 2 ;;
 esac
 
-version="${PIPELINE_RELEASE_TAG:-0.1.0-dev}"
-version="${version#v}"
-commit="${PIPELINE_SHA:-$(git rev-parse HEAD)}"
+release_tag="${PIPELINE_RELEASE_TAG:-}"
+if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((dev|alpha|beta|rc)\.[0-9]+))?$ ]]; then
+  echo "PIPELINE_RELEASE_TAG must be a valid versioned Git tag (vMAJOR.MINOR.PATCH[-channel.N])." >&2
+  exit 2
+fi
+
+head_commit="$(git rev-parse --verify HEAD)"
+tag_commit="$(git rev-parse --verify "refs/tags/${release_tag}^{commit}")"
+if [[ "$tag_commit" != "$head_commit" ]]; then
+  echo "Release tag $release_tag resolves to $tag_commit, not checked-out commit $head_commit." >&2
+  exit 1
+fi
+
+version="${release_tag#v}"
+pipeline_version="${PIPELINE_RELEASE_VERSION:-}"
+if [[ -n "$pipeline_version" && "${pipeline_version#v}" != "$version" ]]; then
+  echo "Pipeline release version $pipeline_version does not match Git tag $release_tag." >&2
+  exit 1
+fi
+
+commit="${PIPELINE_SHA:-$head_commit}"
+if [[ "$commit" != "$head_commit" ]]; then
+  echo "Pipeline source SHA $commit does not match tagged build commit $head_commit." >&2
+  exit 1
+fi
 
 mkdir -p dist
 binary="dist/registry-$goos-$goarch"
@@ -28,7 +50,7 @@ if [[ "$goos" == windows ]]; then
   binary+=".exe"
 fi
 
-echo "Building Registry $version for $goos/$goarch"
+echo "Building Registry $version from Git tag $release_tag for $goos/$goarch"
 CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build \
   -trimpath \
   -buildvcs=false \

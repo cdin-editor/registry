@@ -158,6 +158,44 @@ func TestDynamicCatalogRejectsMixedStaticAndReleaseSources(t *testing.T) {
 	}
 }
 
+func TestLoadFromGitHubReleaseSourcesSkipsLegacyReleaseWithoutRegistryMetadata(t *testing.T) {
+	source, current, client := testADR0028Fixture(t, "1.2.0", "2026-11-10T18:00:00Z", 20)
+	legacy := GitHubRelease{
+		ID:          19,
+		TagName:     "v1.1.0",
+		Draft:       false,
+		Prerelease:  false,
+		PublishedAt: "2026-11-09T18:00:00Z",
+		URL:         "https://api.github.com/repos/acme/editor/releases/19",
+		HTMLURL:     "https://github.com/acme/editor/releases/tag/v1.1.0",
+		Assets: []GitHubReleaseAsset{{
+			ID: 1019, Name: "editor-1.1.0-source.tar.gz", Size: 100,
+			Digest:             "sha256:" + strings.Repeat("a", 64),
+			URL:                "https://api.github.com/repos/acme/editor/releases/assets/1019",
+			BrowserDownloadURL: "https://github.com/acme/editor/releases/download/v1.1.0/editor-1.1.0-source.tar.gz",
+		}},
+	}
+	client.releases[1] = []GitHubRelease{legacy, current}
+
+	loaded, err := loadFromGitHubReleaseSources(
+		context.Background(),
+		Index{SchemaVersion: "1.1.0", CatalogID: "test.catalog", ReleaseSources: []ReleaseSource{source}},
+		client,
+		&acceptingValidator{},
+		1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Releases) != 1 {
+		t.Fatalf("got %d candidates, want only the release with Registry metadata", len(loaded.Releases))
+	}
+	if loaded.Releases[0].Version != "1.2.0" || loaded.Releases[0].Discovery == nil ||
+		loaded.Releases[0].Discovery.ReleaseID != current.ID {
+		t.Fatalf("unexpected discovered release after skipping legacy metadata-less release: %#v", loaded.Releases[0])
+	}
+}
+
 func TestLoadFromGitHubReleaseSourcesVerifiesAndRecordsPublication(t *testing.T) {
 	source, release, client := testADR0028Fixture(t, "1.2.0", "2026-11-10T18:00:00Z", 10)
 	index := Index{SchemaVersion: "1.1.0", CatalogID: "test.catalog", ReleaseSources: []ReleaseSource{source}}

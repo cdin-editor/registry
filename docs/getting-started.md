@@ -73,8 +73,10 @@ Check that the executable runs:
 ./build/registry schema list
 ```
 
-The current source reports `0.2.0-dev.3`. This is a development
-prerelease, not a stable release. See [Registry 1.0.0 release readiness](release-readiness-1.0.0.md) for the stable-release gates.
+A release build reports the version encoded by its exact Git tag: for
+example, tag `v1.0.0` produces CLI version `1.0.0`. Untagged developer builds
+report `development`. The release workflow checks that the tag resolves to
+the checked-out commit and that this changelog contains the matching version.
 
 ## Your first validation
 

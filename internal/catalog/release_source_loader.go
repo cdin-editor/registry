@@ -86,8 +86,14 @@ func loadFromGitHubReleaseSources(
 						matched = append(matched, asset)
 					}
 				}
+				if len(matched) == 0 {
+					// Legacy GitHub Releases that do not publish the canonical
+					// Registry metadata asset are not Registry candidates. They
+					// remain valid ordinary GitHub Releases and are skipped.
+					continue
+				}
 				if len(matched) != 1 {
-					return nil, fmt.Errorf("catalog: GitHub Release %s must contain exactly one metadata asset named %s (found %d)", githubRelease.TagName, expectedAsset, len(matched))
+					return nil, fmt.Errorf("catalog: GitHub Release %s must contain at most one metadata asset named %s (found %d)", githubRelease.TagName, expectedAsset, len(matched))
 				}
 				asset := matched[0]
 				if asset.ID <= 0 || asset.Size <= 0 || asset.Size > maxReleaseMetadataBytes {

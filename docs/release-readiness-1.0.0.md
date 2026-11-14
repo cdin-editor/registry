@@ -8,7 +8,7 @@ This checklist defines the acceptance boundary for the Registry CLI/package rele
 
 Keep these version tracks separate:
 
-- **Registry CLI/package:** the executable version shown by `registry --version`. The current source default is `0.2.0-dev.3`; the stable target is `1.0.0`.
+- **Registry CLI/package:** the executable version shown by `registry --version`. Release builds derive it from the exact immutable Git tag (`v1.0.0` becomes `1.0.0`); untagged developer builds report `development`.
 - **Spec release and Registry Data Contracts:** schema and contract versions pinned in `schemas/registry/v1/SOURCE.toml`. They are not changed merely because the CLI reaches 1.0.0.
 - **Document schema versions:** Product Definition, Catalog Index, Component Release Metadata, Manifest, Resolution Report and Update Discovery Report have their own compatibility rules.
 - **Catalog model:** static Catalog 1.0.x (`entries`) and dynamic Catalog 1.1.x+ (`release_sources`) are separate supported shapes. A document must not mix them.
@@ -22,6 +22,7 @@ A Registry 1.0.0 tag must not be interpreted as Spec 1.0.0, Catalog 1.0.0, or a 
 - [ ] The final public command list, flags, input formats, exit behavior and machine-readable output are reviewed and documented as the 1.x compatibility surface.
 - [ ] All six public document types validate against the exact embedded schemas pinned to the Spec commit/tree/blob IDs in `SOURCE.toml`.
 - [ ] Static Catalog 1.0.x and dynamic Catalog 1.1.x+ are both covered by valid and invalid fixtures.
+- [ ] The production CDIN Catalog uses one GitHub Release source per component/variant; each candidate version is derived from its repository tag and the tag-resolved commit is verified against canonical ADR-0028 Release Metadata. Historical releases without that metadata asset are skipped; malformed or mismatched metadata fails closed.
 - [ ] Mixed `entries` + `release_sources`, duplicate identities, invalid provider/source definitions, malformed metadata and ambiguous candidates fail closed.
 - [ ] SemVer selection, dependency/contract resolution, deterministic ordering, conflict reporting and update discovery have executable regression coverage.
 - [ ] Existing source-delivery Product Definitions remain backward-compatible when the optional artifact-delivery policy is absent.
@@ -78,7 +79,7 @@ The following are not silently implied by a 1.0.0 release. Keep them visible in 
 ## Release procedure
 
 1. Complete the gates above and link the exact evidence from the release issue/PRs.
-2. Update `internal/buildinfo/version.go` to `1.0.0`, add a dated `[1.0.0]` changelog section and review the release notes.
+2. Keep `internal/buildinfo/version.go` at the untagged `development` default; add the dated changelog section matching the exact release tag and review the release notes. Never write the release version into source defaults.
 3. Run the full CI and release preflight against the exact release candidate commit.
 4. Create and push the immutable `v1.0.0` tag at that commit. The tag-push release workflow builds and publishes; do not manually upload or retarget assets.
 5. Verify the published Release contains the exact five executables, Catalog, descriptor and final checksum manifest. Re-download and verify every asset from a clean consumer.
