@@ -231,13 +231,14 @@ func runExecution(ctx context.Context, args []string, preparing bool, stdout, st
 // token; only use GITHUB_TOKEN as a local-shell fallback outside Actions.
 // HTTPFetcher sends the credential exclusively to api.github.com.
 func githubAPITokenFromEnvironment() string {
-	for _, name := range []string{"REGISTRY_GITHUB_API_TOKEN", "GH_TOKEN"} {
-		if token := strings.TrimSpace(os.Getenv(name)); token != "" {
-			return token
-		}
+	if token := strings.TrimSpace(os.Getenv("REGISTRY_GITHUB_API_TOKEN")); token != "" {
+		return token
 	}
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("GITHUB_ACTIONS")), "true") {
 		return ""
+	}
+	if token := strings.TrimSpace(os.Getenv("GH_TOKEN")); token != "" {
+		return token
 	}
 	return strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 }
