@@ -5,11 +5,16 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ## [1.0.0] - Unreleased
 
-> Planned stable release. The immutable `v1.0.0` tag and GitHub Release have **not** been published; see [release readiness](docs/release-readiness-1.0.0.md).
+> Planned stable release. The immutable `v1.0.0` tag and GitHub Release
+> have **not** been published; see
+> [release readiness](docs/release-readiness-1.0.0.md).
 
 ### Added
 
-- Add a release-readiness checklist for the stable 1.0.0 CLI/package release, covering the public CLI and data-contract compatibility surface, reproducibility, Workspace/cache safety, the five-target release bundle, clean-consumer verification and documented limitations.
+- Add a release-readiness checklist for the stable 1.0.0 CLI/package release,
+  covering the public CLI and data-contract compatibility surface,
+  reproducibility, Workspace/cache safety, the five-target release bundle,
+  clean-consumer verification and documented limitations.
 
 ### Changed
 
@@ -18,8 +23,13 @@ Notable changes to CDIN Registry are recorded here. The format follows
 
 ### Fixed
 
-- Make release publication idempotent: skip an already complete immutable Release and fail closed with the missing asset inventory when an existing Release is incomplete.
-- Distinguish Windows Git-object lock contention from transient lock disappearance; retry the latter during both object-lock and maintenance-lock acquisition while preserving fail-closed handling for unsafe paths and unrelated permission errors.
+- Make release publication idempotent: skip an already complete immutable
+  Release and fail closed with the missing asset inventory when an existing
+  Release is incomplete.
+- Distinguish Windows Git-object lock contention from transient lock
+  disappearance; retry the latter during both object-lock and maintenance-lock
+  acquisition while preserving fail-closed handling for unsafe paths and
+  unrelated permission errors.
 
 ## [0.2.0-dev.3] - 2026-11-13
 
