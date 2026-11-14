@@ -2,7 +2,7 @@ package cli
 
 import "testing"
 
-func TestGitHubAPITokenFromEnvironment(t *testing.T) {
+func TestGitHubAPITokenFromEnvironmentSelection(t *testing.T) {
 	tests := []struct {
 		name     string
 		actions  string
