@@ -388,12 +388,12 @@ func TestRepositoryGovernancePSXRequiresProjectAndReviewFiles(t *testing.T) {
 
 func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
 	type releaseSource struct {
-		SourceID     string `json:"source_id"`
-		Provider     string `json:"provider"`
-		Repository   string `json:"repository_uri"`
-		ComponentID  string `json:"component_id"`
-		Variant      string `json:"variant"`
-		TagPrefix    string `json:"tag_prefix"`
+		SourceID    string `json:"source_id"`
+		Provider    string `json:"provider"`
+		Repository  string `json:"repository_uri"`
+		ComponentID string `json:"component_id"`
+		Variant     string `json:"variant"`
+		TagPrefix   string `json:"tag_prefix"`
 	}
 	var document struct {
 		SchemaVersion  string          `json:"schema_version"`
@@ -415,12 +415,12 @@ func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"backend|default":    "https://github.com/cdin-editor/backend",
-		"kernel|default":     "https://github.com/cdin-editor/kernel",
-		"runtime|default":    "https://github.com/cdin-editor/runtime",
-		"frontend|core":      "https://github.com/cdin-editor/frontend",
-		"frontend|tui":       "https://github.com/cdin-editor/frontend",
-		"frontend|gui-sdl":   "https://github.com/cdin-editor/frontend",
+		"backend|default":  "https://github.com/cdin-editor/backend",
+		"kernel|default":   "https://github.com/cdin-editor/kernel",
+		"runtime|default":  "https://github.com/cdin-editor/runtime",
+		"frontend|core":    "https://github.com/cdin-editor/frontend",
+		"frontend|tui":     "https://github.com/cdin-editor/frontend",
+		"frontend|gui-sdl": "https://github.com/cdin-editor/frontend",
 	}
 	found := make(map[string]bool, len(want))
 	sourceIDs := make(map[string]bool, len(document.ReleaseSources))
