@@ -234,11 +234,11 @@ func githubAPITokenFromEnvironment() string {
 	if token := strings.TrimSpace(os.Getenv("REGISTRY_GITHUB_API_TOKEN")); token != "" {
 		return token
 	}
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("GITHUB_ACTIONS")), "true") {
-		return ""
-	}
 	if token := strings.TrimSpace(os.Getenv("GH_TOKEN")); token != "" {
 		return token
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("GITHUB_ACTIONS")), "true") {
+		return ""
 	}
 	return strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
 }
