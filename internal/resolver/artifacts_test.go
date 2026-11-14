@@ -92,13 +92,13 @@ func TestResolveArtifactDeliveryPreservesADR0028ManifestSchema(t *testing.T) {
 		testArtifact("backend-linux", *nativeTarget()),
 	}
 	definition := product(Requirement{
-		ComponentID: "backend",
-		Variant: "default",
+		ComponentID:       "backend",
+		Variant:           "default",
 		VersionConstraint: "=1.2.2",
 	})
 	definition.Resolution = ResolutionPolicy{
 		DeliveryMode: "artifact",
-		Target: nativeTarget(),
+		Target:       nativeTarget(),
 	}
 
 	result := Resolve(definition, []*catalog.Catalog{
