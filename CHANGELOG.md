@@ -3,13 +3,23 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.0.0] - Unreleased
 
-### Documentation
+> Planned stable release. The immutable `v1.0.0` tag and GitHub Release have **not** been published; see [release readiness](docs/release-readiness-1.0.0.md).
 
-- Add a release-readiness checklist for Registry 1.0.0 covering the public CLI/data-contract surface, reproducibility, five-target release bundle, clean-consumer verification and explicitly documented limitations.
-- Correct the current development version and align Pipeline references across contributor, development and getting-started documentation.
-- Repair contributor-guide links to retired architecture/status pages and add an idempotent release-publication preflight.
+### Added
+
+- Add a release-readiness checklist for the stable 1.0.0 CLI/package release, covering the public CLI and data-contract compatibility surface, reproducibility, Workspace/cache safety, the five-target release bundle, clean-consumer verification and documented limitations.
+
+### Changed
+
+- Align CI, documentation and contributor guidance with the exact immutable Pipeline revision used by the repository's release workflow.
+- Repair contributor-guide links to retired architecture, status and tooling pages.
+
+### Fixed
+
+- Make release publication idempotent: skip an already complete immutable Release and fail closed with the missing asset inventory when an existing Release is incomplete.
+- Distinguish Windows Git-object lock contention from transient lock disappearance; retry the latter during both object-lock and maintenance-lock acquisition while preserving fail-closed handling for unsafe paths and unrelated permission errors.
 
 ## [0.2.0-dev.3] - 2026-11-13
 
