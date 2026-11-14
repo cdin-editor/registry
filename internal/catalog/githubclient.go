@@ -279,6 +279,9 @@ func (f *HTTPFetcher) fetchGitHubAPI(ctx context.Context, source ReleaseSource, 
 		request.Header.Set("Accept", "application/vnd.github+json")
 		request.Header.Set("User-Agent", "cdin-registry/1")
 		request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		if f.githubToken != "" {
+			request.Header.Set("Authorization", "Bearer "+f.githubToken)
+		}
 		response, requestErr := f.client.Do(request)
 		if requestErr != nil {
 			if ctx.Err() != nil {
