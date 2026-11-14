@@ -41,7 +41,7 @@ jobs:
           fi
 
           TAG_NAME="$GITHUB_REF_NAME"
-          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+(-((dev|alpha|beta|rc)\\.[0-9]+))?$ ]]; then
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((dev|alpha|beta|rc)\.[0-9]+))?$ ]]; then
             echo "::error title=Invalid release tag::Expected vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-(dev|alpha|beta|rc).N; got $TAG_NAME."
             exit 2
           fi
@@ -61,8 +61,8 @@ jobs:
 
           version = sys.argv[1]
           pattern = re.compile(
-              r"^\\s{0,3}#{1,6}\\s+\\[?" + re.escape(version)
-              + r"\\]?(?:\\s*[-–—:].*)?$"
+              r"^\s{0,3}#{1,6}\s+\[?" + re.escape(version)
+              + r"\]?(?:\s*[-–—:].*)?$"
           )
           lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
           matches = [number for number, line in enumerate(lines, 1) if pattern.fullmatch(line)]
@@ -74,10 +74,10 @@ jobs:
           print(f"Release changelog section for {version}: line {matches[0]}")
           PY
 
-          printf 'source_ref=refs/tags/%s\\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
-          printf 'release_tag=%s\\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
-          printf 'version=%s\\n' "$VERSION" >> "$GITHUB_OUTPUT"
-          printf 'Validated immutable release tag %s at %s\\n' "$TAG_NAME" "$TAG_COMMIT"
+          printf 'source_ref=refs/tags/%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
+          printf 'release_tag=%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'Validated immutable release tag %s at %s\n' "$TAG_NAME" "$TAG_COMMIT"
 
   release:
     name: Cross-platform release (Pipeline)
