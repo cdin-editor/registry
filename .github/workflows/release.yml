@@ -4,148 +4,85 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: ["main"]
 
 permissions:
   contents: read
 
 jobs:
-  create-verified-development-tag:
-    name: Tag the exact main commit after successful CI
-    if: github.event_name == 'workflow_run'
+  validate-release-tag:
+    name: Validate version from the immutable Git tag
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
     outputs:
-      source_ref: ${{ steps.tag.outputs.source_ref }}
-      should_release: ${{ steps.tag.outputs.should_release }}
-      release_required: ${{ steps.tag.outputs.release_required }}
+      source_ref: ${{ steps.validate.outputs.source_ref }}
+      release_tag: ${{ steps.validate.outputs.release_tag }}
+      version: ${{ steps.validate.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
-      - name: Create or verify the immutable Catalog release tag
-        id: tag
+          persist-credentials: false
+
+      - name: Validate tag identity and matching changelog section
+        id: validate
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-          UPSTREAM_NAME: ${{ github.event.workflow_run.name }}
-          UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
-          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          UPSTREAM_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          TAG_NAME: v0.2.0-dev.3
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          printf 'Upstream workflow=%s event=%s conclusion=%s branch=%s repository=%s\n' \
-            "$UPSTREAM_NAME" "$UPSTREAM_EVENT" "$UPSTREAM_CONCLUSION" "$UPSTREAM_BRANCH" "$UPSTREAM_REPOSITORY"
-          if [[ "$UPSTREAM_NAME" != "CI" || "$UPSTREAM_EVENT" != "push" || \
-                "$UPSTREAM_CONCLUSION" != "success" || "$UPSTREAM_BRANCH" != "main" || \
-                "$UPSTREAM_REPOSITORY" != "$REPOSITORY" ]]; then
-            echo "This workflow completion is not a successful push from this repository's main branch; release is safely skipped."
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            exit 0
+
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            echo "::error title=Release requires a Git tag::Run workflow_dispatch against a version tag, not a branch."
+            exit 2
           fi
-          echo "should_release=true" >> "$GITHUB_OUTPUT"
-          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          tag_ref_json="$RUNNER_TEMP/tag-ref.json"
-          status="$(curl --silent --show-error --output "$tag_ref_json" --write-out '%{http_code}' \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header 'Accept: application/vnd.github+json' \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/$REPOSITORY/git/ref/tags/$TAG_NAME")"
-          case "$status" in
-            200)
-              echo "Tag $TAG_NAME already exists; resolving its immutable source commit."
-              git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
-              release_sha="$(git rev-parse --verify "$TAG_NAME^{commit}")"
-              if ! git merge-base --is-ancestor "$release_sha" "$SOURCE_SHA"; then
-                echo "Existing immutable $TAG_NAME target $release_sha is not an ancestor of trusted CI commit $SOURCE_SHA." >&2
-                exit 1
-              fi
-              echo "Using the existing immutable tag target $release_sha; the tag will not be moved."
-              ;;
-            404)
-              gh api --method POST "repos/$REPOSITORY/git/refs" \
-                -f "ref=refs/tags/$TAG_NAME" -f "sha=$SOURCE_SHA" >/dev/null
-              release_sha="$SOURCE_SHA"
-              echo "Created $TAG_NAME at trusted main commit $release_sha."
-              ;;
-            *)
-              cat "$tag_ref_json" >&2
-              echo "Could not inspect $TAG_NAME (HTTP $status)." >&2
-              exit 1
-              ;;
-          esac
-          git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"
-          tag_commit="$(git rev-parse --verify "$TAG_NAME^{commit}")"
-          if [[ "$tag_commit" != "$release_sha" ]]; then
-            echo "Immutable $TAG_NAME resolves to $tag_commit, expected $release_sha." >&2
+
+          TAG_NAME="$GITHUB_REF_NAME"
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+(-((dev|alpha|beta|rc)\\.[0-9]+))?$ ]]; then
+            echo "::error title=Invalid release tag::Expected vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-(dev|alpha|beta|rc).N; got $TAG_NAME."
+            exit 2
+          fi
+
+          TAG_COMMIT="$(git rev-parse --verify "refs/tags/$TAG_NAME^{commit}")"
+          HEAD_COMMIT="$(git rev-parse --verify HEAD)"
+          if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
+            echo "::error title=Tag checkout mismatch::$TAG_NAME resolves to $TAG_COMMIT but the checkout is $HEAD_COMMIT."
             exit 1
           fi
-          printf 'source_ref=refs/tags/%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
 
           VERSION="${TAG_NAME#v}"
-          release_status="$(curl --silent --show-error --output "$RUNNER_TEMP/release.json" --write-out '%{http_code}' \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header 'Accept: application/vnd.github+json' \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG_NAME")"
-          case "$release_status" in
-            200)
-              required_assets=(
-                "registry-linux-amd64"
-                "registry-linux-arm64"
-                "registry-darwin-amd64"
-                "registry-darwin-arm64"
-                "registry-windows-amd64.exe"
-                "catalog-index.json"
-                "registry-release-$VERSION.json"
-                "SHA256SUMS"
+          python - "$VERSION" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          pattern = re.compile(
+              r"^\\s{0,3}#{1,6}\\s+\\[?" + re.escape(version)
+              + r"\\]?(?:\\s*[-–—:].*)?$"
+          )
+          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          matches = [number for number, line in enumerate(lines, 1) if pattern.fullmatch(line)]
+          if len(matches) != 1:
+              raise SystemExit(
+                  f"CHANGELOG.md must contain exactly one heading for Git tag version "
+                  f"{version}; found {len(matches)}"
               )
-              jq -r '.assets[].name' "$RUNNER_TEMP/release.json" > "$RUNNER_TEMP/release-assets.txt"
-              missing=()
-              for asset in "${required_assets[@]}"; do
-                if ! grep -Fxq "$asset" "$RUNNER_TEMP/release-assets.txt"; then
-                  missing+=("$asset")
-                fi
-              done
-              if (( ${#missing[@]} > 0 )); then
-                printf 'Existing immutable Release %s is incomplete; missing assets:\n' "$TAG_NAME" >&2
-                printf '  - %s\n' "${missing[@]}" >&2
-                echo "Do not retag or silently reuse an incomplete Release; repair its asset inventory explicitly." >&2
-                exit 1
-              fi
-              echo "The immutable Release $TAG_NAME already contains all required executable, Catalog, descriptor and checksum assets."
-              echo "release_required=false" >> "$GITHUB_OUTPUT"
-              ;;
-            404)
-              echo "No GitHub Release exists for $TAG_NAME; publication is required."
-              echo "release_required=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              cat "$RUNNER_TEMP/release.json" >&2
-              echo "Could not inspect Release $TAG_NAME (HTTP $release_status)." >&2
-              exit 1
-              ;;
-          esac
+          print(f"Release changelog section for {version}: line {matches[0]}")
+          PY
+
+          printf 'source_ref=refs/tags/%s\\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
+          printf 'release_tag=%s\\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'Validated immutable release tag %s at %s\\n' "$TAG_NAME" "$TAG_COMMIT"
 
   release:
     name: Cross-platform release (Pipeline)
-    needs: [create-verified-development-tag]
-    if: >-
-      always() &&
-      (github.event_name == 'push' ||
-       github.event_name == 'workflow_dispatch' ||
-       (needs.create-verified-development-tag.result == 'success' &&
-        needs.create-verified-development-tag.outputs.should_release == 'true' &&
-        needs.create-verified-development-tag.outputs.release_required == 'true'))
+    needs: [validate-release-tag]
+    if: needs.validate-release-tag.result == 'success'
     permissions:
       contents: write
       id-token: write
@@ -153,7 +90,7 @@ jobs:
     uses: m-mdy-m/pipeline/.github/workflows/release.yml@1682c520bb5be073eeaa07db03a254fb2e247545
     with:
       pipeline-ref: 1682c520bb5be073eeaa07db03a254fb2e247545
-      source-ref: ${{ needs.create-verified-development-tag.outputs.source_ref || github.ref }}
+      source-ref: ${{ needs.validate-release-tag.outputs.source_ref }}
       go-version: "1.27.3"
       test-command: "python scripts/prepare-release-catalog.py --self-test && PYTHONPATH=.pipeline/src python -m pipeline.providers.github task release-check --json"
       build-command: "python scripts/registry_checks.py release-build"
