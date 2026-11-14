@@ -544,6 +544,8 @@ def release_build() -> None:
     release_tag = os.environ.get("PIPELINE_RELEASE_TAG", "").strip()
     if not release_tag:
         raise SystemExit("PIPELINE_RELEASE_TAG is required; release versions come from Git tags.")
+    if RELEASE_TAG_PATTERN.fullmatch(release_tag) is None:
+        raise SystemExit(f"Unsupported release Git tag: {release_tag!r}")
 
     try:
         head_commit = git_output("rev-parse", "HEAD")
