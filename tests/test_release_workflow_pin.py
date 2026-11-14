@@ -51,7 +51,7 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         ):
             content = (ROOT / relative).read_text(encoding="utf-8")
             revisions = re.findall(
-                r"^\\s*uses:\\s*m-mdy-m/pipeline/\\.github/workflows/[^\\s]+@([0-9a-f]{40})\\s*$",
+                r"^\s*uses:\s*m-mdy-m/pipeline/\.github/workflows/[^\s]+@([0-9a-f]{40})\s*$",
                 content,
                 re.MULTILINE,
             )
