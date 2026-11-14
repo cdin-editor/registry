@@ -3,6 +3,12 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] - 2026-11-14
+
+### Fixed
+
+- Preserve Resolved Manifest schema 1.2.0 when artifact delivery is selected. The artifact policy upgrades legacy 1.0.0 source graphs to 1.1.0 but no longer downgrades ADR-0028 Release Discovery provenance already selected by the Resolver.
+
 ## [1.0.0] - 2026-11-14
 
 ### Added
