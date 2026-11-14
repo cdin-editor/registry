@@ -88,6 +88,7 @@ func runManifestDiscover(
 	fetcher, err := newFetcher(catalog.HTTPFetcherOptions{
 		AllowedHosts: options.allowedHosts,
 		CacheDir:     options.cacheDir,
+		GitHubToken:  githubAPITokenFromEnvironment(),
 	})
 	if err != nil {
 		return writeManifestError(stderr, "DISCOVERY_CATALOG_CONFIG_FAILED", "cannot configure current Catalog transport; check --allow-host and --cache-dir")
