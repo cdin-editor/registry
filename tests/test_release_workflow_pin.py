@@ -44,6 +44,35 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         self.assertIn("Using the existing immutable tag target", tag_step)
         self.assertNotIn('git tag -f', tag_step)
 
+    def test_workflow_run_trigger_is_diagnostic_and_only_releases_successful_main_pushes(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('branches: ["main"]', content)
+        tag_job = content.split("  create-verified-development-tag:", 1)[1].split("\n  release:", 1)[0]
+        self.assertIn("if: github.event_name == 'workflow_run'", tag_job)
+        for field in (
+            "UPSTREAM_NAME: ${{ github.event.workflow_run.name }}",
+            "UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}",
+            "UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}",
+            "UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}",
+            "UPSTREAM_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(field, tag_job)
+        for required in (
+            '"$UPSTREAM_NAME" != "CI"',
+            '"$UPSTREAM_EVENT" != "push"',
+            '"$UPSTREAM_CONCLUSION" != "success"',
+            '"$UPSTREAM_BRANCH" != "main"',
+            '"$UPSTREAM_REPOSITORY" != "$REPOSITORY"',
+            'echo "should_release=false" >> "$GITHUB_OUTPUT"',
+            'echo "should_release=true" >> "$GITHUB_OUTPUT"',
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, tag_job)
+
+        release_job = content.split("  release:", 1)[1]
+        self.assertIn("needs.create-verified-development-tag.outputs.should_release == 'true'", release_job)
+
     def test_release_still_prepares_the_adr_0028_catalog_from_the_tagged_source(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("asset-preparation-command:", content)
