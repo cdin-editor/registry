@@ -48,6 +48,7 @@ type manifestReplayReceipt struct {
 func runManifest(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return runManifestWithDependencies(ctx, args, stdin, stdout, stderr,
 		func(options catalog.HTTPFetcherOptions) (catalog.Fetcher, error) {
+			options.GitHubToken = githubAPITokenFromEnvironment()
 			return catalog.NewHTTPFetcher(options)
 		},
 		collector.CommandGit{},
