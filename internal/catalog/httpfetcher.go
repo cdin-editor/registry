@@ -48,6 +48,9 @@ type HTTPFetcherOptions struct {
 	MaxRedirects int
 	CacheDir     string
 	Offline      bool
+	// GitHubToken authenticates requests to api.github.com only. It is never
+	// used for component metadata or release-asset download hosts.
+	GitHubToken string
 }
 
 // safePolicyError is produced only by local URL/redirect policy checks. It can
@@ -68,6 +71,7 @@ type HTTPFetcher struct {
 	cacheDir      string
 	metadataCache *MetadataCache
 	offline       bool
+	githubToken   string
 
 	// These hooks are private test seams. Production constructors never enable
 	// private-address access and always use the system resolver.
@@ -115,6 +119,10 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 	if redirects <= 0 {
 		redirects = defaultMaximumRedirect
 	}
+	githubToken := strings.TrimSpace(options.GitHubToken)
+	if strings.ContainsAny(githubToken, " \t\r\n") {
+		return nil, fmt.Errorf("catalog: GitHub API token contains invalid header characters")
+	}
 	cacheDir := options.CacheDir
 	var metadataCache *MetadataCache
 	if cacheDir != "" {
@@ -131,6 +139,7 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		cacheDir:      cacheDir,
 		metadataCache: metadataCache,
 		offline:       options.Offline,
+		githubToken:   githubToken,
 		lookupIPAddr:  net.DefaultResolver.LookupIPAddr,
 		dialIP: (&net.Dialer{
 			Timeout:   8 * time.Second,
@@ -156,6 +165,11 @@ func NewHTTPFetcher(options HTTPFetcherOptions) (*HTTPFetcher, error) {
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			if len(via) > redirects {
 				return &safePolicyError{message: "catalog: metadata redirect limit exceeded"}
+			}
+			// A GitHub API bearer token is scoped to api.github.com. A release
+			// asset redirect or any other allowed host must never receive it.
+			if !strings.EqualFold(request.URL.Hostname(), "api.github.com") {
+				request.Header.Del("Authorization")
 			}
 			if err := fetcher.validateURL(request.URL); err != nil {
 				return &safePolicyError{message: "catalog: redirected metadata URI rejected: " + err.Error()}
