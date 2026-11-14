@@ -154,6 +154,9 @@ func runDiscoveryFixture(t *testing.T, fixture discoveryFixture, constraint stri
 }
 
 func TestGitHubAPITokenFromEnvironment(t *testing.T) {
+	// Exercise a local CLI environment, not the Actions runner's automatic token.
+	t.Setenv("GITHUB_ACTIONS", "")
+	t.Setenv("REGISTRY_GITHUB_API_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("GH_TOKEN", "")
 	if got := githubAPITokenFromEnvironment(); got != "" {
