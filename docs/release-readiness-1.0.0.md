@@ -78,7 +78,7 @@ The following are not silently implied by a 1.0.0 release. Keep them visible in 
 ## Release procedure
 
 1. Complete the gates above and link the exact evidence from the release issue/PRs.
-2. Update `internal/buildinfo/version.go` to `1.0.0`, add a dated `[1.0.0]` changelog section and review the release notes.
+2. Keep `internal/buildinfo/version.go` at the untagged `development` default; add the dated changelog section matching the exact release tag and review the release notes. Never write the release version into source defaults.
 3. Run the full CI and release preflight against the exact release candidate commit.
 4. Create and push the immutable `v1.0.0` tag at that commit. The tag-push release workflow builds and publishes; do not manually upload or retarget assets.
 5. Verify the published Release contains the exact five executables, Catalog, descriptor and final checksum manifest. Re-download and verify every asset from a clean consumer.
