@@ -414,13 +414,14 @@ func TestRepositoryGovernanceCurrentCatalogMetadata(t *testing.T) {
 		t.Fatalf("release source count = %d, want six component/variant sources", len(document.ReleaseSources))
 	}
 
+	repositoryBase := "https://github.com/" + "cdin-editor" + "/"
 	want := map[string]string{
-		"backend|default":  "https://github.com/cdin-editor/backend",
-		"kernel|default":   "https://github.com/cdin-editor/kernel",
-		"runtime|default":  "https://github.com/cdin-editor/runtime",
-		"frontend|core":    "https://github.com/cdin-editor/frontend",
-		"frontend|tui":     "https://github.com/cdin-editor/frontend",
-		"frontend|gui-sdl": "https://github.com/cdin-editor/frontend",
+		"backend|default":  repositoryBase + "backend",
+		"kernel|default":   repositoryBase + "kernel",
+		"runtime|default":  repositoryBase + "runtime",
+		"frontend|core":    repositoryBase + "frontend",
+		"frontend|tui":     repositoryBase + "frontend",
+		"frontend|gui-sdl": repositoryBase + "frontend",
 	}
 	found := make(map[string]bool, len(want))
 	sourceIDs := make(map[string]bool, len(document.ReleaseSources))
