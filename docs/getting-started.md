@@ -54,7 +54,7 @@ To build Registry from source, install:
 Install the Pipeline task runner used by this repository:
 
 ```sh
-python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16"
+python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@1682c520bb5be073eeaa07db03a254fb2e247545"
 ```
 
 Clone and build:
@@ -73,8 +73,8 @@ Check that the executable runs:
 ./build/registry schema list
 ```
 
-The source currently reports `0.1.0-dev`. Do not treat that development
-identifier as a released stable version.
+The current source reports `0.2.0-dev.3`. This is a development
+prerelease, not a stable release. See [Registry 1.0.0 release readiness](release-readiness-1.0.0.md) for the stable-release gates.
 
 ## Your first validation
 
