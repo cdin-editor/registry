@@ -44,6 +44,50 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         self.assertIn("Using the existing immutable tag target", tag_step)
         self.assertNotIn('git tag -f', tag_step)
 
+    def test_ci_and_docs_use_the_same_immutable_pipeline_revision(self) -> None:
+        for relative in (
+            ".github/workflows/ci.yml",
+            ".github/workflows/docs.yml",
+        ):
+            content = (ROOT / relative).read_text(encoding="utf-8")
+            revisions = re.findall(
+                r"^\\s*uses:\\s*m-mdy-m/pipeline/\\.github/workflows/[^\\s]+@([0-9a-f]{40})\\s*$",
+                content,
+                re.MULTILINE,
+            )
+            self.assertTrue(revisions, f"{relative} must pin reusable Pipeline workflows")
+            self.assertEqual(set(revisions), {PIPELINE_REVISION}, relative)
+        for relative in ("README.md", "CONTRIBUTING.md", "docs/getting-started.md", "docs/development.md"):
+            content = (ROOT / relative).read_text(encoding="utf-8")
+            self.assertIn(f"pipeline.git@{PIPELINE_REVISION}", content, relative)
+
+    def test_main_ci_release_job_skips_only_a_complete_existing_release(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+        tag_step = content.split("      - name: Create or verify the immutable Catalog release tag", 1)[1]
+        tag_step = tag_step.split("  release:", 1)[0]
+        for asset in (
+            "registry-linux-amd64",
+            "registry-linux-arm64",
+            "registry-darwin-amd64",
+            "registry-darwin-arm64",
+            "registry-windows-amd64.exe",
+            "catalog-index.json",
+            "registry-release-$VERSION.json",
+            "SHA256SUMS",
+        ):
+            with self.subTest(asset=asset):
+                self.assertIn(asset, tag_step)
+        self.assertIn('echo "release_required=false" >> "$GITHUB_OUTPUT"', tag_step)
+        self.assertIn('echo "release_required=true" >> "$GITHUB_OUTPUT"', tag_step)
+        self.assertIn("outputs.release_required == 'true'", content)
+        self.assertIn("Existing immutable Release", tag_step)
+        self.assertIn("repair its asset inventory explicitly", tag_step)
+
+    def test_release_readiness_checklist_is_linked_from_the_public_docs(self) -> None:
+        self.assertTrue((ROOT / "docs" / "release-readiness-1.0.0.md").is_file())
+        self.assertIn("docs/release-readiness-1.0.0.md", (ROOT / "README.md").read_text(encoding="utf-8"))
+        self.assertIn("release-readiness-1.0.0.md", (ROOT / "docs" / "README.md").read_text(encoding="utf-8"))
+
     def test_release_still_prepares_the_adr_0028_catalog_from_the_tagged_source(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("asset-preparation-command:", content)
