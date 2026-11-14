@@ -31,6 +31,31 @@ def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
+def github_api_headers(token: str | None = None) -> dict[str, str]:
+    """Build bounded GitHub API headers, using the CI token when available."""
+    if token is None:
+        token = os.environ.get("GITHUB_TOKEN", "").strip()
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "cdin-registry-schema-check",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def run_github_api_auth_self_test() -> None:
+    """Ensure schema verification authenticates in CI without requiring a token locally."""
+    authenticated = github_api_headers("test-token")
+    if authenticated.get("Authorization") != "Bearer test-token":
+        raise SystemExit("GitHub API auth self-test failed: bearer token was not applied")
+    unauthenticated = github_api_headers("")
+    if "Authorization" in unauthenticated:
+        raise SystemExit("GitHub API auth self-test failed: empty token was emitted")
+    print("GitHub API authentication header self-test: OK")
+
+
 def go_files() -> list[Path]:
     roots = (ROOT / "cmd", ROOT / "internal", ROOT / "tests")
     return sorted(
@@ -165,13 +190,7 @@ def verify_schema_tree(repository: str, tree_sha: str, pinned: dict[str, str]) -
     if not re.fullmatch(r"[0-9a-f]{40}", tree_sha):
         raise SystemExit(f"Invalid pinned Spec schema tree SHA: {tree_sha!r}")
     url = f"https://api.github.com/repos/{repository}/git/trees/{tree_sha}?recursive=1"
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "cdin-registry-schema-check",
-        },
-    )
+    request = urllib.request.Request(url, headers=github_api_headers())
     last_error: Exception | None = None
     for attempt in range(3):
         try:
@@ -207,13 +226,7 @@ def fetch_schema(repository: str, blob_sha: str, destination: Path) -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", blob_sha):
         raise SystemExit(f"Invalid pinned Spec schema Git blob SHA: {blob_sha!r}")
     url = f"https://api.github.com/repos/{repository}/git/blobs/{blob_sha}"
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "cdin-registry-schema-check",
-        },
-    )
+    request = urllib.request.Request(url, headers=github_api_headers())
     last_error: Exception | None = None
     for attempt in range(3):
         try:
@@ -465,6 +478,7 @@ def run_release_binary_self_test() -> None:
     pe[0x80:0x84] = b"PE\x00\x00"
     pe[0x84:0x86] = (0x8664).to_bytes(2, "little")
     validate_executable_header(bytes(pe), "windows", "amd64")
+    run_github_api_auth_self_test()
     print("Registry executable target self-tests: OK")
 
 

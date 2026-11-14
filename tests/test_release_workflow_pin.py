@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
-PIPELINE_REVISION = "0c2c89c7c64575c6b0f66c78925bdf5638abc5e9"
+PIPELINE_REVISION = "1682c520bb5be073eeaa07db03a254fb2e247545"
 
 
 class ReleaseWorkflowPinTests(unittest.TestCase):
@@ -29,6 +29,20 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         self.assertIsNotNone(helper, "pipeline-ref must use a full immutable Pipeline SHA")
         self.assertEqual(workflow.group(1), helper.group(1))
         self.assertEqual(workflow.group(1), PIPELINE_REVISION)
+
+    def test_existing_catalog_tag_is_reused_without_moving_its_target(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+        tag_step = content.split("      - name: Create or verify the immutable Catalog release tag", 1)[1]
+        tag_step = tag_step.split("  release:", 1)[0]
+        self.assertIn('status="$(curl --silent --show-error --output "$tag_ref_json"', tag_step)
+        self.assertIn('200)', tag_step)
+        self.assertIn('404)', tag_step)
+        self.assertIn('git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"', tag_step)
+        self.assertIn('git merge-base --is-ancestor "$release_sha" "$SOURCE_SHA"', tag_step)
+        self.assertIn('if [[ "$tag_commit" != "$release_sha" ]]', tag_step)
+        self.assertIn("source_ref=refs/tags/%s", tag_step)
+        self.assertIn("Using the existing immutable tag target", tag_step)
+        self.assertNotIn('git tag -f', tag_step)
 
     def test_release_still_prepares_the_adr_0028_catalog_from_the_tagged_source(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
