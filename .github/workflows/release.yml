@@ -7,6 +7,7 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -14,18 +15,13 @@ permissions:
 jobs:
   create-verified-development-tag:
     name: Tag the exact main commit after successful CI
-    if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.name == 'CI' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+    if: github.event_name == 'workflow_run'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
       source_ref: ${{ steps.tag.outputs.source_ref }}
+      should_release: ${{ steps.tag.outputs.should_release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,10 +33,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          UPSTREAM_NAME: ${{ github.event.workflow_run.name }}
+          UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          UPSTREAM_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
           TAG_NAME: v0.2.0-dev.3
         shell: bash
         run: |
           set -euo pipefail
+          printf 'Upstream workflow=%s event=%s conclusion=%s branch=%s repository=%s\n' \
+            "$UPSTREAM_NAME" "$UPSTREAM_EVENT" "$UPSTREAM_CONCLUSION" "$UPSTREAM_BRANCH" "$UPSTREAM_REPOSITORY"
+          if [[ "$UPSTREAM_NAME" != "CI" || "$UPSTREAM_EVENT" != "push" || \
+                "$UPSTREAM_CONCLUSION" != "success" || "$UPSTREAM_BRANCH" != "main" || \
+                "$UPSTREAM_REPOSITORY" != "$REPOSITORY" ]]; then
+            echo "This workflow completion is not a successful push from this repository's main branch; release is safely skipped."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           tag_ref_json="$RUNNER_TEMP/tag-ref.json"
           status="$(curl --silent --show-error --output "$tag_ref_json" --write-out '%{http_code}' \
@@ -86,7 +97,8 @@ jobs:
       always() &&
       (github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch' ||
-       needs.create-verified-development-tag.result == 'success')
+       (needs.create-verified-development-tag.result == 'success' &&
+        needs.create-verified-development-tag.outputs.should_release == 'true'))
     permissions:
       contents: write
       id-token: write
