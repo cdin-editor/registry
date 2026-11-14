@@ -483,7 +483,7 @@ def run_release_binary_self_test() -> None:
 
 
 RELEASE_TAG_PATTERN = re.compile(
-    r"^v(?P<version>\\d+\\.\\d+\\.\\d+(?:-(?:dev|alpha|beta|rc)\\.\\d+)?)$"
+    r"^v(?P<version>\d+\.\d+\.\d+(?:-(?:dev|alpha|beta|rc)\.\d+)?)$"
 )
 
 
