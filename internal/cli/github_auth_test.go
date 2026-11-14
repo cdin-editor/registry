@@ -20,11 +20,11 @@ func TestGitHubAPITokenFromEnvironmentSelection(t *testing.T) {
 			want:     "registry-read-token",
 		},
 		{
-			name:    "GH_TOKEN is accepted in Actions",
+			name:    "GH_TOKEN is ignored in Actions",
 			actions: "true",
-			gh:      " cross-repository-read-token ",
+			gh:      "repo-write-token",
 			github:  "repo-scoped-token",
-			want:    "cross-repository-read-token",
+			want:    "",
 		},
 		{
 			name:    "automatic Actions GITHUB_TOKEN is ignored",
