@@ -3,6 +3,30 @@
 Notable changes to CDIN Registry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - Draft (not released)
+
+> This is the proposed stable release entry. It is not a published release.
+> Finalize the date and contents only after the acceptance gates in
+> [Registry 1.0.0 release readiness](docs/release-readiness-1.0.0.md) pass.
+
+### Planned release scope
+
+- Stable CLI/package compatibility surface for Product Definitions, Catalog Indexes,
+  Component Release Metadata, deterministic resolution, Workspace preparation,
+  Manifest verification, exact replay and update discovery.
+- Five native Registry executables for Linux x86_64/ARM64, macOS x86_64/ARM64
+  and Windows x86_64 UCRT64.
+- Same-tag Catalog Index and release descriptor, with exact source commit,
+  executable target identities, SHA-256 digests and byte sizes.
+- Reproducible, artifact-first clean-consumer verification without cloning
+  Registry source or installing the Go toolchain.
+
+### Release status
+
+- Not released. Do not use this section as evidence that `v1.0.0` is available.
+- Stable publication remains blocked on the checklist and downstream consumer
+  evidence linked above.
+
 ## [Unreleased]
 
 ### Documentation
