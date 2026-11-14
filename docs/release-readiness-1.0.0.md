@@ -8,7 +8,7 @@ This checklist defines the acceptance boundary for the Registry CLI/package rele
 
 Keep these version tracks separate:
 
-- **Registry CLI/package:** the executable version shown by `registry --version`. The current source default is `0.2.0-dev.3`; the stable target is `1.0.0`.
+- **Registry CLI/package:** the executable version shown by `registry --version`. Release builds derive it from the exact immutable Git tag (`v1.0.0` becomes `1.0.0`); untagged developer builds report `development`.
 - **Spec release and Registry Data Contracts:** schema and contract versions pinned in `schemas/registry/v1/SOURCE.toml`. They are not changed merely because the CLI reaches 1.0.0.
 - **Document schema versions:** Product Definition, Catalog Index, Component Release Metadata, Manifest, Resolution Report and Update Discovery Report have their own compatibility rules.
 - **Catalog model:** static Catalog 1.0.x (`entries`) and dynamic Catalog 1.1.x+ (`release_sources`) are separate supported shapes. A document must not mix them.
