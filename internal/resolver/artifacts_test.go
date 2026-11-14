@@ -86,6 +86,37 @@ func TestApplyDeliveryPolicyPreservesReleaseProvenanceManifestSchema(t *testing.
 	}
 }
 
+func TestResolveArtifactDeliveryPreservesADR0028ManifestSchema(t *testing.T) {
+	release := releaseWithGitHubDiscovery("backend", "1.2.2", 42, "2026-11-14T00:00:00Z")
+	release.Artifacts = []catalog.Artifact{
+		testArtifact("backend-linux", *nativeTarget()),
+	}
+	definition := product(Requirement{
+		ComponentID: "backend",
+		Variant: "default",
+		VersionConstraint: "=1.2.2",
+	})
+	definition.Resolution = ResolutionPolicy{
+		DeliveryMode: "artifact",
+		Target: nativeTarget(),
+	}
+
+	result := Resolve(definition, []*catalog.Catalog{
+		catalogOf("release-source", release),
+	})
+	if result.Graph == nil || result.Report.Result != "success" {
+		t.Fatalf("artifact resolution failed: %+v", result.Report)
+	}
+	if result.Graph.SchemaVersion != "1.2.0" {
+		t.Fatalf("Resolver graph schema=%q, want 1.2.0", result.Graph.SchemaVersion)
+	}
+	if len(result.Graph.Components) != 1 ||
+		result.Graph.Components[0].ReleaseDiscovery == nil ||
+		result.Graph.Components[0].Delivery != "artifact" {
+		t.Fatalf("selected artifact lost ADR-0028 provenance or delivery mode: %#v", result.Graph.Components)
+	}
+}
+
 func TestApplyDeliveryPolicyUniversalFallback(t *testing.T) {
 	graph := &Graph{
 		Components: []ResolvedComponent{
