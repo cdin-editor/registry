@@ -919,12 +919,12 @@ func TestADR0028ManifestRecordsAndValidatesExactGitHubReleaseIdentity(t *testing
 		PublishedAt:       "2026-11-10T18:00:00Z",
 	}
 	document, err := Build(graph, sources, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if document.SchemaVersion != releaseDiscoverySchemaVersion {
 		t.Fatalf("Manifest schema version = %q, want %q when Release Discovery provenance is serialized",
 			document.SchemaVersion, releaseDiscoverySchemaVersion)
-	}
-	if err != nil {
-		t.Fatal(err)
 	}
 	encoded, err := MarshalCanonical(document)
 	if err != nil {
