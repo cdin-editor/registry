@@ -196,6 +196,45 @@ func TestGitHubAPITokenFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestManifestDiscoverPassesSelectedGitHubTokenToFetcher(t *testing.T) {
+	revision := strings.Repeat("a", 40)
+	historical, _, metadata := buildCLIReplayManifest(t, revision, true)
+	fixture := writeDiscoveryFixture(t, historical, metadata[discoveryReleaseURI], nil, "=1.0.0")
+
+	t.Setenv("GITHUB_ACTIONS", "true")
+	t.Setenv("GITHUB_TOKEN", "repository-scoped-token")
+	t.Setenv("GH_TOKEN", "explicit-read-token")
+	t.Setenv("REGISTRY_GITHUB_API_TOKEN", "registry-read-token")
+
+	args := []string{
+		"discover",
+		"--input", fixture.manifestPath,
+		"--product", fixture.productPath,
+		"--catalog", fixture.catalogPath,
+		"--allow-host", "metadata.example.invalid",
+	}
+	var stdout, stderr bytes.Buffer
+	var receivedToken string
+	code := runManifestWithDependencies(
+		context.Background(),
+		args,
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		func(options catalog.HTTPFetcherOptions) (catalog.Fetcher, error) {
+			receivedToken = options.GitHubToken
+			return fixture.fetcher, nil
+		},
+		nil,
+	)
+	if code != exitOK {
+		t.Fatalf("discover exit=%d stderr=%q", code, stderr.String())
+	}
+	if receivedToken != "registry-read-token" {
+		t.Fatalf("Manifest discovery GitHub token = %q, want registry-read-token", receivedToken)
+	}
+}
+
 func TestManifestDiscoverReportsUnchangedAndWritesImmutableAuditFile(t *testing.T) {
 	revision := strings.Repeat("a", 40)
 	historical, _, metadata := buildCLIReplayManifest(t, revision, true)
