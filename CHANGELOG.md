@@ -8,7 +8,7 @@ Notable changes to CDIN Registry are recorded here. The format follows
 ### Fixed
 
 - Derive the Resolved Manifest schema version from the features actually serialized. Mixed artifact delivery and ADR-0028 release-discovery provenance now produce a Manifest schema version accepted by the embedded Spec schema, even when an intermediate Resolver graph carries an older compatible schema version.
-- Authenticate dynamic GitHub Release discovery API requests with an explicitly provisioned cross-repository read token (`REGISTRY_GITHUB_API_TOKEN` or `GH_TOKEN`) to avoid unauthenticated rate limits in parallel target/profile consumers. Do not automatically send GitHub Actions' repository-scoped `GITHUB_TOKEN` to component repositories; outside Actions, `GITHUB_TOKEN` remains a local-shell fallback. Credentials are scoped to `api.github.com`, never attached to ordinary metadata or release-asset hosts, and are stripped on cross-host redirects.
+- Authenticate dynamic GitHub Release discovery API requests in Actions only with the explicitly provisioned cross-repository read token `REGISTRY_GITHUB_API_TOKEN`, avoiding unauthenticated rate limits in parallel target/profile consumers. Do not send `GH_TOKEN` or the repository-scoped `GITHUB_TOKEN` from Actions to component repositories. Outside Actions, `GH_TOKEN` and `GITHUB_TOKEN` remain local-shell fallbacks. Credentials are scoped to `api.github.com`, never attached to ordinary metadata or release-asset hosts, and are stripped on cross-host redirects.
 
 ## [1.0.0] - 2026-11-14
 
