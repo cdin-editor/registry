@@ -4,12 +4,12 @@ import "testing"
 
 func TestGitHubAPITokenFromEnvironment(t *testing.T) {
 	tests := []struct {
-		name       string
-		actions    string
-		registry   string
-		gh         string
-		github     string
-		want       string
+		name     string
+		actions  string
+		registry string
+		gh       string
+		github   string
+		want     string
 	}{
 		{
 			name:     "explicit Registry token wins",
@@ -38,10 +38,10 @@ func TestGitHubAPITokenFromEnvironment(t *testing.T) {
 			want:   "local-personal-token",
 		},
 		{
-			name:    "GH_TOKEN works outside Actions",
-			gh:      "local-gh-token",
-			github:  "local-github-token",
-			want:    "local-gh-token",
+			name:   "GH_TOKEN works outside Actions",
+			gh:     "local-gh-token",
+			github: "local-github-token",
+			want:   "local-gh-token",
 		},
 	}
 
