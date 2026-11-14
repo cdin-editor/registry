@@ -117,8 +117,8 @@ jobs:
                 fi
               done
               if (( ${#missing[@]} > 0 )); then
-                printf 'Existing immutable Release %s is incomplete; missing assets:\\n' "$TAG_NAME" >&2
-                printf '  - %s\\n' "${missing[@]}" >&2
+                printf 'Existing immutable Release %s is incomplete; missing assets:\n' "$TAG_NAME" >&2
+                printf '  - %s\n' "${missing[@]}" >&2
                 echo "Do not retag or silently reuse an incomplete Release; repair its asset inventory explicitly." >&2
                 exit 1
               fi
