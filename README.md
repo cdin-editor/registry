@@ -84,20 +84,21 @@ The example Catalog path is a local file. Registry itself performs the remote me
 - [Examples](docs/examples.md)
 - [Limitations and security](docs/limitations.md)
 - [Development](docs/development.md)
+- [Registry 1.0.0 release readiness](docs/release-readiness-1.0.0.md)
 
 ## Build Registry
 
 Requirements: Go 1.27.3, Python 3.11 or newer, GNU Make, Git, and curl.
 
 ```sh
-python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16"
+python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@1682c520bb5be073eeaa07db03a254fb2e247545"
 git clone https://github.com/cdin-editor/registry.git
 cd registry
 make build
 make check
 ```
 
-The executable is written to `build/registry`. The current source identifies itself as `0.2.0-dev.1`; this is a development prerelease, not a stable Registry 1.0.0 release.
+The executable is written to `build/registry`. The current source identifies itself as `0.2.0-dev.3`; this is a development prerelease, not a stable Registry 1.0.0 release. See [Registry 1.0.0 release readiness](docs/release-readiness-1.0.0.md) for the remaining acceptance gates.
 
 ## License
 
