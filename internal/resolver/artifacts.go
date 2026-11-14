@@ -33,7 +33,14 @@ func applyDeliveryPolicy(graph *Graph, policy ResolutionPolicy) *Conflict {
 			target := *policy.Target
 			graph.Resolution.Target = &target
 		}
-		graph.SchemaVersion = artifactManifestVersion
+		// Artifact delivery adds delivery/target fields to the Manifest,
+		// but must not downgrade a newer schema required by release provenance.
+		// buildGraph already selects 1.2.0 when ADR-0028 discovery evidence is
+		// present; preserve that contract while upgrading legacy source graphs
+		// to the artifact-capable 1.1.0 schema.
+		if graph.SchemaVersion == "" || graph.SchemaVersion == manifestSchemaVersion {
+			graph.SchemaVersion = artifactManifestVersion
+		}
 	}
 	if mode == "source" {
 		for i := range graph.Components {
