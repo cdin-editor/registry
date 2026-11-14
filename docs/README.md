@@ -16,6 +16,7 @@ used Registry before.
 6. [Outputs](outputs.md) — read the prepared Workspace and its records.
 7. [Immutable artifact delivery](artifact-delivery.md) — publish and consume
    target-specific prebuilt packages, including digest-pinned offline replay.
+8. [Registry 1.0.0 release readiness](release-readiness-1.0.0.md) — stable CLI/package acceptance gates and release procedure.
 
 ## Look up a task
 

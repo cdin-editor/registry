@@ -22,6 +22,7 @@ jobs:
     outputs:
       source_ref: ${{ steps.tag.outputs.source_ref }}
       should_release: ${{ steps.tag.outputs.should_release }}
+      release_required: ${{ steps.tag.outputs.release_required }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,6 +91,51 @@ jobs:
           fi
           printf 'source_ref=refs/tags/%s\n' "$TAG_NAME" >> "$GITHUB_OUTPUT"
 
+          VERSION="${TAG_NAME#v}"
+          release_status="$(curl --silent --show-error --output "$RUNNER_TEMP/release.json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$REPOSITORY/releases/tags/$TAG_NAME")"
+          case "$release_status" in
+            200)
+              required_assets=(
+                "registry-linux-amd64"
+                "registry-linux-arm64"
+                "registry-darwin-amd64"
+                "registry-darwin-arm64"
+                "registry-windows-amd64.exe"
+                "catalog-index.json"
+                "registry-release-$VERSION.json"
+                "SHA256SUMS"
+              )
+              jq -r '.assets[].name' "$RUNNER_TEMP/release.json" > "$RUNNER_TEMP/release-assets.txt"
+              missing=()
+              for asset in "${required_assets[@]}"; do
+                if ! grep -Fxq "$asset" "$RUNNER_TEMP/release-assets.txt"; then
+                  missing+=("$asset")
+                fi
+              done
+              if (( ${#missing[@]} > 0 )); then
+                printf 'Existing immutable Release %s is incomplete; missing assets:\n' "$TAG_NAME" >&2
+                printf '  - %s\n' "${missing[@]}" >&2
+                echo "Do not retag or silently reuse an incomplete Release; repair its asset inventory explicitly." >&2
+                exit 1
+              fi
+              echo "The immutable Release $TAG_NAME already contains all required executable, Catalog, descriptor and checksum assets."
+              echo "release_required=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "No GitHub Release exists for $TAG_NAME; publication is required."
+              echo "release_required=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              cat "$RUNNER_TEMP/release.json" >&2
+              echo "Could not inspect Release $TAG_NAME (HTTP $release_status)." >&2
+              exit 1
+              ;;
+          esac
+
   release:
     name: Cross-platform release (Pipeline)
     needs: [create-verified-development-tag]
@@ -98,7 +144,8 @@ jobs:
       (github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch' ||
        (needs.create-verified-development-tag.result == 'success' &&
-        needs.create-verified-development-tag.outputs.should_release == 'true'))
+        needs.create-verified-development-tag.outputs.should_release == 'true' &&
+        needs.create-verified-development-tag.outputs.release_required == 'true'))
     permissions:
       contents: write
       id-token: write

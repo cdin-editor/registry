@@ -5,16 +5,16 @@ is the authority for cross-project Registry behavior; this repository implements
 
 ## Before changing code
 
-1. Read [Registry architecture](docs/architecture/overview.md) and [Module boundaries](docs/architecture/module-boundaries.md).
+1. Read the [Registry responsibilities and consumer boundary](README.md#responsibilities).
 2. Read [Registry data contracts](https://github.com/cdin-editor/spec/blob/main/docs/architecture/registry-contracts.md).
 3. Keep consumer identity out of Registry behavior. A product supplies data; Registry remains generic.
 4. Do not fetch or execute undeclared component sources during validation or resolution.
-5. Check [implementation status](docs/status.md) before claiming a capability is complete.
+5. Check the [1.0.0 release-readiness checklist](docs/release-readiness-1.0.0.md) before claiming stable-release readiness.
 
 ## Toolchain
 
 - Go 1.27.3
-- Python 3.11+ and the pinned [Pipeline](docs/development/tooling.md#pipeline--task-graph-and-ci)
+- Python 3.11+ and the pinned [Pipeline task runner](docs/development.md)
 - GNU Make and Git
 - PSX v0.3.2 for repository-structure checks
 - GIX v1.2.0 for the documented branch workflow
@@ -22,7 +22,7 @@ is the authority for cross-project Registry behavior; this repository implements
 Install Pipeline and run the authoritative task graph:
 
 ```sh
-python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16"
+python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@1682c520bb5be073eeaa07db03a254fb2e247545"
 pipeline validate
 pipeline run check --json
 ```
@@ -59,7 +59,7 @@ For changes to a public contract, propose and merge the Spec change first, then 
 
 ## Branching
 
-The committed `.gix/config` defines the branch flow. Feature and bugfix branches start from `develop`; open PRs targeting `develop`. Use `gix doctor` before starting work and the commands in [Branching](docs/development/branching.md). Do not run `gix flow init`; this repository already has a checked-in configuration.
+The committed `.gix/config` defines the branch flow. Feature and bugfix branches start from `develop`; open PRs targeting `develop`. Use `gix doctor` before starting work and follow the committed [GIX branch configuration](.gix/config). Do not run `gix flow init`; this repository already has a checked-in configuration.
 
 ## Pull requests
 

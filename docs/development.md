@@ -14,7 +14,7 @@ This page is for people changing Registry itself. For normal use, start with
 Install the Pipeline revision used by the current build workflow:
 
 ```sh
-python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16"
+python -m pip install "git+https://github.com/m-mdy-m/pipeline.git@1682c520bb5be073eeaa07db03a254fb2e247545"
 ```
 
 ## Build
@@ -26,6 +26,8 @@ make build
 ```
 
 The executable is written to `build/registry`.
+
+The current source default is `0.2.0-dev.3`. The planned stable release is governed by the [Registry 1.0.0 release-readiness checklist](release-readiness-1.0.0.md); do not change the version to `1.0.0` until its gates are satisfied.
 
 ## Run tests and checks
 

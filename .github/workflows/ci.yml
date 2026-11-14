@@ -17,12 +17,12 @@ concurrency:
 jobs:
   quality:
     name: Registry quality gate (Pipeline)
-    uses: m-mdy-m/pipeline/.github/workflows/ci.yml@c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+    uses: m-mdy-m/pipeline/.github/workflows/ci.yml@1682c520bb5be073eeaa07db03a254fb2e247545
     with:
       language: go
       go-version: "1.27.3"
       pipeline-task: check
-      pipeline-ref: c5cb4a661b9c15b679e422f3f4584c6f7ebe9e16
+      pipeline-ref: 1682c520bb5be073eeaa07db03a254fb2e247545
 
   release-catalog:
     name: Registry immutable Catalog release preflight
