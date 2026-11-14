@@ -34,11 +34,15 @@ class ReleaseWorkflowPinTests(unittest.TestCase):
         content = WORKFLOW.read_text(encoding="utf-8")
         tag_step = content.split("      - name: Create or verify the immutable Catalog release tag", 1)[1]
         tag_step = tag_step.split("  release:", 1)[0]
-        self.assertIn('git ls-remote --exit-code origin "refs/tags/$TAG_NAME"', tag_step)
+        self.assertIn('status="$(curl --silent --show-error --output "$tag_ref_json"', tag_step)
+        self.assertIn('200)', tag_step)
+        self.assertIn('404)', tag_step)
+        self.assertIn('git fetch origin "refs/tags/$TAG_NAME:refs/tags/$TAG_NAME"', tag_step)
         self.assertIn('git merge-base --is-ancestor "$release_sha" "$SOURCE_SHA"', tag_step)
         self.assertIn('if [[ "$tag_commit" != "$release_sha" ]]', tag_step)
         self.assertIn("source_ref=refs/tags/%s", tag_step)
         self.assertIn("Using the existing immutable tag target", tag_step)
+        self.assertNotIn('git tag -f', tag_step)
 
     def test_release_still_prepares_the_adr_0028_catalog_from_the_tagged_source(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
