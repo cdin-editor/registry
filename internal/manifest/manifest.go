@@ -65,9 +65,9 @@ func (e *VerificationError) Unwrap() error {
 }
 
 const (
-	schemaVersion                  = "1.0.0"
-	artifactSchemaVersion          = "1.1.0"
-	releaseDiscoverySchemaVersion  = "1.2.0"
+	schemaVersion                 = "1.0.0"
+	artifactSchemaVersion         = "1.1.0"
+	releaseDiscoverySchemaVersion = "1.2.0"
 )
 
 // minimumManifestSchemaVersion derives the minimum public schema from the
