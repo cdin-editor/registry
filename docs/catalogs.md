@@ -162,4 +162,6 @@ The component maintainer remains authoritative for source and Release Metadata. 
 ./build/registry validate catalog-index ./catalogs/cdin-components/catalog-index.json
 ```
 
-A Catalog Index may be supplied to the CLI as a local file or remote URI. The production network fetcher supports public, unauthenticated HTTPS metadata. Every host used for remote Catalog, metadata, and source retrieval must be explicitly allowed with `--allow-host`. These host allow-lists are security policy and do not define component-to-repository mappings.
+A Catalog Index may be supplied to the CLI as a local file or remote URI. Catalog Indexes, Component Release Metadata, and release assets remain public HTTPS resources; no credential is required to download them. For dynamic `release_sources`, Registry optionally uses `GITHUB_TOKEN` (preferred) or `GH_TOKEN` from the process environment to authenticate only GitHub Release/tag API requests and avoid unauthenticated API rate limits during parallel discovery. The token is never sent to ordinary metadata or release-asset hosts and is removed on cross-host redirects. Do not put tokens in Catalog documents or command-line arguments.
+
+Every host used for remote Catalog, metadata, and source retrieval must be explicitly allowed with `--allow-host`. These host allow-lists are security policy and do not define component-to-repository mappings.

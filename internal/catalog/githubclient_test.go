@@ -59,7 +59,10 @@ func TestNewHTTPFetcherRequiresExplicitGitHubAllowList(t *testing.T) {
 func TestHTTPFetcherListsGitHubReleasePages(t *testing.T) {
 	releasesJSON := `[{"id":17,"tag_name":"v1.2.3","draft":false,"prerelease":false,"published_at":"2026-11-10T12:00:00Z","url":"https://api.github.com/repos/acme/engine/releases/17","html_url":"https://github.com/acme/engine/releases/tag/v1.2.3","assets":[]}]
 `
-	fetcher := githubTestFetcher(t, HTTPFetcherOptions{AllowedHosts: []string{"github.com"}}, githubRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+	fetcher := githubTestFetcher(t, HTTPFetcherOptions{
+		AllowedHosts: []string{"github.com"},
+		GitHubToken:  "test-token",
+	}, githubRoundTripFunc(func(request *http.Request) (*http.Response, error) {
 		if request.URL.Host != "api.github.com" || request.URL.Path != "/repos/acme/engine/releases" {
 			return nil, fmt.Errorf("unexpected GitHub API request %s", request.URL)
 		}
@@ -68,6 +71,9 @@ func TestHTTPFetcherListsGitHubReleasePages(t *testing.T) {
 		}
 		if request.Header.Get("Accept") != "application/vnd.github+json" {
 			return nil, fmt.Errorf("missing GitHub API media type")
+		}
+		if request.Header.Get("Authorization") != "Bearer test-token" {
+			return nil, fmt.Errorf("GitHub API bearer token was not attached")
 		}
 		return githubResponse(http.StatusOK, nil, releasesJSON), nil
 	}))
@@ -83,6 +89,67 @@ func TestHTTPFetcherListsGitHubReleasePages(t *testing.T) {
 	}
 	if _, err := fetcher.ListGitHubReleases(context.Background(), ReleaseSource{RepositoryURI: "https://github.com/acme/engine"}, maxGitHubReleasePages+1, 100); err == nil {
 		t.Fatal("out-of-range page was accepted")
+	}
+}
+
+func TestHTTPFetcherDoesNotForwardGitHubTokenToReleaseAssetRedirect(t *testing.T) {
+	requests := 0
+	fetcher := githubTestFetcher(t, HTTPFetcherOptions{
+		AllowedHosts: []string{"github.com"},
+		GitHubToken:  "test-token",
+	}, githubRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		switch request.URL.Host {
+		case "api.github.com":
+			if request.Header.Get("Authorization") != "Bearer test-token" {
+				t.Fatal("GitHub API request did not carry its configured bearer token")
+			}
+			headers := make(http.Header)
+			headers.Set("Location", "https://release-assets.githubusercontent.com/acme/asset?signature=short-lived")
+			return githubResponse(http.StatusFound, headers, ""), nil
+		case "release-assets.githubusercontent.com":
+			if got := request.Header.Get("Authorization"); got != "" {
+				t.Fatalf("GitHub API token leaked to release asset host: %q", got)
+			}
+			return githubResponse(http.StatusOK, nil, "[]"), nil
+		default:
+			return nil, fmt.Errorf("unexpected redirect host %q", request.URL.Host)
+		}
+	}))
+	releases, err := fetcher.ListGitHubReleases(context.Background(), ReleaseSource{
+		SourceID: "engine", Provider: githubReleaseProvider,
+		RepositoryURI: "https://github.com/acme/engine", ComponentID: "engine",
+	}, 1, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(releases) != 0 || requests != 2 {
+		t.Fatalf("release discovery requests=%d releases=%d, want two requests and an empty release list", requests, len(releases))
+	}
+}
+
+func TestHTTPFetcherRejectsGitHubTokenHeaderInjection(t *testing.T) {
+	_, err := NewHTTPFetcher(HTTPFetcherOptions{
+		AllowedHosts: []string{"github.com"},
+		GitHubToken:  "valid-token\r\nX-Injected: true",
+	})
+	if err == nil {
+		t.Fatal("GitHub token containing CR/LF header injection was accepted")
+	}
+}
+
+func TestHTTPFetcherDoesNotAttachGitHubTokenToOrdinaryMetadata(t *testing.T) {
+	fetcher := githubTestFetcher(t, HTTPFetcherOptions{
+		AllowedHosts: []string{"catalog.example.invalid"},
+		GitHubToken:  "test-token",
+	}, githubRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Header.Get("Authorization") != "" {
+			t.Fatalf("GitHub API token leaked to ordinary metadata host: %q", request.Header.Get("Authorization"))
+		}
+		return githubResponse(http.StatusOK, nil, "{}"), nil
+	}))
+	if _, err := fetcher.Fetch(context.Background(), "https://catalog.example.invalid/index.json"); err != nil {
+		t.Fatal(err)
 	}
 }
 

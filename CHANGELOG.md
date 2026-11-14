@@ -8,6 +8,7 @@ Notable changes to CDIN Registry are recorded here. The format follows
 ### Fixed
 
 - Derive the Resolved Manifest schema version from the features actually serialized. Mixed artifact delivery and ADR-0028 release-discovery provenance now produce a Manifest schema version accepted by the embedded Spec schema, even when an intermediate Resolver graph carries an older compatible schema version.
+- Authenticate dynamic GitHub Release discovery API requests with an optional `GITHUB_TOKEN`/`GH_TOKEN` bearer token to avoid unauthenticated rate limits in parallel target/profile consumers. The credential is scoped to `api.github.com`, is never attached to ordinary metadata or release-asset hosts, and is stripped on cross-host redirects.
 
 ## [1.0.0] - 2026-11-14
 
