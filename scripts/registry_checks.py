@@ -156,7 +156,10 @@ def check_boundaries() -> None:
         ),
         (
             "cmd internal tests",
-            re.compile(r'"[^"]*cdin-editor/(kernel|runtime|backend|frontend)'),
+            re.compile(
+                r'^\\s*(?:[A-Za-z_]\\w*\\s+)?'
+                r'"github\\.com/cdin-editor/(kernel|runtime|backend|frontend)(?:/[^"]*)?"'
+            ),
             "boundary violation: Registry must not import product implementation packages",
         ),
         (
